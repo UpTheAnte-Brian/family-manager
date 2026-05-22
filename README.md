@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Family Manager
+
+Family Manager is an iPad-first household console. The goal is a shared kitchen or mudroom app that helps each family member answer three questions quickly:
+
+- What do I need to do now?
+- What is different about today?
+- What does the house need from me?
+
+The current app keeps the summer 2026 planner, chores, and calendar importer as prototype seed data while the product pivots toward a personalized daily dashboard.
+
+## Current Direction
+
+- Shared iPad experience first, with desktop support for development.
+- Manual profile switching in v1 so the product is useful before identity automation.
+- Local-first operation so the home dashboard remains fast and resilient.
+- Optional Mac Mini home server for background jobs, local APIs, LAN access, and richer automation.
+- Supabase remote for sync, backup, auth, and remote parent access, not as the only runtime.
+- Face recognition deferred until the manual dashboard is valuable; when added, it should suggest a profile rather than act as sole authentication.
+
+## Current Prototype
+
+- Next.js app shell with TypeScript and Tailwind.
+- Household members, summer schedule blocks, fixed calendar events, routine chores, weekly chores, and chore assignments in `data/summer-2026-planner.json`.
+- A manual profile dashboard that filters routines, events, and chores by selected family member.
+- Browser-local checklist completion tracking for the dashboard.
+- ICS importer for Apple Calendar and SportsEngine feeds.
+- Supabase client placeholder for the later sync layer.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` to `.env.local` when Supabase is ready. Keep real local env files out of git.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Planning Docs
 
-## Learn More
+- `docs/household-console-plan.md` describes the product and architecture plan.
+- `docs/schedule-data-model.md` documents the existing planner JSON and how it should feed the new dashboard.
 
-To learn more about Next.js, take a look at the following resources:
+## Import Apple Calendar
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+In Apple Calendar, select the calendar in the sidebar, then use `File > Export > Export...` and save the `.ics` file to `imports/family-calendar.ics`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Then run:
 
-## Deploy on Vercel
+```bash
+pnpm import:calendar
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The importer expands recurring events inside the summer date range and writes them into `data/summer-2026-planner.json` as fixed events.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Refresh SportsEngine Calendar
+
+SportsEngine should be imported from its subscription URL because schedules can change.
+
+Add this to `.env.local`:
+
+```bash
+SPORTSENGINE_CALENDAR_URL="https://..."
+```
+
+Then run:
+
+```bash
+pnpm import:sports
+```
+
+This replaces existing `sportsengine-calendar` events inside the summer date range with the latest subscription feed.
+
+## GitHub Remote Setup
+
+The intended first remote should be a private GitHub repository.
+
+```bash
+git status --short
+git remote add origin git@github.com:<account>/family-manager.git
+git add .
+git status --short
+git commit -m "Pivot family manager to household console"
+git push -u origin main
+```
+
+Before staging, confirm no real env files, private calendar exports, or other local-only files are included.

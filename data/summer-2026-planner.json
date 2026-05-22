@@ -1,0 +1,1911 @@
+{
+  "version": 1,
+  "timezone": "America/Chicago",
+  "season": {
+    "id": "summer-2026",
+    "label": "Summer 2026",
+    "startsOn": "2026-06-02",
+    "endsOn": "2026-09-07",
+    "schoolReturnsOn": "2026-09-08",
+    "notes": [
+      "School is out starting Tuesday, June 2, 2026.",
+      "Labor Day is Monday, September 7, 2026; assume school resumes Tuesday, September 8 unless corrected."
+    ]
+  },
+  "household": {
+    "members": [
+      {
+        "id": "brian",
+        "preferredName": "Brian",
+        "displayName": "Me",
+        "role": "parent",
+        "relationship": "dad"
+      },
+      {
+        "id": "angela",
+        "preferredName": "Angela",
+        "displayName": "Mom",
+        "role": "parent",
+        "relationship": "mom",
+        "workFromHome": true,
+        "focusWindows": [
+          {
+            "startTime": "09:00",
+            "endTime": "12:00"
+          },
+          {
+            "startTime": "13:00",
+            "endTime": "16:30"
+          }
+        ]
+      },
+      {
+        "id": "mason",
+        "preferredName": "Mason",
+        "displayName": "Mason",
+        "role": "child",
+        "relationship": "son",
+        "birthDate": "2017-06-01"
+      },
+      {
+        "id": "reagan",
+        "preferredName": "Reagan",
+        "displayName": "Reagan",
+        "role": "child",
+        "relationship": "daughter",
+        "birthDate": "2018-09-04"
+      },
+      {
+        "id": "kenzley",
+        "preferredName": "Kenzley",
+        "displayName": "Kenzley",
+        "role": "child",
+        "relationship": "daughter",
+        "birthDate": "2020-05-28"
+      }
+    ]
+  },
+  "calendarSources": [
+    {
+      "id": "family-calendar",
+      "label": "Family Calendar",
+      "status": "active",
+      "notes": "Imported from family-calendar.ics."
+    },
+    {
+      "id": "sportsengine-calendar",
+      "label": "SportsEngine Calendar",
+      "status": "active",
+      "notes": "Imported from subscription URL."
+    }
+  ],
+  "dayTemplates": [
+    {
+      "id": "weekday-home",
+      "label": "Weekday Home Baseline",
+      "appliesTo": {
+        "daysOfWeek": [
+          "MO",
+          "TU",
+          "WE",
+          "TH",
+          "FR"
+        ],
+        "dateRange": {
+          "startsOn": "2026-06-02",
+          "endsOn": "2026-09-07"
+        }
+      },
+      "blocks": [
+        {
+          "id": "wake-breakfast",
+          "startTime": "07:30",
+          "endTime": "08:30",
+          "title": "Wake up, breakfast, get dressed",
+          "category": "routine",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "morning-reset",
+          "startTime": "08:30",
+          "endTime": "09:00",
+          "title": "Rooms, teeth, quick house reset",
+          "category": "chores",
+          "noiseLevel": "low",
+          "location": "home",
+          "calendarBehavior": "draft",
+          "futureLinks": [
+            "chores",
+            "allowance"
+          ]
+        },
+        {
+          "id": "focus-block-1",
+          "startTime": "09:00",
+          "endTime": "10:00",
+          "title": "Quiet focus: reading, workbook, puzzles",
+          "category": "quiet-work",
+          "noiseLevel": "low",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "outside-block",
+          "startTime": "10:00",
+          "endTime": "11:30",
+          "title": "Outside time or planned outing",
+          "category": "activity",
+          "noiseLevel": "high",
+          "location": "home-or-away",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "lunch",
+          "startTime": "11:30",
+          "endTime": "12:30",
+          "title": "Lunch and kitchen reset",
+          "category": "meal",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "quiet-hour",
+          "startTime": "12:30",
+          "endTime": "13:30",
+          "title": "Quiet hour: books, audio, rest",
+          "category": "quiet-time",
+          "noiseLevel": "low",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "project-play",
+          "startTime": "13:30",
+          "endTime": "15:00",
+          "title": "Project, craft, build, or independent play",
+          "category": "activity",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "snack-screen",
+          "startTime": "15:00",
+          "endTime": "16:00",
+          "title": "Snack and limited screen time",
+          "category": "screen-time",
+          "noiseLevel": "low",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "late-afternoon",
+          "startTime": "16:00",
+          "endTime": "17:30",
+          "title": "Free play, outside, or errands",
+          "category": "activity",
+          "noiseLevel": "medium",
+          "location": "home-or-away",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "dinner-reset",
+          "startTime": "17:30",
+          "endTime": "18:30",
+          "title": "Dinner and family reset",
+          "category": "meal",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "evening",
+          "startTime": "18:30",
+          "endTime": "19:30",
+          "title": "Family time, bath, tomorrow prep",
+          "category": "routine",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "bedtime",
+          "startTime": "19:30",
+          "endTime": "20:00",
+          "title": "Bedtime routine",
+          "category": "routine",
+          "noiseLevel": "low",
+          "location": "home",
+          "calendarBehavior": "draft"
+        }
+      ]
+    },
+    {
+      "id": "weekend-flex",
+      "label": "Weekend Flex Baseline",
+      "appliesTo": {
+        "daysOfWeek": [
+          "SA",
+          "SU"
+        ],
+        "dateRange": {
+          "startsOn": "2026-06-02",
+          "endsOn": "2026-09-07"
+        }
+      },
+      "blocks": [
+        {
+          "id": "weekend-morning",
+          "startTime": "07:30",
+          "endTime": "10:00",
+          "title": "Breakfast, chores, family plan",
+          "category": "routine",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "weekend-day",
+          "startTime": "10:00",
+          "endTime": "17:30",
+          "title": "Family calendar, outings, free play",
+          "category": "family-time",
+          "noiseLevel": "variable",
+          "location": "home-or-away",
+          "calendarBehavior": "draft"
+        },
+        {
+          "id": "weekend-evening",
+          "startTime": "17:30",
+          "endTime": "20:00",
+          "title": "Dinner, reset, bedtime",
+          "category": "routine",
+          "noiseLevel": "medium",
+          "location": "home",
+          "calendarBehavior": "draft"
+        }
+      ]
+    }
+  ],
+  "fixedEvents": [
+    {
+      "id": "family-calendar-019e539b-ff65-4b5d-b4d5-43eb1d5183d7-2026-06-02-00-00",
+      "source": "family-calendar",
+      "sourceUid": "019E539B-FF65-4B5D-B4D5-43EB1D5183D7",
+      "date": "2026-06-02",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Last Day of School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-ea18df00-333e-408b-b6eb-5198d38834cf-sportsengine-com-2026-06-02-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "ea18df00-333e-408b-b6eb-5198d38834cf@sportsengine.com",
+      "date": "2026-06-02",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-06-03-00-00",
+      "source": "family-calendar",
+      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
+      "date": "2026-06-03",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Pay target bill",
+      "category": "admin",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-185e1512-cd63-4adf-b8ee-78697052d0af-sportsengine-com-2026-06-03-17-30",
+      "source": "sportsengine-calendar",
+      "sourceUid": "185e1512-cd63-4adf-b8ee-78697052d0af@sportsengine.com",
+      "date": "2026-06-03",
+      "startTime": "17:30",
+      "endTime": "18:30",
+      "title": "Keliix-Intra Soccer Club 18 Boys Blue at U9 Boys Select 2",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "685 Old Crystal Bay Rd N, Orono, MN, 55356, US"
+    },
+    {
+      "id": "sportsengine-calendar-5cdf0947-6ff7-4960-8e15-3f43f7412e95-sportsengine-com-2026-06-04-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "5cdf0947-6ff7-4960-8e15-3f43f7412e95@sportsengine.com",
+      "date": "2026-06-04",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-05-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-06-05",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-08-09-00",
+      "source": "family-calendar",
+      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "date": "2026-06-08",
+      "startTime": "09:00",
+      "endTime": "12:00",
+      "title": "Good Shepherd VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-08-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-06-08",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-09-09-00",
+      "source": "family-calendar",
+      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "date": "2026-06-09",
+      "startTime": "09:00",
+      "endTime": "12:00",
+      "title": "Good Shepherd VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-bca31f66-3e12-4b62-9887-54468f5de4a3-sportsengine-com-2026-06-09-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "bca31f66-3e12-4b62-9887-54468f5de4a3@sportsengine.com",
+      "date": "2026-06-09",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "family-calendar-2f2baf63-6621-4a14-b6da-d46ef97db902-2026-06-10-09-00",
+      "source": "family-calendar",
+      "sourceUid": "2F2BAF63-6621-4A14-B6DA-D46EF97DB902",
+      "date": "2026-06-10",
+      "startTime": "09:00",
+      "endTime": "10:00",
+      "title": "Bring Soccer Snacks tonight",
+      "category": "sports",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-10-09-00",
+      "source": "family-calendar",
+      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "date": "2026-06-10",
+      "startTime": "09:00",
+      "endTime": "12:00",
+      "title": "Good Shepherd VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-d9d3d797-5696-4d50-89c1-eabee8afc831-sportsengine-com-2026-06-10-19-15",
+      "source": "sportsengine-calendar",
+      "sourceUid": "d9d3d797-5696-4d50-89c1-eabee8afc831@sportsengine.com",
+      "date": "2026-06-10",
+      "startTime": "19:15",
+      "endTime": "20:15",
+      "title": "U9 Boys Select 2 at Fusion Soccer Club Boys 17 Navy 4",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "14800 34th Ave N, Plymouth, MN, 55447, US"
+    },
+    {
+      "id": "family-calendar-1077645f-c538-4e03-a287-f2c6b692ca62-2026-06-11-08-30",
+      "source": "family-calendar",
+      "sourceUid": "1077645F-C538-4E03-A287-F2C6B692CA62",
+      "date": "2026-06-11",
+      "startTime": "08:30",
+      "endTime": "09:30",
+      "title": "Kenz doctor",
+      "category": "appointment",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-11-09-00",
+      "source": "family-calendar",
+      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "date": "2026-06-11",
+      "startTime": "09:00",
+      "endTime": "12:00",
+      "title": "Good Shepherd VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-1a61f495-5b28-4960-8272-5e06bbd4f75b-sportsengine-com-2026-06-11-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "1a61f495-5b28-4960-8272-5e06bbd4f75b@sportsengine.com",
+      "date": "2026-06-11",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "sportsengine-calendar-f69d5782-56c9-467b-a895-a1b6a60be0cb-sportsengine-com-2026-06-12-00-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "f69d5782-56c9-467b-a895-a1b6a60be0cb@sportsengine.com",
+      "date": "2026-06-12",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Hold for Tonka Splash Tournament",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-12-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-06-12",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "sportsengine-calendar-0c9192d3-d59f-4c6e-8e61-95475d0bab03-sportsengine-com-2026-06-13-00-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "0c9192d3-d59f-4c6e-8e61-95475d0bab03@sportsengine.com",
+      "date": "2026-06-13",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Hold for Tonka Splash Tournament",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-045968eb-f766-4a6d-8301-0a1110d82d45-sportsengine-com-2026-06-14-00-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "045968eb-f766-4a6d-8301-0a1110d82d45@sportsengine.com",
+      "date": "2026-06-14",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Hold for Tonka Splash Tournament",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-20260615t090000-0-27mia-myvbs-app-2026-06-15-10-00",
+      "source": "family-calendar",
+      "sourceUid": "20260615T090000-0-27mia@myvbs.app",
+      "date": "2026-06-15",
+      "startTime": "10:00",
+      "endTime": "13:00",
+      "title": "St. John's Lutheran Church VBS  2026",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-15-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-06-15",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "sportsengine-calendar-f5314bba-dcea-479d-b85c-f774587ccfcd-sportsengine-com-2026-06-15-18-45",
+      "source": "sportsengine-calendar",
+      "sourceUid": "f5314bba-dcea-479d-b85c-f774587ccfcd@sportsengine.com",
+      "date": "2026-06-15",
+      "startTime": "18:45",
+      "endTime": "19:45",
+      "title": "Minneapolis United 2017 Boys Tango at U9 Boys Select 2",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN, 55356, US"
+    },
+    {
+      "id": "family-calendar-20260616t090000-1-dtmu64-myvbs-app-2026-06-16-10-00",
+      "source": "family-calendar",
+      "sourceUid": "20260616T090000-1-dtmu64@myvbs.app",
+      "date": "2026-06-16",
+      "startTime": "10:00",
+      "endTime": "13:00",
+      "title": "St. John's Lutheran Church VBS  2026",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+    },
+    {
+      "id": "sportsengine-calendar-e9fe183f-a240-4857-9511-ec7e4d42b7d3-sportsengine-com-2026-06-16-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "e9fe183f-a240-4857-9511-ec7e4d42b7d3@sportsengine.com",
+      "date": "2026-06-16",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "family-calendar-20260617t090000-2-ka3og9-myvbs-app-2026-06-17-10-00",
+      "source": "family-calendar",
+      "sourceUid": "20260617T090000-2-ka3og9@myvbs.app",
+      "date": "2026-06-17",
+      "startTime": "10:00",
+      "endTime": "13:00",
+      "title": "St. John's Lutheran Church VBS  2026",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+    },
+    {
+      "id": "family-calendar-20260618t090000-3-1w1mia-myvbs-app-2026-06-18-10-00",
+      "source": "family-calendar",
+      "sourceUid": "20260618T090000-3-1w1mia@myvbs.app",
+      "date": "2026-06-18",
+      "startTime": "10:00",
+      "endTime": "13:00",
+      "title": "St. John's Lutheran Church VBS  2026",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+    },
+    {
+      "id": "sportsengine-calendar-3faabab9-bccd-4b3e-a55d-f9280c7542ce-sportsengine-com-2026-06-18-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "3faabab9-bccd-4b3e-a55d-f9280c7542ce@sportsengine.com",
+      "date": "2026-06-18",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-19-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-06-19",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-22-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-06-22",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "sportsengine-calendar-f525ef7d-260e-4641-a258-0dd4a9b24e6f-sportsengine-com-2026-06-22-17-30",
+      "source": "sportsengine-calendar",
+      "sourceUid": "f525ef7d-260e-4641-a258-0dd4a9b24e6f@sportsengine.com",
+      "date": "2026-06-22",
+      "startTime": "17:30",
+      "endTime": "18:30",
+      "title": "U9 Boys Select 2 at Legacy FC 2017 LFC Boys Blue",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "683 Tiger Drive, Delano, MN, 55328, US"
+    },
+    {
+      "id": "sportsengine-calendar-45082c7b-bd01-42fe-b2b3-38df852eaa83-sportsengine-com-2026-06-23-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "45082c7b-bd01-42fe-b2b3-38df852eaa83@sportsengine.com",
+      "date": "2026-06-23",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "sportsengine-calendar-6b5433fd-d8c0-45d0-97d9-3064b022606c-sportsengine-com-2026-06-24-18-45",
+      "source": "sportsengine-calendar",
+      "sourceUid": "6b5433fd-d8c0-45d0-97d9-3064b022606c@sportsengine.com",
+      "date": "2026-06-24",
+      "startTime": "18:45",
+      "endTime": "19:45",
+      "title": "Bloomington United 2017 Boys Jaguars at U9 Boys Select 2",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN, 55356, US"
+    },
+    {
+      "id": "sportsengine-calendar-bdef7d7c-9fa0-4252-9552-089ff71ee396-sportsengine-com-2026-06-25-19-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "bdef7d7c-9fa0-4252-9552-089ff71ee396@sportsengine.com",
+      "date": "2026-06-25",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "U9 Boys Select 2 Practice",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-26-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-06-26",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-29-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-06-29",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "sportsengine-calendar-9d0165d7-9feb-4c76-a9b8-d075868119ce-sportsengine-com-2026-06-29-18-45",
+      "source": "sportsengine-calendar",
+      "sourceUid": "9d0165d7-9feb-4c76-a9b8-d075868119ce@sportsengine.com",
+      "date": "2026-06-29",
+      "startTime": "18:45",
+      "endTime": "19:45",
+      "title": "CC United Soccer Club 2017 Boys Blue 2 at U9 Boys Select 2",
+      "category": "sports",
+      "calendarBehavior": "fixed",
+      "locationNote": "685 Old Crystal Bay Rd N, Orono, MN, 55356, US"
+    },
+    {
+      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-07-01-19-00",
+      "source": "family-calendar",
+      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
+      "date": "2026-07-01",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "Max heartguard and tick stuff",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-07-03-00-00",
+      "source": "family-calendar",
+      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
+      "date": "2026-07-03",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Pay target bill",
+      "category": "admin",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-03-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-07-03",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-06-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-06",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-06-10-45",
+      "source": "family-calendar",
+      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
+      "date": "2026-07-06",
+      "startTime": "10:45",
+      "endTime": "11:45",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-06-12-00",
+      "source": "family-calendar",
+      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "date": "2026-07-06",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-06-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-07-06",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-07-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-07",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-07-12-00",
+      "source": "family-calendar",
+      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "date": "2026-07-07",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-08-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-08",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-09-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-09",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-09-12-00",
+      "source": "family-calendar",
+      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
+      "date": "2026-07-09",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-10-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-07-10",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-13-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-13",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-13-10-45",
+      "source": "family-calendar",
+      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
+      "date": "2026-07-13",
+      "startTime": "10:45",
+      "endTime": "11:45",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-13-12-00",
+      "source": "family-calendar",
+      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "date": "2026-07-13",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-13-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-07-13",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-14-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-14",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-5cdcb865-9038-473d-b810-fcc270d54d92-2026-07-14-09-00",
+      "source": "family-calendar",
+      "sourceUid": "5CDCB865-9038-473D-B810-FCC270D54D92",
+      "date": "2026-07-14",
+      "startTime": "09:00",
+      "endTime": "10:00",
+      "title": "Mason Johnson",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Wayzata Children's Clinic\n14001 Ridgedale Dr, Unit 100, Hopkins, MN  55305, United States"
+    },
+    {
+      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-14-12-00",
+      "source": "family-calendar",
+      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "date": "2026-07-14",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-15-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-15",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-16-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-16",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-16-12-00",
+      "source": "family-calendar",
+      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
+      "date": "2026-07-16",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-17-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-07-17",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "sportsengine-calendar-b5c3d02c-2a37-4c8f-b7ab-2dd5b5f781f2-sportsengine-com-2026-07-19-15-45",
+      "source": "sportsengine-calendar",
+      "sourceUid": "b5c3d02c-2a37-4c8f-b7ab-2dd5b5f781f2@sportsengine.com",
+      "date": "2026-07-19",
+      "startTime": "15:45",
+      "endTime": "16:45",
+      "title": "2017/2018 Practice w/ 2016 Gray",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-20-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-20",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-20-10-45",
+      "source": "family-calendar",
+      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
+      "date": "2026-07-20",
+      "startTime": "10:45",
+      "endTime": "11:45",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-20-12-00",
+      "source": "family-calendar",
+      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "date": "2026-07-20",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-20-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-07-20",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-21-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-21",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-21-12-00",
+      "source": "family-calendar",
+      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "date": "2026-07-21",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-22-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-22",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-edc8d1ea-dec8-499c-ad60-c31305455da9-sportsengine-com-2026-07-22-17-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "edc8d1ea-dec8-499c-ad60-c31305455da9@sportsengine.com",
+      "date": "2026-07-22",
+      "startTime": "17:00",
+      "endTime": "18:00",
+      "title": "2017/2018 Practice w/ 2016 Gray",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
+    },
+    {
+      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-23-08-00",
+      "source": "family-calendar",
+      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "date": "2026-07-23",
+      "startTime": "08:00",
+      "endTime": "15:00",
+      "title": "Reagan Summer School",
+      "category": "school-camp",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-23-12-00",
+      "source": "family-calendar",
+      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
+      "date": "2026-07-23",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-24-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-07-24",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-103f031d-595c-4ab9-81dc-57c3c55d637a-2026-07-25-00-00",
+      "source": "family-calendar",
+      "sourceUid": "103F031D-595C-4AB9-81DC-57C3C55D637A",
+      "date": "2026-07-25",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Brookside Cabin",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "sportsengine-calendar-38874e74-4fe2-4f95-8347-0f03b27e878b-sportsengine-com-2026-07-26-15-45",
+      "source": "sportsengine-calendar",
+      "sourceUid": "38874e74-4fe2-4f95-8347-0f03b27e878b@sportsengine.com",
+      "date": "2026-07-26",
+      "startTime": "15:45",
+      "endTime": "16:45",
+      "title": "2017/2018 Practice w/ 2016 Gray",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
+    },
+    {
+      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-27-10-45",
+      "source": "family-calendar",
+      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
+      "date": "2026-07-27",
+      "startTime": "10:45",
+      "endTime": "11:45",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-27-12-00",
+      "source": "family-calendar",
+      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "date": "2026-07-27",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-27-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-07-27",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "sportsengine-calendar-16582685-9be6-4a40-adc6-d29435df200e-sportsengine-com-2026-07-27-17-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "16582685-9be6-4a40-adc6-d29435df200e@sportsengine.com",
+      "date": "2026-07-27",
+      "startTime": "17:00",
+      "endTime": "18:00",
+      "title": "2017/2018 Practice - Solo",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
+    },
+    {
+      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-28-12-00",
+      "source": "family-calendar",
+      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "date": "2026-07-28",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-30-12-00",
+      "source": "family-calendar",
+      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
+      "date": "2026-07-30",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-66a7c2ff-027a-44b1-adcc-83a49800906a-2026-07-31-00-00",
+      "source": "family-calendar",
+      "sourceUid": "66A7C2FF-027A-44B1-ADCC-83A49800906A",
+      "date": "2026-07-31",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "2017/18 Hawks Red Tournament Dates",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-31-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-07-31",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-08-01-19-00",
+      "source": "family-calendar",
+      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
+      "date": "2026-08-01",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "Max heartguard and tick stuff",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-08-03-00-00",
+      "source": "family-calendar",
+      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
+      "date": "2026-08-03",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Pay target bill",
+      "category": "admin",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-03-09-30",
+      "source": "family-calendar",
+      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "date": "2026-08-03",
+      "startTime": "09:30",
+      "endTime": "12:00",
+      "title": "Woodridge VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-08-03-10-45",
+      "source": "family-calendar",
+      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
+      "date": "2026-08-03",
+      "startTime": "10:45",
+      "endTime": "11:45",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-08-03-12-00",
+      "source": "family-calendar",
+      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "date": "2026-08-03",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-03-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-08-03",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "sportsengine-calendar-afb7215c-d770-47dc-9257-a8bf599b6273-sportsengine-com-2026-08-03-17-00",
+      "source": "sportsengine-calendar",
+      "sourceUid": "afb7215c-d770-47dc-9257-a8bf599b6273@sportsengine.com",
+      "date": "2026-08-03",
+      "startTime": "17:00",
+      "endTime": "18:00",
+      "title": "2017/2018 Practice w/ 2016 Red",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
+    },
+    {
+      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-04-09-30",
+      "source": "family-calendar",
+      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "date": "2026-08-04",
+      "startTime": "09:30",
+      "endTime": "12:00",
+      "title": "Woodridge VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-08-04-12-00",
+      "source": "family-calendar",
+      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "date": "2026-08-04",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-05-09-30",
+      "source": "family-calendar",
+      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "date": "2026-08-05",
+      "startTime": "09:30",
+      "endTime": "12:00",
+      "title": "Woodridge VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-06-09-30",
+      "source": "family-calendar",
+      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "date": "2026-08-06",
+      "startTime": "09:30",
+      "endTime": "12:00",
+      "title": "Woodridge VBS",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-08-06-12-00",
+      "source": "family-calendar",
+      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
+      "date": "2026-08-06",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-07-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-08-07",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-08-10-10-45",
+      "source": "family-calendar",
+      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
+      "date": "2026-08-10",
+      "startTime": "10:45",
+      "endTime": "11:45",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-08-10-12-00",
+      "source": "family-calendar",
+      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "date": "2026-08-10",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-10-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-08-10",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-08-11-12-00",
+      "source": "family-calendar",
+      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "date": "2026-08-11",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Kenzley STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-08-13-12-00",
+      "source": "family-calendar",
+      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
+      "date": "2026-08-13",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Mason and Reagan STP",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-14-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-08-14",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-17-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-08-17",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-21-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-08-21",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-24-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-08-24",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-8376db1a-1cff-40c7-908b-390d405591b3-2026-08-27-00-00",
+      "source": "family-calendar",
+      "sourceUid": "8376DB1A-1CFF-40C7-908B-390D405591B3",
+      "date": "2026-08-27",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Tommy’s bday",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-4eeaeec3-34fb-42d4-b3fe-f7738c0961ab-2026-08-28-00-00",
+      "source": "family-calendar",
+      "sourceUid": "4EEAEEC3-34FB-42D4-B3FE-F7738C0961AB",
+      "date": "2026-08-28",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "2017/18 Hawks Red Tournament Dates",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-28-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-08-28",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-31-12-00",
+      "source": "family-calendar",
+      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "date": "2026-08-31",
+      "startTime": "12:00",
+      "endTime": "13:00",
+      "title": "Reagan 3 on 3 Hockey",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+    },
+    {
+      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-09-01-19-00",
+      "source": "family-calendar",
+      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
+      "date": "2026-09-01",
+      "startTime": "19:00",
+      "endTime": "20:00",
+      "title": "Max heartguard and tick stuff",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-09-03-00-00",
+      "source": "family-calendar",
+      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
+      "date": "2026-09-03",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Pay target bill",
+      "category": "admin",
+      "calendarBehavior": "fixed"
+    },
+    {
+      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-09-04-15-00",
+      "source": "family-calendar",
+      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
+      "date": "2026-09-04",
+      "startTime": "15:00",
+      "endTime": "16:00",
+      "title": "Angela and Bri Weekly Touch Base/Connect",
+      "category": "family-calendar",
+      "calendarBehavior": "fixed",
+      "locationNote": "Living Room"
+    },
+    {
+      "id": "labor-day",
+      "source": "manual",
+      "date": "2026-09-07",
+      "startTime": "00:00",
+      "endTime": "23:59",
+      "title": "Labor Day",
+      "category": "holiday",
+      "calendarBehavior": "fixed"
+    }
+  ],
+  "futureModules": [
+    {
+      "id": "chores",
+      "label": "Chores",
+      "status": "active"
+    },
+    {
+      "id": "daily-routines",
+      "label": "Daily routines",
+      "status": "active"
+    },
+    {
+      "id": "allowance",
+      "label": "Allowance",
+      "status": "planned"
+    }
+  ],
+  "chores": {
+    "weeklyTargetPerChild": 5,
+    "routineChores": [
+      {
+        "id": "make-bed",
+        "title": "Make bed",
+        "category": "morning-routine",
+        "defaultAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "schedule": {
+          "daysOfWeek": [
+            "MO",
+            "TU",
+            "WE",
+            "TH",
+            "FR"
+          ],
+          "startTime": "08:30",
+          "endTime": "08:40"
+        },
+        "countsTowardWeeklyTarget": false
+      },
+      {
+        "id": "brush-teeth",
+        "title": "Brush teeth",
+        "category": "morning-routine",
+        "defaultAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "schedule": {
+          "daysOfWeek": [
+            "MO",
+            "TU",
+            "WE",
+            "TH",
+            "FR"
+          ],
+          "startTime": "08:40",
+          "endTime": "08:45"
+        },
+        "countsTowardWeeklyTarget": false
+      },
+      {
+        "id": "dirty-clothes-hamper",
+        "title": "Put dirty clothes in hamper",
+        "category": "morning-routine",
+        "defaultAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "schedule": {
+          "daysOfWeek": [
+            "MO",
+            "TU",
+            "WE",
+            "TH",
+            "FR"
+          ],
+          "startTime": "08:45",
+          "endTime": "08:50"
+        },
+        "countsTowardWeeklyTarget": false
+      },
+      {
+        "id": "clear-breakfast-dishes",
+        "title": "Clear breakfast dishes",
+        "category": "morning-routine",
+        "defaultAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "schedule": {
+          "daysOfWeek": [
+            "MO",
+            "TU",
+            "WE",
+            "TH",
+            "FR"
+          ],
+          "startTime": "08:50",
+          "endTime": "09:00"
+        },
+        "countsTowardWeeklyTarget": false
+      }
+    ],
+    "weeklyChores": [
+      {
+        "id": "empty-dishwasher",
+        "title": "Empty dishwasher",
+        "category": "kitchen",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan"
+        ]
+      },
+      {
+        "id": "walk-dog",
+        "title": "Walk the dog",
+        "category": "pets",
+        "estimatedMinutes": 15,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan"
+        ],
+        "requiresAdultCheck": true
+      },
+      {
+        "id": "feed-dog",
+        "title": "Feed the dog",
+        "category": "pets",
+        "estimatedMinutes": 5,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ]
+      },
+      {
+        "id": "set-table",
+        "title": "Set the table",
+        "category": "kitchen",
+        "estimatedMinutes": 5,
+        "eligibleAssigneeIds": [
+          "reagan",
+          "kenzley"
+        ]
+      },
+      {
+        "id": "clear-table",
+        "title": "Clear the table",
+        "category": "kitchen",
+        "estimatedMinutes": 8,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ]
+      },
+      {
+        "id": "living-room-reset",
+        "title": "Living room reset",
+        "category": "house-reset",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ]
+      },
+      {
+        "id": "toy-reset",
+        "title": "Toy reset",
+        "category": "house-reset",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "kenzley",
+          "reagan"
+        ]
+      },
+      {
+        "id": "trash-small-cans",
+        "title": "Empty small trash cans",
+        "category": "house-reset",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan"
+        ]
+      }
+    ],
+    "weeklyAssignmentTemplates": [
+      {
+        "id": "mason-dishwasher-mon",
+        "childId": "mason",
+        "choreId": "empty-dishwasher",
+        "dayOfWeek": "MO",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "mason-dog-tue",
+        "childId": "mason",
+        "choreId": "walk-dog",
+        "dayOfWeek": "TU",
+        "startTime": "16:00",
+        "endTime": "16:20"
+      },
+      {
+        "id": "mason-dishwasher-wed",
+        "childId": "mason",
+        "choreId": "empty-dishwasher",
+        "dayOfWeek": "WE",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "mason-trash-thu",
+        "childId": "mason",
+        "choreId": "trash-small-cans",
+        "dayOfWeek": "TH",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "mason-dishwasher-fri",
+        "childId": "mason",
+        "choreId": "empty-dishwasher",
+        "dayOfWeek": "FR",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "reagan-dog-mon",
+        "childId": "reagan",
+        "choreId": "feed-dog",
+        "dayOfWeek": "MO",
+        "startTime": "16:00",
+        "endTime": "16:10"
+      },
+      {
+        "id": "reagan-reset-tue",
+        "childId": "reagan",
+        "choreId": "living-room-reset",
+        "dayOfWeek": "TU",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "reagan-dog-wed",
+        "childId": "reagan",
+        "choreId": "feed-dog",
+        "dayOfWeek": "WE",
+        "startTime": "16:00",
+        "endTime": "16:10"
+      },
+      {
+        "id": "reagan-reset-thu",
+        "childId": "reagan",
+        "choreId": "living-room-reset",
+        "dayOfWeek": "TH",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "reagan-dog-fri",
+        "childId": "reagan",
+        "choreId": "feed-dog",
+        "dayOfWeek": "FR",
+        "startTime": "16:00",
+        "endTime": "16:10"
+      },
+      {
+        "id": "kenzley-table-mon",
+        "childId": "kenzley",
+        "choreId": "set-table",
+        "dayOfWeek": "MO",
+        "startTime": "17:15",
+        "endTime": "17:25"
+      },
+      {
+        "id": "kenzley-toys-tue",
+        "childId": "kenzley",
+        "choreId": "toy-reset",
+        "dayOfWeek": "TU",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "kenzley-table-wed",
+        "childId": "kenzley",
+        "choreId": "set-table",
+        "dayOfWeek": "WE",
+        "startTime": "17:15",
+        "endTime": "17:25"
+      },
+      {
+        "id": "kenzley-toys-thu",
+        "childId": "kenzley",
+        "choreId": "toy-reset",
+        "dayOfWeek": "TH",
+        "startTime": "16:00",
+        "endTime": "16:15"
+      },
+      {
+        "id": "kenzley-table-fri",
+        "childId": "kenzley",
+        "choreId": "set-table",
+        "dayOfWeek": "FR",
+        "startTime": "17:15",
+        "endTime": "17:25"
+      }
+    ],
+    "completions": []
+  }
+}
