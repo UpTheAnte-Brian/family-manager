@@ -8,7 +8,7 @@
     "import:calendar": "node scripts/import-ics-to-planner.mjs",
     "import:sports": "node scripts/import-ics-to-planner.mjs --source sportsengine-calendar --replace-source --env SPORTSENGINE_CALENDAR_URL",
     "start": "next start",
-    "test": "tsx --test src/lib/today/context.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "lint": "eslint"
   },
   "dependencies": {

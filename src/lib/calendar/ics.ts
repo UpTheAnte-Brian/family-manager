@@ -6,18 +6,33 @@ export type ParseIcsOptions = {
   startsOn: string;
   endsOn: string;
   limit?: number;
+  maxExpandedEvents?: number;
 };
 
 export function parseIcsEvents(calendarText: string, options: ParseIcsOptions) {
   const startsOn = parseDateOnly(options.startsOn);
   const endsOn = endOfDay(parseDateOnly(options.endsOn));
+  const maxExpandedEvents = options.maxExpandedEvents ?? Number.POSITIVE_INFINITY;
   const calendar = ical.sync.parseICS(calendarText);
-  const events = Object.values(calendar)
-    .filter(isCalendarEvent)
-    .flatMap((event) => expandEvent(event, startsOn, endsOn))
-    .map((event) => toImportedEvent(event, options.sourceId))
-    .filter((event): event is ImportedCalendarEvent => Boolean(event))
-    .sort(compareImportedEvents);
+  const events: ImportedCalendarEvent[] = [];
+
+  for (const event of Object.values(calendar).filter(isCalendarEvent)) {
+    const remaining = maxExpandedEvents - events.length;
+
+    if (remaining <= 0) {
+      break;
+    }
+
+    for (const expandedEvent of expandEvent(event, startsOn, endsOn, remaining)) {
+      const importedEvent = toImportedEvent(expandedEvent, options.sourceId);
+
+      if (importedEvent) {
+        events.push(importedEvent);
+      }
+    }
+  }
+
+  events.sort(compareImportedEvents);
 
   return typeof options.limit === "number" ? events.slice(0, options.limit) : events;
 }
@@ -26,19 +41,40 @@ function isCalendarEvent(entry: ical.CalendarComponent | undefined): entry is ic
   return entry?.type === "VEVENT";
 }
 
-function expandEvent(event: ical.VEvent, startsOn: Date, endsOn: Date): ical.VEvent[] {
+function expandEvent(event: ical.VEvent, startsOn: Date, endsOn: Date, maxEvents: number): ical.VEvent[] {
   const durationMs = event.end && event.start ? event.end.getTime() - event.start.getTime() : 0;
+
+  if (maxEvents <= 0) {
+    return [];
+  }
 
   if (!event.rrule) {
     return overlapsWindow(event.start, event.end, startsOn, endsOn) ? [event] : [];
   }
 
-  return event.rrule.between(startsOn, endsOn, true).map((start) => ({
-    ...event,
-    start,
-    end: new Date(start.getTime() + durationMs),
-    recurrenceid: start,
-  }));
+  const events: ical.VEvent[] = [];
+  let cursor = startsOn;
+  let includeCursor = true;
+
+  while (events.length < maxEvents) {
+    const start = event.rrule.after(cursor, includeCursor);
+
+    if (!start || start > endsOn) {
+      break;
+    }
+
+    events.push({
+      ...event,
+      start,
+      end: new Date(start.getTime() + durationMs),
+      recurrenceid: start,
+    });
+
+    cursor = start;
+    includeCursor = false;
+  }
+
+  return events;
 }
 
 function toImportedEvent(event: ical.VEvent, sourceId: string): ImportedCalendarEvent | null {
