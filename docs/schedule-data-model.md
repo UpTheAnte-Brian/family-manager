@@ -1,6 +1,8 @@
 # Schedule Data Model
 
-`data/summer-2026-planner.json` is now prototype seed data for the household console. The UI can change freely, but this file should remain easy to transform into dashboard state, calendar events, and future Supabase rows.
+`data/summer-2026-planner.json` is now prototype configuration data for the household console. The UI can change freely, but this file should remain easy to transform into dashboard state, calendar events, and future Supabase rows.
+
+The dashboard must not treat this file as the source of truth for the current date. Today is computed from the real date in the household timezone. If today does not exist inside this prototype data, the app should show the real date with empty events and a missing-baseline state.
 
 ## Current Assumptions
 
@@ -9,6 +11,8 @@
 - School resumes after Labor Day, currently modeled as `2026-09-08`.
 - Kids are awake around `07:30` and bedtime is `20:00`.
 - Weekday work-from-home protection matters most from `09:00-12:00` and `13:00-16:30`.
+- School-year weekday and weekend baselines are not modeled yet.
+- Calendar data is imported prototype data, not a live calendar connection.
 
 ## Import Path
 
@@ -49,3 +53,5 @@ Chores now live under `chores` in `data/summer-2026-planner.json`.
 The current target is five weekly assigned chores per child. Morning routine chores do not count toward that weekly target.
 
 The old chore manager stored chore edits and completions in browser `localStorage` under `family-manager:chores:v1`. The profile dashboard stores checklist completions under `family-manager:dashboard:v1`. Both are temporary persistence layers until these records move into Supabase.
+
+The dashboard now also stores user-created same-day tasks and reminders in `family-manager:dashboard:v1`.

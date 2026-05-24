@@ -6,7 +6,7 @@ Family Manager is an iPad-first household console. The goal is a shared kitchen 
 - What is different about today?
 - What does the house need from me?
 
-The current app keeps the summer 2026 planner, chores, and calendar importer as prototype seed data while the product pivots toward a personalized daily dashboard.
+The current app keeps the summer 2026 planner, chores, and calendar importer as prototype planning data while the product pivots toward a personalized daily dashboard.
 
 ## Current Direction
 
@@ -22,9 +22,20 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 - Next.js app shell with TypeScript and Tailwind.
 - Household members, summer schedule blocks, fixed calendar events, routine chores, weekly chores, and chore assignments in `data/summer-2026-planner.json`.
 - A manual profile dashboard that filters routines, events, and chores by selected family member.
-- Browser-local checklist completion tracking for the dashboard.
+- Real-date Today Engine with explicit missing states when no baseline is configured for the current day.
+- Browser-local checklist completion tracking plus same-day task/reminder quick-add.
+- Admin setup route for shared calendar source URLs, ICS preview, and local apply-to-dashboard.
 - ICS importer for Apple Calendar and SportsEngine feeds.
 - Supabase client placeholder for the later sync layer.
+
+## Data Status
+
+The app is not connected to Supabase or a live calendar yet.
+
+- Prototype configuration data lives in `data/summer-2026-planner.json`.
+- Local user actions are stored in browser `localStorage`.
+- Imported-looking calendar events are prototype data.
+- Supabase is planned for durable sync, backup, auth, and remote access.
 
 ## Getting Started
 

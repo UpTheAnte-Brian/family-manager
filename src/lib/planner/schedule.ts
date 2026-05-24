@@ -91,7 +91,6 @@ export function getScheduleStats() {
   );
 
   return {
-    dayCount: days.length,
     blockCount,
     quietBlockCount,
     fixedEventCount: plannerData.fixedEvents.length,

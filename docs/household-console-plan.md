@@ -18,16 +18,30 @@ The dashboard should include:
 
 - Morning routine checklist for children.
 - Adult-oriented household operations for parents.
-- Today schedule highlights from existing planner/calendar seed data.
+- Today schedule highlights from existing planner/calendar prototype data.
 - Assigned weekly chores and responsibilities.
 - Reminder placeholders for things to bring, wear, or remember.
 - Browser-local completion state until Supabase persistence is introduced.
 
 Face recognition is intentionally out of scope for v1. The app should be valuable without it.
 
+## Today Engine
+
+The dashboard should always represent the real current date in the household timezone. It must not fall back to the first summer planner day just because no configured data exists for today.
+
+The Today Engine owns:
+
+- current local date and day of week
+- day classification: school day, school-year weekend, summer weekday, summer weekend, no-school day, holiday
+- fixed events that match the current date
+- baseline flow selection
+- explicit missing-baseline states when a day type has not been modeled yet
+
+This means May dates before the summer plan range should show as May dates. If there is no configured school-year or weekend baseline yet, the UI should say that plainly.
+
 ## Core Data Concepts
 
-The existing planner JSON remains the seed data source until the Supabase model is ready.
+The existing planner JSON remains the prototype configuration source until the Supabase model is ready.
 
 - `household.members`: family profiles and basic roles.
 - `chores.routineChores`: recurring checklist items, currently morning routines.
@@ -35,6 +49,15 @@ The existing planner JSON remains the seed data source until the Supabase model 
 - `chores.weeklyAssignmentTemplates`: recurring chore responsibilities by child and weekday.
 - `fixedEvents`: imported calendar items.
 - `dayTemplates`: baseline draft schedule blocks.
+
+Browser-local state currently stores:
+
+- selected profile
+- routine checkoffs
+- chore completions
+- user-created same-day tasks
+- user-created same-day reminders
+- admin calendar source settings
 
 Future durable concepts:
 
@@ -49,7 +72,7 @@ Future durable concepts:
 
 Use a local-first architecture with three operating modes.
 
-1. Standalone iPad mode: local seed/config data plus browser persistence for the earliest MVP.
+1. Standalone iPad mode: local configuration data plus browser persistence for the earliest MVP.
 2. Home server mode: a Mac Mini runs local APIs, background jobs, calendar/weather refreshes, and LAN-first service.
 3. Cloud sync mode: Supabase remote provides auth, backup, cross-device sync, and parent access away from home.
 
@@ -63,7 +86,7 @@ Sensitive identity data should stay local. If face recognition is added later, r
 
 - Rewrite the README around the household console direction.
 - Document local-first, Mac Mini, Supabase, and deferred face recognition decisions.
-- Preserve the summer planner prototype as seed data.
+- Preserve the summer planner prototype as configuration data.
 - Keep local env files and secrets out of git.
 - Create a private GitHub remote and push the cleaned baseline.
 
@@ -72,8 +95,24 @@ Sensitive identity data should stay local. If face recognition is added later, r
 - Replace the prototype overview with a profile-aware dashboard.
 - Add manual profile switching.
 - Filter routines, events, and assignments by selected profile.
-- Persist checklist completions in localStorage.
+- Persist checklist completions and same-day quick-add tasks/reminders in localStorage.
 - Keep the existing planner data and importer intact.
+
+### Phase 1.5: Day Modeling
+
+- Add school-year weekday and weekend baselines.
+- Add explicit no-school and holiday handling.
+- Add manual day override controls for unusual days.
+- Keep the classifier deterministic before adding AI-generated recommendations.
+
+### Phase 1.6: Admin Calendar Sources
+
+- Add an `/admin` setup route for parent configuration.
+- Let parents save shared ICS/webcal URLs for Apple Calendar, SportsEngine, school, and other event lists.
+- Preview imported events before they affect the dashboard.
+- Apply reviewed preview events into a local dashboard feed.
+- Keep saved sources local until Supabase persistence exists.
+- Use source defaults and later rules to map events to people, gear, pickup, meal impact, and day type changes.
 
 ### Phase 2: Supabase Data Model
 
@@ -102,5 +141,5 @@ Sensitive identity data should stay local. If face recognition is added later, r
 - Child profiles show morning routine, assigned chores, and today context.
 - Parent profiles show household operations and today context.
 - Checklist state persists across refresh.
-- Calendar and chore seed data still load from the existing JSON.
+- Calendar and chore prototype data still load from the existing JSON.
 - README and planning docs explain the pivot and future architecture.

@@ -1,39 +1,23 @@
 import { ProfileDashboard } from "@/components/profile-dashboard";
-import {
-  buildPlannedDays,
-  getScheduleStats,
-  plannerData,
-} from "@/lib/planner/schedule";
+import { getScheduleStats, plannerData } from "@/lib/planner/schedule";
+import { getTodayContext } from "@/lib/today/context";
+import { connection } from "next/server";
 
-const plannedDays = buildPlannedDays();
 const stats = getScheduleStats();
 
-export default function Home() {
+export default async function Home() {
+  await connection();
+  const today = getTodayContext(new Date(), plannerData);
+
   return (
     <ProfileDashboard
       chores={plannerData.chores}
-      day={getDashboardDay()}
       members={plannerData.household.members}
       seasonLabel={plannerData.season.label}
       stats={{
-        dayCount: stats.dayCount,
         fixedEventCount: stats.fixedEventCount,
       }}
+      today={today}
     />
   );
-}
-
-function getDashboardDay() {
-  const today = toDateKey(new Date());
-  const inSeedRange = plannedDays.find((day) => day.date === today);
-
-  return inSeedRange ?? plannedDays[0];
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 }
