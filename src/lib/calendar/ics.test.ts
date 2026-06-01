@@ -58,4 +58,30 @@ describe("parseIcsEvents", () => {
       ["2026-06-01", "2026-06-02", "2026-06-03"],
     );
   });
+
+  it("extracts SportsEngine team identity from descriptions", () => {
+    const events = parseIcsEvents(
+      [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "BEGIN:VEVENT",
+        "UID:fury-event",
+        "DTSTART;TZID=America/Chicago:20260504T130000",
+        "DTEND;TZID=America/Chicago:20260504T140000",
+        "SUMMARY:Pract@Orono",
+        "DESCRIPTION:https://app.sportngin.com/teams/11ef80ea-d381-d21c-9316-4a0e92f31379/schedule/event/fury-event?team_id=11ef80ea-d381-d21c-9316-4a0e92f31379&type=event",
+        "END:VEVENT",
+        "END:VCALENDAR",
+      ].join("\r\n"),
+      {
+        sourceId: "sports-calendar",
+        startsOn: "2026-05-01",
+        endsOn: "2026-05-31",
+      },
+    );
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].teamId, "11ef80ea-d381-d21c-9316-4a0e92f31379");
+    assert.equal(events[0].teamLabel, "FURY U8");
+  });
 });

@@ -11,8 +11,7 @@ type AddressResolver = (hostname: string) => Promise<string[]>;
 
 const maxCalendarBytes = 512 * 1024;
 const maxRedirects = 2;
-const previewEventLimit = 20;
-const previewExpansionLimit = 200;
+const previewExpansionLimit = 1000;
 
 export async function POST(request: Request) {
   const body = await readPreviewRequest(request);
@@ -52,20 +51,46 @@ export async function POST(request: Request) {
     );
   }
 
-  const { parseIcsEvents } = await import("@/lib/calendar/ics");
-  const events = parseIcsEvents(calendarText, {
-    sourceId,
-    startsOn: plannerData.season.startsOn,
-    endsOn: plannerData.season.endsOn,
-    limit: previewEventLimit,
-    maxExpandedEvents: previewExpansionLimit,
-  });
+  if (!looksLikeIcsCalendar(calendarText)) {
+    return Response.json(
+      {
+        error: "Calendar response was not a valid ICS calendar.",
+      },
+      { status: 422 },
+    );
+  }
+
+  let events;
+
+  try {
+    const { parseIcsEvents } = await import("@/lib/calendar/ics");
+    events = parseIcsEvents(calendarText, {
+      sourceId,
+      startsOn: getCalendarImportStartsOn(plannerData.season.startsOn),
+      endsOn: plannerData.season.endsOn,
+      maxExpandedEvents: previewExpansionLimit,
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error: error instanceof Error ? error.message : "Calendar parse failed.",
+      },
+      { status: 422 },
+    );
+  }
 
   return Response.json({
     sourceId,
     eventCount: events.length,
     events,
   });
+}
+
+function getCalendarImportStartsOn(seasonStartsOn: string) {
+  const [year, month] = seasonStartsOn.split("-").map(Number);
+  const startsOn = new Date(year, month - 2, 1);
+
+  return `${startsOn.getFullYear()}-${String(startsOn.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
 async function readPreviewRequest(request: Request): Promise<PreviewRequest | null> {
@@ -119,6 +144,10 @@ async function fetchCalendarText(initialUrl: string) {
 
 function isRedirect(status: number) {
   return status >= 300 && status < 400;
+}
+
+function looksLikeIcsCalendar(calendarText: string) {
+  return /BEGIN:VCALENDAR/i.test(calendarText) && /END:VCALENDAR/i.test(calendarText);
 }
 
 async function readBoundedResponseText(response: Response, maxBytes: number) {

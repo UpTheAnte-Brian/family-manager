@@ -7,9 +7,17 @@ export default function AdminPage() {
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
       <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-6 sm:px-8 lg:px-10">
-          <Link className="text-sm font-semibold text-[#1f6f8b]" href="/">
-            Back to dashboard
-          </Link>
+          <div className="flex flex-wrap gap-4">
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/">
+              Back to dashboard
+            </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
+              Calendar
+            </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
+              Chores
+            </Link>
+          </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
               Household setup

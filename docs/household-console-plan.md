@@ -54,7 +54,9 @@ Browser-local state currently stores:
 
 - selected profile
 - routine checkoffs
+- locally added recurring routine steps
 - chore completions
+- locally added recurring responsibilities
 - user-created same-day tasks
 - user-created same-day reminders
 - admin calendar source settings
@@ -67,6 +69,16 @@ Future durable concepts:
 - tasks, chores, and completions
 - calendar events and calendar sources
 - profile preferences, needs, and private notes
+
+The first Supabase action-item model intentionally gives routines, tasks, and reminders a shared durable shape:
+
+- recurring routines are `household_action_items.item_kind = 'routine'` with `days_of_week`, `start_time`, and `end_time`
+- recurring responsibilities are `item_kind = 'task'` with `days_of_week`, `start_time`, and `end_time`
+- dated tasks are also `item_kind = 'task'` with `occurrence_date`
+- dated reminders are `item_kind = 'reminder'` with `occurrence_date`
+- completion records point to an action item plus an occurrence date, so routine checkoffs and task completions use the same mechanism
+
+Client-side voice AI should fit this architecture as another authenticated client of the same action-item APIs. Voice commands should produce structured mutations such as “create task”, “create recurring responsibility”, “complete routine occurrence”, or “add reminder”. The server should still validate household membership, allowed assignees, dates, recurrence, and audit metadata before writing to Supabase.
 
 ## Architecture Direction
 
@@ -96,6 +108,8 @@ Sensitive identity data should stay local. If face recognition is added later, r
 - Add manual profile switching.
 - Filter routines, events, and assignments by selected profile.
 - Persist checklist completions and same-day quick-add tasks/reminders in localStorage.
+- Let parents add household-specific recurring routine steps from the dashboard.
+- Let parents add household-specific recurring responsibilities from the dashboard.
 - Keep the existing planner data and importer intact.
 
 ### Phase 1.5: Day Modeling

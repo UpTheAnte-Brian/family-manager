@@ -1,13 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
-import { appliedCalendarEventsStorageKey, calendarSourcesStorageKey } from "@/lib/calendar/storage";
+import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
+import {
+  appliedCalendarEventsStorageKey,
+  calendarEventAssignmentsStorageKey,
+  calendarSourcesStorageKey,
+  calendarTeamAssignmentsStorageKey,
+} from "@/lib/calendar/storage";
+import {
+  getCalendarTeamAssignment,
+  getCalendarEventTeamKey,
+  inferSportsTeamLabel,
+  normalizeTeamLabel,
+  type CalendarTeamAssignment,
+} from "@/lib/calendar/team-tags";
 import type { AppliedCalendarEvent, CalendarSource } from "@/lib/calendar/types";
 import { useLocalStorageState } from "@/lib/storage/local";
 import type {
   ChoreCompletion,
+  DayTemplate,
+  DayOfWeek,
   FixedEvent,
   HouseholdMember,
   PlannerData,
@@ -15,22 +30,31 @@ import type {
   WeeklyChore,
   WeeklyChoreAssignmentTemplate,
 } from "@/lib/planner/types";
-import type { LocalHouseholdItem, LocalHouseholdItemKind, TodayContext } from "@/lib/today/types";
+import type {
+  LocalHouseholdItem,
+  LocalResponsibilityItem,
+  LocalRoutineItem,
+  ResponsibilityCategory,
+  TodayContext,
+} from "@/lib/today/types";
 
 type DashboardState = {
   selectedMemberId: string;
   routineCompletions: Record<string, boolean>;
+  actionCompletions: Record<string, boolean>;
   choreCompletions: ChoreCompletion[];
   localItems: LocalHouseholdItem[];
+  localRoutines: LocalRoutineItem[];
+  localResponsibilities: LocalResponsibilityItem[];
 };
 
 type ProfileDashboardProps = {
+  dayTemplates: DayTemplate[];
+  fixedEvents: FixedEvent[];
   members: HouseholdMember[];
   chores: PlannerData["chores"];
-  stats: {
-    fixedEventCount: number;
-  };
-  seasonLabel: string;
+  configuredResponsibilities: LocalResponsibilityItem[];
+  season: PlannerData["season"];
   today: TodayContext;
 };
 
@@ -38,13 +62,68 @@ type AssignmentWithChore = WeeklyChoreAssignmentTemplate & {
   chore?: WeeklyChore;
 };
 
+type DashboardRoutineItem = {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  source: "configured" | "local";
+};
+
+type DashboardResponsibilityItem = {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  category: ResponsibilityCategory;
+  source: "routine" | "configured" | "configured-responsibility" | "local" | "dated-task";
+  assignment?: AssignmentWithChore;
+  localResponsibility?: LocalResponsibilityItem;
+  localTaskId?: string;
+  completionKey?: string;
+};
+
+type DashboardEvent = FixedEvent & {
+  assignedMemberIds?: string[];
+};
+
 const storageKey = "family-manager:dashboard:v1";
+const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+const responsibilityCategories: ResponsibilityCategory[] = [
+  "morning-routine",
+  "homework",
+  "chores",
+  "sports",
+  "work",
+  "personal",
+  "investments",
+  "family-planning",
+  "home-maintenance",
+  "finance",
+];
+const monthNames = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function ProfileDashboard({
   chores,
+  configuredResponsibilities,
+  dayTemplates,
+  fixedEvents,
   members,
-  seasonLabel,
-  stats,
+  season,
   today,
 }: ProfileDashboardProps) {
   const defaultMemberId = members[0]?.id ?? "";
@@ -53,46 +132,148 @@ export function ProfileDashboard({
     () => ({
       selectedMemberId: defaultMemberId,
       routineCompletions: {},
+      actionCompletions: {},
       choreCompletions: chores.completions,
       localItems: [],
+      localRoutines: [],
+      localResponsibilities: [],
     }),
     [chores.completions, defaultMemberId],
   );
   const [state, setState] = useLocalStorageState(storageKey, initialState);
+  const fallbackChoreConfig = useMemo<ChoreStorageState>(
+    () => ({
+      routineChores: chores.routineChores,
+      weeklyChores: chores.weeklyChores,
+      weeklyAssignmentTemplates: chores.weeklyAssignmentTemplates,
+      completions: chores.completions,
+    }),
+    [chores.completions, chores.routineChores, chores.weeklyAssignmentTemplates, chores.weeklyChores],
+  );
+  const [choreConfig] = useLocalStorageState(choreStorageKey, fallbackChoreConfig);
   const [appliedCalendarEvents] = useLocalStorageState<AppliedCalendarEvent[]>(
     appliedCalendarEventsStorageKey,
     [],
   );
   const [calendarSources] = useLocalStorageState<CalendarSource[]>(calendarSourcesStorageKey, []);
+  const [calendarEventAssignments] = useLocalStorageState<Record<string, string[]>>(
+    calendarEventAssignmentsStorageKey,
+    {},
+  );
+  const [calendarTeamAssignments] = useLocalStorageState<CalendarTeamAssignment[]>(
+    calendarTeamAssignmentsStorageKey,
+    [],
+  );
+  const [selectedDate, setSelectedDate] = useState(today.date);
+  const [responsibilityModal, setResponsibilityModal] = useState<
+    | { mode: "add" }
+    | { mode: "edit"; responsibility: LocalResponsibilityItem }
+    | null
+  >(null);
+  const [collapsedResponsibilityCategories, setCollapsedResponsibilityCategories] = useState<
+    Partial<Record<ResponsibilityCategory, boolean>>
+  >({});
+  const wasMorningRoutineCompleteRef = useRef(false);
+  const displayedDay = useMemo(
+    () =>
+      getDashboardDayContext({
+        date: selectedDate,
+        dayTemplates,
+        fixedEvents,
+        season,
+        today,
+      }),
+    [dayTemplates, fixedEvents, season, selectedDate, today],
+  );
 
   const selectedMember =
     members.find((member) => member.id === state.selectedMemberId) ?? members[0];
-  const childMembers = members.filter((member) => member.role === "child");
   const choresById = useMemo(
-    () => new Map(chores.weeklyChores.map((chore) => [chore.id, chore])),
-    [chores.weeklyChores],
+    () => new Map(choreConfig.weeklyChores.map((chore) => [chore.id, chore])),
+    [choreConfig.weeklyChores],
   );
-  const routineItems = getRoutineItems(chores.routineChores, selectedMember, today);
+  const routineItems = getRoutineItems(
+    choreConfig.routineChores,
+    state.localRoutines,
+    selectedMember,
+    displayedDay,
+  );
   const assignments = getAssignments(
-    chores.weeklyAssignmentTemplates,
+    choreConfig.weeklyAssignmentTemplates,
     choresById,
     selectedMember,
-    today,
+    displayedDay,
   );
-  const importedEvents = getAppliedEventsForToday(appliedCalendarEvents, calendarSources, today.date);
-  const effectiveEvents = [...today.fixedEvents, ...importedEvents];
+  const importedEvents = getAppliedEventsForToday(
+    appliedCalendarEvents,
+    calendarSources,
+    calendarTeamAssignments,
+    displayedDay.date,
+  );
+  const configuredEvents = displayedDay.fixedEvents.map((event) => ({
+    ...event,
+    assignedMemberIds:
+      calendarEventAssignments[getConfiguredEventAssignmentKey(event)] ??
+      getConfiguredEventTeamAssignedMemberIds(event, calendarTeamAssignments) ??
+      event.assignedMemberIds ??
+      getConfiguredEventAssignedMemberIds(event, calendarSources),
+  }));
+  const effectiveEvents = [...configuredEvents, ...importedEvents];
   const events = getRelevantEvents(effectiveEvents, selectedMember);
-  const dayTypeLabel = getEffectiveDayTypeLabel(today.dayTypeLabel, effectiveEvents);
-  const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, today.date);
+  const dayTypeLabel = getEffectiveDayTypeLabel(displayedDay.dayTypeLabel, effectiveEvents);
+  const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, displayedDay.date);
   const localTasks = visibleLocalItems.filter((item) => item.kind === "task");
   const localReminders = visibleLocalItems.filter((item) => item.kind === "reminder");
-  const completedRoutineCount = routineItems.filter((routine) =>
-    state.routineCompletions[getRoutineKey(today.date, selectedMember.id, routine.id)],
-  ).length;
-  const completedAssignmentCount =
-    assignments.filter((assignment) => hasCompletion(state.choreCompletions, assignment.id, today.date)).length +
-    localTasks.filter((item) => item.completedAt).length;
-  const reminderItems = getReminderItems(selectedMember, events, assignments, localReminders, today);
+  const responsibilityItems = getResponsibilityItems(
+    routineItems,
+    assignments,
+    configuredResponsibilities,
+    state.localResponsibilities,
+    localTasks,
+    selectedMember,
+    displayedDay,
+  );
+  const reminderItems = getReminderItems(
+    selectedMember,
+    events,
+    responsibilityItems.length,
+    localReminders,
+    displayedDay,
+  );
+  const isPastSelectedDate = displayedDay.date < today.date;
+  const isTodaySelected = displayedDay.date === today.date;
+  const groupedResponsibilityItems = groupResponsibilitiesByCategory(responsibilityItems);
+
+  useEffect(() => {
+    const morningRoutineItems =
+      groupedResponsibilityItems.find(([category]) => category === "morning-routine")?.[1] ?? [];
+
+    if (morningRoutineItems.length === 0) {
+      return;
+    }
+
+    const isMorningRoutineComplete = morningRoutineItems.every((item) =>
+      isResponsibilityComplete(item, state, displayedDay.date, selectedMember.id),
+    );
+
+    const wasMorningRoutineComplete = wasMorningRoutineCompleteRef.current;
+    wasMorningRoutineCompleteRef.current = isMorningRoutineComplete;
+
+    if (isMorningRoutineComplete && !wasMorningRoutineComplete) {
+      setCollapsedResponsibilityCategories((current) => ({
+        ...current,
+        "morning-routine": true,
+      }));
+      return;
+    }
+
+    if (!isMorningRoutineComplete && wasMorningRoutineComplete) {
+      setCollapsedResponsibilityCategories((current) => ({
+        ...current,
+        "morning-routine": false,
+      }));
+    }
+  }, [displayedDay.date, groupedResponsibilityItems, selectedMember.id, state]);
 
   function selectMember(memberId: string) {
     setState((current) => ({
@@ -101,8 +282,8 @@ export function ProfileDashboard({
     }));
   }
 
-  function toggleRoutine(routine: RoutineChore) {
-    const key = getRoutineKey(today.date, selectedMember.id, routine.id);
+  function toggleRoutine(routine: DashboardRoutineItem) {
+    const key = getRoutineKey(displayedDay.date, selectedMember.id, routine.id);
 
     setState((current) => ({
       ...current,
@@ -113,12 +294,31 @@ export function ProfileDashboard({
     }));
   }
 
+  function removeLocalRoutine(routineId: string) {
+    setState((current) => {
+      const removedRoutine = current.localRoutines.find((routine) => routine.id === routineId);
+      const routineCompletions = { ...current.routineCompletions };
+
+      if (removedRoutine) {
+        delete routineCompletions[
+          getRoutineKey(displayedDay.date, removedRoutine.assigneeId, removedRoutine.id)
+        ];
+      }
+
+      return {
+        ...current,
+        localRoutines: current.localRoutines.filter((routine) => routine.id !== routineId),
+        routineCompletions,
+      };
+    });
+  }
+
   function toggleAssignment(assignment: AssignmentWithChore) {
     setState((current) => {
       const existing = current.choreCompletions.find(
         (completion) =>
           completion.assignmentTemplateId === assignment.id &&
-          completion.completedAt.startsWith(today.date),
+          completion.completedAt.startsWith(displayedDay.date),
       );
 
       if (existing) {
@@ -135,11 +335,11 @@ export function ProfileDashboard({
         choreCompletions: [
           ...current.choreCompletions,
           {
-            id: createId(`${assignment.id}-${today.date}`),
+            id: createId(`${assignment.id}-${displayedDay.date}`),
             assignmentTemplateId: assignment.id,
             childId: assignment.childId,
             choreId: assignment.choreId,
-            completedAt: `${today.date}T${assignment.endTime}:00`,
+            completedAt: `${displayedDay.date}T${assignment.endTime}:00`,
             completedBy: selectedMember.id,
           },
         ],
@@ -147,29 +347,100 @@ export function ProfileDashboard({
     });
   }
 
-  function addLocalItem(kind: LocalHouseholdItemKind, title: string, assigneeId: string) {
-    const trimmedTitle = title.trim();
-
-    if (!trimmedTitle) {
+  function toggleResponsibility(item: DashboardResponsibilityItem) {
+    if (item.assignment) {
+      toggleAssignment(item.assignment);
       return;
+    }
+
+    if (item.localTaskId) {
+      toggleLocalTask(item.localTaskId);
+      return;
+    }
+
+    const key = getActionKey(displayedDay.date, selectedMember.id, item.id);
+
+    setState((current) => ({
+      ...current,
+      actionCompletions: {
+        ...current.actionCompletions,
+        [key]: !current.actionCompletions[key],
+      },
+    }));
+  }
+
+  function addLocalResponsibility(input: Omit<LocalResponsibilityItem, "createdAt" | "id">) {
+    const title = input.title.trim();
+
+    if (!title) {
+      return false;
     }
 
     const createdAt = new Date().toISOString();
 
     setState((current) => ({
       ...current,
-      localItems: [
-        ...current.localItems,
+      localResponsibilities: [
+        ...current.localResponsibilities,
         {
-          id: createId(`${kind}-${assigneeId}-${today.date}-${createdAt}-${trimmedTitle}`),
-          kind,
-          title: trimmedTitle,
-          assigneeId,
-          date: today.date,
+          ...input,
+          title,
           createdAt,
+          id: createId(`responsibility-${input.assigneeId}-${createdAt}-${title}`),
         },
       ],
     }));
+
+    return true;
+  }
+
+  function updateLocalResponsibility(
+    responsibilityId: string,
+    input: Omit<LocalResponsibilityItem, "createdAt" | "id">,
+  ) {
+    const title = input.title.trim();
+
+    if (!title) {
+      return false;
+    }
+
+    setState((current) => ({
+      ...current,
+      localResponsibilities: current.localResponsibilities.map((responsibility) =>
+        responsibility.id === responsibilityId
+          ? {
+              ...responsibility,
+              ...input,
+              title,
+            }
+          : responsibility,
+      ),
+    }));
+
+    return true;
+  }
+
+  function removeLocalResponsibility(responsibilityId: string) {
+    setState((current) => {
+      const removedResponsibility = current.localResponsibilities.find(
+        (responsibility) => responsibility.id === responsibilityId,
+      );
+      const actionCompletions = { ...current.actionCompletions };
+
+      if (removedResponsibility) {
+        delete actionCompletions[
+          getActionKey(displayedDay.date, removedResponsibility.assigneeId, removedResponsibility.id)
+        ];
+      }
+
+      return {
+        ...current,
+        actionCompletions,
+        localResponsibilities: current.localResponsibilities.filter(
+          (responsibility) => responsibility.id !== responsibilityId,
+        ),
+      };
+    });
   }
 
   function toggleLocalTask(itemId: string) {
@@ -189,131 +460,189 @@ export function ProfileDashboard({
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
       <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
-        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6 sm:px-8 lg:grid-cols-[1fr_420px] lg:px-10">
-          <div>
-            <Link className="mb-4 inline-block text-sm font-semibold text-[#1f6f8b]" href="/admin">
-              Admin setup
-            </Link>
-            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-              {seasonLabel} · Today Engine
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-normal sm:text-5xl">
-              Household console
-            </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-[#4c5965]">
-              A shared iPad dashboard for the person standing in front of it: routines,
-              schedule changes, chores, and reminders for today.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-            <Stat label="People" value={members.length} />
-            <Stat label="Kids" value={childMembers.length} />
-            <Stat label="Configured events" value={stats.fixedEventCount} />
-            <Stat label="Local imports" value={importedEvents.length} />
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-4 sm:px-8 lg:px-10">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
+                Admin setup
+              </Link>
+              <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
+                Calendar
+              </Link>
+              <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
+                Chores
+              </Link>
+              <label className="text-sm">
+                <span className="sr-only">Person</span>
+                <select
+                  className="min-w-[190px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
+                  onChange={(event) => selectMember(event.target.value)}
+                  value={selectedMember.id}
+                >
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.preferredName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="min-w-[150px]">
+                <h2 className="text-lg font-semibold">{formatDateLabel(displayedDay.date)}</h2>
+                <p className="text-xs text-[#4c5965]">
+                  {displayedDay.dayTypeLabel} · {events.length} event{events.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 sm:w-[340px]">
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  onClick={() => setSelectedDate((current) => shiftDate(current, -1))}
+                  type="button"
+                >
+                  Previous
+                </button>
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isTodaySelected}
+                  onClick={() => setSelectedDate(today.date)}
+                  type="button"
+                >
+                  Today
+                </button>
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  onClick={() => setSelectedDate((current) => shiftDate(current, 1))}
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:grid-cols-[280px_1fr] lg:px-10">
-        <aside className="space-y-4">
-          <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-semibold">Who is here?</h2>
-            <div className="mt-3 grid gap-2">
-              {members.map((member) => (
+      <section className="mx-auto max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
+        <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <div className="space-y-5">
+            <Panel
+              action={
                 <button
-                  aria-pressed={member.id === selectedMember.id}
-                  className={
-                    member.id === selectedMember.id
-                      ? "border border-[#1f6f8b] bg-[#e4f2f6] px-3 py-3 text-left text-sm font-semibold text-[#123d4d]"
-                      : "border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left text-sm font-medium text-[#33414f]"
-                  }
-                  key={member.id}
-                  onClick={() => selectMember(member.id)}
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setResponsibilityModal({ mode: "add" })}
                   type="button"
                 >
-                  <span className="block">{member.preferredName}</span>
-                  <span className="mt-1 block text-xs font-medium capitalize text-[#657381]">
-                    {member.relationship} · {member.role}
-                  </span>
+                  Add responsibility
                 </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-semibold">Today</h2>
-            <dl className="mt-3 space-y-3 text-sm">
-              <Fact label="Date" value={`${today.date} (${today.dayOfWeek})`} />
-              <Fact label="Day type" value={dayTypeLabel} />
-              <Fact label="Baseline" value={today.baseline.label} />
-              <Fact label="Events" value={String(effectiveEvents.length)} />
-              <Fact label="Local imports" value={String(importedEvents.length)} />
-              <Fact label="Schedule blocks" value={String(today.baseline.blocks.length)} />
-            </dl>
-          </section>
-
-          <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-semibold">Operating Mode</h2>
-            <ul className="mt-3 space-y-2 text-sm text-[#4c5965]">
-              <li>Manual profile switching is active.</li>
-              <li>Tasks, reminders, and checkoffs are saved in this browser.</li>
-              <li>Supabase sync, calendar connection, and Mac Mini service are planned next layers.</li>
-            </ul>
-          </section>
-        </aside>
-
-        <div className="space-y-5">
-          <section className="border border-[#cbd5df] bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                  {selectedMember.role === "child" ? "Kid dashboard" : "Parent dashboard"}
-                </p>
-                <h2 className="mt-2 text-3xl font-semibold">{selectedMember.preferredName}</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#4c5965]">
-                  {getProfileSummary(selectedMember, events.length, assignments.length)}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[260px]">
-                <ProgressCard label="Routine" value={completedRoutineCount} total={routineItems.length} />
-                <ProgressCard
-                  label="Chores"
-                  value={completedAssignmentCount}
-                  total={assignments.length + localTasks.length}
-                />
-              </div>
-            </div>
-          </section>
-
-          <QuickAddPanel
-            defaultAssigneeId={selectedMember?.id ?? defaultQuickAddAssignee}
-            key={selectedMember?.id ?? defaultQuickAddAssignee}
-            members={members}
-            onAdd={addLocalItem}
-          />
-
-          <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-            <Panel title={selectedMember.role === "child" ? "Morning Routine" : "House Operations"}>
-              {routineItems.length > 0 ? (
-                <Checklist>
-                  {routineItems.map((routine) => {
-                    const key = getRoutineKey(today.date, selectedMember.id, routine.id);
-                    const checked = Boolean(state.routineCompletions[key]);
+              }
+              title="Responsibilities"
+            >
+              {responsibilityItems.length > 0 ? (
+                <div className="grid gap-4">
+                  {groupedResponsibilityItems.map(([category, items]) => {
+                    const completedCount = items.filter((item) =>
+                      isResponsibilityComplete(item, state, displayedDay.date, selectedMember.id),
+                    ).length;
+                    const isCollapsed = Boolean(collapsedResponsibilityCategories[category]);
 
                     return (
-                      <ChecklistItem
-                        checked={checked}
-                        key={routine.id}
-                        meta={`${routine.schedule.startTime}-${routine.schedule.endTime}`}
-                        onChange={() => toggleRoutine(routine)}
-                        title={routine.title}
-                      />
+                      <section className="grid gap-2" key={category}>
+                        <button
+                          aria-expanded={!isCollapsed}
+                          className="flex items-center justify-between gap-3 text-left"
+                          onClick={() =>
+                            setCollapsedResponsibilityCategories((current) => ({
+                              ...current,
+                              [category]: !current[category],
+                            }))
+                          }
+                          type="button"
+                        >
+                          <span className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                            {categoryLabel(category)}
+                          </span>
+                          <span className="flex items-center gap-2 text-xs font-semibold text-[#657381]">
+                            <span>
+                              {completedCount}/{items.length}
+                            </span>
+                            <span className="inline-grid h-6 w-6 place-items-center border border-[#d7e0e7] bg-[#f8fafc] text-[#17202a]">
+                              {isCollapsed ? "+" : "-"}
+                            </span>
+                          </span>
+                        </button>
+                        {isCollapsed ? null : (
+                          <Checklist>
+                            {items.map((item) => {
+                              const checked = isResponsibilityComplete(
+                                item,
+                                state,
+                                displayedDay.date,
+                                selectedMember.id,
+                              );
+                              const editableResponsibility =
+                                item.source === "local" ? item.localResponsibility : undefined;
+
+                              return (
+                                <ChecklistItem
+                                  checked={checked}
+                                  isPastDue={isPastSelectedDate && !checked}
+                                  key={item.id}
+                                  meta={formatTimeRange(item.startTime, item.endTime)}
+                                  onChange={() =>
+                                    item.source === "routine"
+                                      ? toggleRoutine({
+                                          id: item.id,
+                                          title: item.title,
+                                          startTime: item.startTime,
+                                          endTime: item.endTime,
+                                          source: "configured",
+                                        })
+                                      : toggleResponsibility(item)
+                                  }
+                                  onRemove={
+                                    item.source === "local"
+                                      ? () => removeLocalResponsibility(item.id)
+                                      : item.source === "routine" && item.id.startsWith("routine-")
+                                        ? () => removeLocalRoutine(item.id)
+                                        : undefined
+                                  }
+                                  onEdit={
+                                    editableResponsibility
+                                      ? () =>
+                                          setResponsibilityModal({
+                                            mode: "edit",
+                                            responsibility: editableResponsibility,
+                                          })
+                                      : undefined
+                                  }
+                                  sourceLabel={responsibilitySourceLabel(item)}
+                                  title={item.title}
+                                />
+                              );
+                            })}
+                          </Checklist>
+                        )}
+                      </section>
                     );
                   })}
-                </Checklist>
+                </div>
               ) : (
-                <EmptyState text="No personal routine items are assigned yet. Use this space for parent handoffs, meal checks, and pickup decisions." />
+                <EmptyState text="No responsibility is scheduled for this profile on this date." />
+              )}
+            </Panel>
+          </div>
+
+          <div className="space-y-5">
+            <Panel title="Day Schedule">
+              {events.length > 0 ? (
+                <ol className="grid gap-2">
+                  {events.map((event) => (
+                    <EventRow event={event} key={event.id} />
+                  ))}
+                </ol>
+              ) : (
+                <EmptyState text="No fixed calendar events are attached to this profile on this date." />
               )}
             </Panel>
 
@@ -326,103 +655,326 @@ export function ProfileDashboard({
                 ))}
               </ul>
             </Panel>
-          </section>
+          </div>
 
-          <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-            <Panel title="Today Schedule">
-              {events.length > 0 ? (
-                <ol className="grid gap-2">
-                  {events.map((event) => (
-                    <EventRow event={event} key={event.id} />
+          <div className="grid gap-5 xl:col-span-2 xl:grid-cols-[1fr_1fr]">
+            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
+              <h2 className="text-lg font-semibold">Selected Day</h2>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <Fact label="Date" value={`${displayedDay.date} (${displayedDay.dayOfWeek})`} />
+                <Fact label="Day type" value={dayTypeLabel} />
+                <Fact label="Baseline" value={displayedDay.baseline.label} />
+                <Fact label="Events" value={String(effectiveEvents.length)} />
+                <Fact label="Imports on day" value={String(importedEvents.length)} />
+                <Fact label="Schedule blocks" value={String(displayedDay.baseline.blocks.length)} />
+              </dl>
+            </section>
+
+            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
+              <h2 className="text-lg font-semibold">Operating Mode</h2>
+              <ul className="mt-3 space-y-2 text-sm text-[#4c5965]">
+                <li>Manual profile switching is active.</li>
+                <li>Routine steps, tasks, reminders, and checkoffs are saved in this browser.</li>
+                <li>Supabase sync, calendar connection, and Mac Mini service are planned next layers.</li>
+              </ul>
+            </section>
+
+            <Panel title="History Notes">
+              <EmptyState
+                text={
+                  isPastSelectedDate
+                    ? "Unchecked items above are highlighted as missed for this day."
+                    : "Open items above remain neutral until you page back after today."
+                }
+              />
+            </Panel>
+          </div>
+
+          <div className="xl:col-span-2">
+            <Panel title="Baseline Flow">
+              {displayedDay.baseline.blocks.length > 0 ? (
+                <ol className="grid gap-2 md:grid-cols-2">
+                  {displayedDay.baseline.blocks.slice(0, 8).map((block) => (
+                    <li
+                      className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
+                      key={block.id}
+                    >
+                      <span className="font-semibold text-[#17202a]">{block.title}</span>
+                      <span className="text-[#657381]">
+                        {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel}
+                      </span>
+                    </li>
                   ))}
                 </ol>
               ) : (
-                <EmptyState text="No fixed calendar events are attached to this profile today." />
+                <EmptyState text={`${dayTypeLabel} has no configured baseline yet. This is intentional until school-year and weekend flows are modeled.`} />
               )}
             </Panel>
-
-            <Panel title="Responsibilities">
-              {assignments.length > 0 ? (
-                <Checklist>
-                  {assignments.map((assignment) => {
-                    const checked = hasCompletion(state.choreCompletions, assignment.id, today.date);
-
-                    return (
-                      <ChecklistItem
-                        checked={checked}
-                        key={assignment.id}
-                        meta={`${assignment.startTime}-${assignment.endTime}`}
-                        onChange={() => toggleAssignment(assignment)}
-                        title={assignment.chore?.title ?? assignment.choreId}
-                      />
-                    );
-                  })}
-                  {localTasks.map((item) => (
-                    <ChecklistItem
-                      checked={Boolean(item.completedAt)}
-                      key={item.id}
-                      meta="Added today"
-                      onChange={() => toggleLocalTask(item.id)}
-                      title={item.title}
-                    />
-                  ))}
-                </Checklist>
-              ) : localTasks.length > 0 ? (
-                <Checklist>
-                  {localTasks.map((item) => (
-                    <ChecklistItem
-                      checked={Boolean(item.completedAt)}
-                      key={item.id}
-                      meta="Added today"
-                      onChange={() => toggleLocalTask(item.id)}
-                      title={item.title}
-                    />
-                  ))}
-                </Checklist>
-              ) : (
-                <EmptyState text="No weekly chore assignment is scheduled for this profile today." />
-              )}
-            </Panel>
-          </section>
-
-          <Panel title="Baseline Flow">
-            {today.baseline.blocks.length > 0 ? (
-              <ol className="grid gap-2 md:grid-cols-2">
-                {today.baseline.blocks.slice(0, 8).map((block) => (
-                  <li
-                    className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
-                    key={block.id}
-                  >
-                    <span className="font-semibold text-[#17202a]">{block.title}</span>
-                    <span className="text-[#657381]">
-                      {block.startTime}-{block.endTime} · {block.noiseLevel}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <EmptyState text={`${dayTypeLabel} has no configured baseline yet. This is intentional until school-year and weekend flows are modeled.`} />
-            )}
-          </Panel>
+          </div>
         </div>
       </section>
+      {responsibilityModal ? (
+        <ResponsibilityModal
+          defaultAssigneeId={selectedMember?.id ?? defaultQuickAddAssignee}
+          defaultDayOfWeek={displayedDay.dayOfWeek}
+          initialResponsibility={
+            responsibilityModal.mode === "edit" ? responsibilityModal.responsibility : undefined
+          }
+          members={members}
+          onClose={() => setResponsibilityModal(null)}
+          onSave={(input) => {
+            const saved =
+              responsibilityModal.mode === "edit"
+                ? updateLocalResponsibility(responsibilityModal.responsibility.id, input)
+                : addLocalResponsibility(input);
+
+            if (saved) {
+              setResponsibilityModal(null);
+            }
+          }}
+        />
+      ) : null}
     </main>
   );
 }
 
-function getRoutineItems(
-  routines: RoutineChore[],
-  member: HouseholdMember,
-  today: TodayContext,
-) {
-  if (member.role !== "child") {
-    return [];
+function getDashboardDayContext({
+  date,
+  dayTemplates,
+  fixedEvents,
+  season,
+  today,
+}: {
+  date: string;
+  dayTemplates: DayTemplate[];
+  fixedEvents: FixedEvent[];
+  season: PlannerData["season"];
+  today: TodayContext;
+}): TodayContext {
+  if (date === today.date) {
+    return today;
   }
 
-  return routines.filter(
-    (routine) =>
-      routine.defaultAssigneeIds.includes(member.id) &&
-      routine.schedule.daysOfWeek.includes(today.dayOfWeek),
+  const dayOfWeek = getDayOfWeekForDate(date);
+  const dayEvents = fixedEvents.filter((event) => event.date === date);
+  const dayType = getDayTypeForDate(date, dayOfWeek, dayEvents, season);
+  const template = dayTemplates.find((candidate) => {
+    const range = candidate.appliesTo.dateRange;
+
+    return (
+      candidate.appliesTo.daysOfWeek.includes(dayOfWeek) &&
+      date >= range.startsOn &&
+      date <= range.endsOn
+    );
+  });
+
+  return {
+    date,
+    dayOfWeek,
+    dayType,
+    dayTypeLabel: getDayTypeDisplayLabel(dayType),
+    baseline: {
+      id: template?.id ?? `missing-${dayType}`,
+      label: template?.label ?? `No ${getDayTypeDisplayLabel(dayType).toLowerCase()} baseline configured`,
+      source: template ? "configured" : "missing",
+      blocks: template?.blocks ?? [],
+    },
+    fixedEvents: dayEvents,
+  };
+}
+
+function getDayTypeForDate(
+  date: string,
+  dayOfWeek: DayOfWeek,
+  events: FixedEvent[],
+  season: PlannerData["season"],
+): TodayContext["dayType"] {
+  const eventText = events.map((event) => `${event.title} ${event.category}`.toLowerCase()).join(" ");
+
+  if (eventText.includes("holiday") || eventText.includes("labor day")) {
+    return "holiday";
+  }
+
+  if (eventText.includes("no school") || eventText.includes("school closed")) {
+    return "no-school";
+  }
+
+  const isWeekend = dayOfWeek === "SA" || dayOfWeek === "SU";
+  const isSummer = date >= season.startsOn && date <= season.endsOn;
+
+  if (isSummer) {
+    return isWeekend ? "summer-weekend" : "summer-weekday";
+  }
+
+  return isWeekend ? "school-year-weekend" : "school-day";
+}
+
+function getDayTypeDisplayLabel(dayType: TodayContext["dayType"]) {
+  switch (dayType) {
+    case "school-day":
+      return "School day";
+    case "school-year-weekend":
+      return "School-year weekend";
+    case "summer-weekday":
+      return "Summer weekday";
+    case "summer-weekend":
+      return "Summer weekend";
+    case "no-school":
+      return "No-school day";
+    case "holiday":
+      return "Holiday";
+  }
+}
+
+function getDayOfWeekForDate(date: string): DayOfWeek {
+  const dayCodes: DayOfWeek[] = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  const [year, month, day] = date.split("-").map(Number);
+
+  return dayCodes[new Date(year, month - 1, day).getDay()];
+}
+
+function shiftDate(date: string, amount: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const next = new Date(year, month - 1, day);
+
+  next.setDate(next.getDate() + amount);
+
+  return formatDateKey(next);
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateLabel(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = new Date(year, month - 1, day).getDay();
+
+  return `${weekdayNames[weekday]}, ${monthNames[month - 1]} ${day} (${month}/${day}/${year})`;
+}
+
+function categoryLabel(category: ResponsibilityCategory) {
+  switch (category) {
+    case "morning-routine":
+      return "Morning Routine";
+    case "homework":
+      return "Homework";
+    case "chores":
+      return "Chores";
+    case "sports":
+      return "Sports";
+    case "work":
+      return "Work";
+    case "personal":
+      return "Personal";
+    case "investments":
+      return "Investments";
+    case "family-planning":
+      return "Family Planning";
+    case "home-maintenance":
+      return "Home Maintenance";
+    case "finance":
+      return "Finance";
+  }
+}
+
+function responsibilitySourceLabel(item: DashboardResponsibilityItem) {
+  switch (item.source) {
+    case "routine":
+      return "Routine";
+    case "configured":
+      return "Weekly chore";
+    case "configured-responsibility":
+      return "Configured";
+    case "local":
+      return "Custom";
+    case "dated-task":
+      return "Today";
+  }
+}
+
+function choreCategoryToResponsibilityCategory(category?: string): ResponsibilityCategory {
+  if (category === "sports") {
+    return "sports";
+  }
+
+  if (category === "homework") {
+    return "homework";
+  }
+
+  return "chores";
+}
+
+function groupResponsibilitiesByCategory(items: DashboardResponsibilityItem[]) {
+  return responsibilityCategories
+    .map((category) => [category, items.filter((item) => item.category === category)] as const)
+    .filter(([, categoryItems]) => categoryItems.length > 0);
+}
+
+function isResponsibilityComplete(
+  item: DashboardResponsibilityItem,
+  state: DashboardState,
+  date: string,
+  memberId: string,
+) {
+  if (item.assignment) {
+    return hasCompletion(state.choreCompletions, item.assignment.id, date);
+  }
+
+  if (item.localTaskId) {
+    const localTask = state.localItems.find((candidate) => candidate.id === item.localTaskId);
+
+    return Boolean(localTask?.completedAt);
+  }
+
+  if (item.source === "routine") {
+    return Boolean(state.routineCompletions[getRoutineKey(date, memberId, item.id)]);
+  }
+
+  return Boolean(state.actionCompletions[getActionKey(date, memberId, item.id)]);
+}
+
+function getRoutineItems(
+  routines: RoutineChore[],
+  localRoutines: LocalRoutineItem[],
+  member: HouseholdMember,
+  today: TodayContext,
+): DashboardRoutineItem[] {
+  const configuredItems =
+    member.role === "child"
+      ? routines
+          .filter(
+            (routine) =>
+              routine.defaultAssigneeIds.includes(member.id) &&
+              routine.schedule.daysOfWeek.includes(today.dayOfWeek),
+          )
+          .map((routine) => ({
+            id: routine.id,
+            title: routine.title,
+            startTime: routine.schedule.startTime,
+            endTime: routine.schedule.endTime,
+            source: "configured" as const,
+          }))
+      : [];
+  const localItems = localRoutines
+    .filter(
+      (routine) =>
+        routine.assigneeId === member.id && routine.daysOfWeek.includes(today.dayOfWeek),
+    )
+    .map((routine) => ({
+      id: routine.id,
+      title: routine.title,
+      startTime: routine.startTime,
+      endTime: routine.endTime,
+      source: "local" as const,
+    }));
+
+  return [...configuredItems, ...localItems].sort((first, second) =>
+    compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
   );
 }
 
@@ -444,7 +996,83 @@ function getAssignments(
     }));
 }
 
-function getRelevantEvents(events: FixedEvent[], member: HouseholdMember) {
+function getResponsibilityItems(
+  routines: DashboardRoutineItem[],
+  assignments: AssignmentWithChore[],
+  configuredResponsibilities: LocalResponsibilityItem[],
+  localResponsibilities: LocalResponsibilityItem[],
+  localTasks: LocalHouseholdItem[],
+  member: HouseholdMember,
+  today: TodayContext,
+): DashboardResponsibilityItem[] {
+  const routineResponsibilities = routines.map((routine) => ({
+    id: routine.id,
+    title: routine.title,
+    startTime: routine.startTime,
+    endTime: routine.endTime,
+    category: "morning-routine" as const,
+    source: "routine" as const,
+  }));
+  const configuredItems = assignments.map((assignment) => ({
+    id: assignment.id,
+    title: assignment.chore?.title ?? assignment.choreId,
+    startTime: assignment.startTime,
+    endTime: assignment.endTime,
+    category: choreCategoryToResponsibilityCategory(assignment.chore?.category),
+    source: "configured" as const,
+    assignment,
+  }));
+  const configuredResponsibilityItems = configuredResponsibilities
+    .filter(
+      (responsibility) =>
+        responsibility.assigneeId === member.id &&
+        responsibility.daysOfWeek.includes(today.dayOfWeek),
+    )
+    .map((responsibility) => ({
+      id: responsibility.id,
+      title: responsibility.title,
+      startTime: responsibility.startTime,
+      endTime: responsibility.endTime,
+      category: responsibility.category ?? "chores",
+      source: "configured-responsibility" as const,
+    }));
+  const localItems = localResponsibilities
+    .filter(
+      (responsibility) =>
+        responsibility.assigneeId === member.id &&
+        responsibility.daysOfWeek.includes(today.dayOfWeek),
+    )
+    .map((responsibility) => ({
+      id: responsibility.id,
+      title: responsibility.title,
+      startTime: responsibility.startTime,
+      endTime: responsibility.endTime,
+      category: responsibility.category ?? "chores",
+      source: "local" as const,
+      localResponsibility: responsibility,
+    }));
+  const datedTasks = localTasks.map((item) => ({
+    id: item.id,
+    title: item.title,
+    startTime: "Anytime",
+    endTime: "Today",
+    category: "personal" as const,
+    source: "dated-task" as const,
+    localTaskId: item.id,
+  }));
+
+  return [
+    ...routineResponsibilities,
+    ...configuredItems,
+    ...configuredResponsibilityItems,
+    ...localItems,
+    ...datedTasks,
+  ].sort((first, second) =>
+    compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
+  );
+}
+
+function getRelevantEvents(events: DashboardEvent[], member: HouseholdMember) {
   if (member.role === "parent") {
     return events;
   }
@@ -453,6 +1081,11 @@ function getRelevantEvents(events: FixedEvent[], member: HouseholdMember) {
 
   return events.filter((event) => {
     const title = event.title.toLowerCase();
+    const assignedMemberIds = event.assignedMemberIds ?? [];
+
+    if (assignedMemberIds.length > 0) {
+      return assignedMemberIds.includes(member.id);
+    }
 
     return (
       title.includes(name) ||
@@ -466,7 +1099,7 @@ function getRelevantEvents(events: FixedEvent[], member: HouseholdMember) {
 function getReminderItems(
   member: HouseholdMember,
   events: FixedEvent[],
-  assignments: AssignmentWithChore[],
+  responsibilityCount: number,
   localReminders: LocalHouseholdItem[],
   today: TodayContext,
 ) {
@@ -495,7 +1128,7 @@ function getReminderItems(
       {
         id: "default-child-responsibility",
         title:
-          assignments.length > 0
+          responsibilityCount > 0
             ? "One house responsibility is scheduled today."
             : "No weekly chore is scheduled today.",
       },
@@ -525,8 +1158,9 @@ function getReminderItems(
 function getAppliedEventsForToday(
   events: AppliedCalendarEvent[],
   sources: CalendarSource[],
+  teamAssignments: CalendarTeamAssignment[],
   date: string,
-): FixedEvent[] {
+): DashboardEvent[] {
   const enabledSourceIds = new Set(sources.filter((source) => source.enabled).map((source) => source.id));
 
   return events
@@ -540,9 +1174,53 @@ function getAppliedEventsForToday(
       endTime: event.endTime,
       title: event.title,
       category: event.category,
+      assignedMemberIds:
+        getCalendarTeamAssignment(teamAssignments, getCalendarEventTeamKey(event))?.assignedMemberIds ??
+        event.assignedMemberIds ??
+        [],
       calendarBehavior: "fixed",
       ...(event.location ? { locationNote: event.location } : {}),
     }));
+}
+
+function getConfiguredEventAssignedMemberIds(event: FixedEvent, sources: CalendarSource[]) {
+  const source = sources.find((candidate) => isMatchingCalendarSource(candidate, event.source));
+
+  return source?.defaultMemberIds ?? [];
+}
+
+function getConfiguredEventAssignmentKey(event: FixedEvent) {
+  return `configured:${event.id}`;
+}
+
+function getConfiguredEventTeamAssignedMemberIds(
+  event: FixedEvent,
+  teamAssignments: CalendarTeamAssignment[],
+) {
+  const teamLabel = inferSportsTeamLabel({
+    sourceId: event.source,
+    title: event.title,
+  });
+
+  if (!teamLabel) {
+    return undefined;
+  }
+
+  const teamKey = `label:${normalizeTeamLabel(teamLabel)}`;
+
+  return getCalendarTeamAssignment(teamAssignments, teamKey)?.assignedMemberIds;
+}
+
+function isMatchingCalendarSource(source: CalendarSource, eventSource: string) {
+  if (source.id === eventSource) {
+    return true;
+  }
+
+  if (source.kind === "sportsengine" && eventSource === "sportsengine-calendar") {
+    return true;
+  }
+
+  return createId(source.label) === eventSource || createId(source.label) === eventSource.replace(/-calendar$/, "");
 }
 
 function getEffectiveDayTypeLabel(defaultLabel: string, events: FixedEvent[]) {
@@ -557,14 +1235,6 @@ function getEffectiveDayTypeLabel(defaultLabel: string, events: FixedEvent[]) {
   }
 
   return defaultLabel;
-}
-
-function getProfileSummary(member: HouseholdMember, eventCount: number, assignmentCount: number) {
-  if (member.role === "child") {
-    return `${member.preferredName}'s view filters the house plan down to morning steps, today-specific reminders, ${eventCount} relevant calendar item${eventCount === 1 ? "" : "s"}, and ${assignmentCount} chore assignment${assignmentCount === 1 ? "" : "s"}.`;
-  }
-
-  return `${member.preferredName}'s view focuses on household coordination: ${eventCount} fixed calendar item${eventCount === 1 ? "" : "s"}, operating context, and the current local-first roadmap.`;
 }
 
 function hasCompletion(completions: ChoreCompletion[], assignmentId: string, date: string) {
@@ -589,73 +1259,175 @@ function getRoutineKey(date: string, memberId: string, routineId: string) {
   return `${date}:${memberId}:${routineId}`;
 }
 
-function QuickAddPanel({
+function getActionKey(date: string, memberId: string, actionId: string) {
+  return `${date}:${memberId}:${actionId}`;
+}
+
+function ResponsibilityModal({
   defaultAssigneeId,
+  defaultDayOfWeek,
+  initialResponsibility,
   members,
-  onAdd,
+  onClose,
+  onSave,
 }: {
   defaultAssigneeId: string;
+  defaultDayOfWeek: DayOfWeek;
+  initialResponsibility?: LocalResponsibilityItem;
   members: HouseholdMember[];
-  onAdd: (kind: LocalHouseholdItemKind, title: string, assigneeId: string) => void;
+  onClose: () => void;
+  onSave: (input: Omit<LocalResponsibilityItem, "createdAt" | "id">) => void;
 }) {
-  const [kind, setKind] = useState<LocalHouseholdItemKind>("task");
-  const [assigneeId, setAssigneeId] = useState(defaultAssigneeId);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialResponsibility?.title ?? "");
+  const [category, setCategory] = useState<ResponsibilityCategory>(
+    initialResponsibility?.category ?? "chores",
+  );
+  const [assigneeId, setAssigneeId] = useState(
+    initialResponsibility?.assigneeId ?? defaultAssigneeId,
+  );
+  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>(
+    initialResponsibility?.daysOfWeek ?? [defaultDayOfWeek],
+  );
+  const [startTime, setStartTime] = useState(initialResponsibility?.startTime ?? "16:00");
+  const [endTime, setEndTime] = useState(initialResponsibility?.endTime ?? "16:15");
+  const isEditing = Boolean(initialResponsibility);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onAdd(kind, title, assigneeId);
-    setTitle("");
+    onSave({
+      assigneeId,
+      category,
+      daysOfWeek,
+      endTime,
+      startTime,
+      title,
+    });
+  }
+
+  function toggleDay(day: DayOfWeek) {
+    setDaysOfWeek((current) =>
+      current.includes(day)
+        ? current.filter((candidate) => candidate !== day)
+        : [...current, day],
+    );
   }
 
   return (
-    <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-      <form className="grid gap-3 lg:grid-cols-[160px_180px_1fr_auto]" onSubmit={submit}>
-        <label className="grid gap-1 text-sm">
-          <span className="font-semibold">Type</span>
-          <select
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setKind(event.target.value as LocalHouseholdItemKind)}
-            value={kind}
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">
+              {isEditing ? "Edit responsibility" : "Add responsibility"}
+            </h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Choose who owns it, when it appears, and where it is grouped.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onClose}
+            type="button"
           >
-            <option value="task">Task</option>
-            <option value="reminder">Reminder</option>
-          </select>
-        </label>
+            Close
+          </button>
+        </div>
 
-        <label className="grid gap-1 text-sm">
-          <span className="font-semibold">For</span>
-          <select
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setAssigneeId(event.target.value)}
-            value={assigneeId}
-          >
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.preferredName}
-              </option>
-            ))}
-          </select>
-        </label>
+        <form className="grid gap-3" onSubmit={submit}>
+          <div className="grid gap-3 lg:grid-cols-[1fr_170px_170px]">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Responsibility</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Make bed, finish math, practice shots, take trash out..."
+                value={title}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Category</span>
+              <select
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setCategory(event.target.value as ResponsibilityCategory)}
+                value={category}
+              >
+                {responsibilityCategories.map((option) => (
+                  <option key={option} value={option}>
+                    {categoryLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">For</span>
+              <select
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setAssigneeId(event.target.value)}
+                value={assigneeId}
+              >
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.preferredName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-        <label className="grid gap-1 text-sm">
-          <span className="font-semibold">Add for today</span>
-          <input
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Bring cleats, call school, pack library book..."
-            value={title}
-          />
-        </label>
+          <fieldset className="grid gap-2 text-sm">
+            <legend className="font-semibold">Days</legend>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+              {dayOptions.map((day) => (
+                <label
+                  className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
+                  key={day}
+                >
+                  <input
+                    checked={daysOfWeek.includes(day)}
+                    onChange={() => toggleDay(day)}
+                    type="checkbox"
+                  />
+                  {day}
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
-        <button
-          className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
-          type="submit"
-        >
-          Add
-        </button>
-      </form>
-    </section>
+          <div className="grid gap-3 sm:grid-cols-[140px_140px_1fr_auto]">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Start</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setStartTime(event.target.value)}
+                type="time"
+                value={startTime}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">End</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setEndTime(event.target.value)}
+                type="time"
+                value={endTime}
+              />
+            </label>
+            <span />
+            <button
+              className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={daysOfWeek.length === 0}
+              type="submit"
+            >
+              {isEditing ? "Save" : "Add"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -678,13 +1450,28 @@ function sourceLabel(source: string) {
   return source.replace(/-calendar$/, "").replace(/-/g, " ");
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="border border-[#cbd5df] bg-white px-4 py-3 shadow-sm">
-      <p className="text-2xl font-semibold">{value}</p>
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">{label}</p>
-    </div>
-  );
+function formatTimeRange(startTime: string, endTime: string) {
+  if (startTime === "00:00" && endTime === "23:59") {
+    return "All Day";
+  }
+
+  if (!isClockTime(startTime) || !isClockTime(endTime)) {
+    return `${startTime}-${endTime}`;
+  }
+
+  return `${formatClockTime(startTime)}-${formatClockTime(endTime)}`;
+}
+
+function formatClockTime(time: string) {
+  const [hourValue, minuteValue] = time.split(":").map(Number);
+  const period = hourValue >= 12 ? "PM" : "AM";
+  const hour = hourValue % 12 || 12;
+
+  return `${hour}:${String(minuteValue).padStart(2, "0")} ${period}`;
+}
+
+function isClockTime(value: string) {
+  return /^\d{2}:\d{2}$/.test(value);
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -696,21 +1483,17 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProgressCard({ label, total, value }: { label: string; total: number; value: number }) {
-  return (
-    <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3">
-      <p className="text-2xl font-semibold">
-        {value}/{total}
-      </p>
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">{label}</p>
-    </div>
-  );
-}
-
-function Panel({ children, title }: Readonly<{ children: React.ReactNode; title: string }>) {
+function Panel({
+  action,
+  children,
+  title,
+}: Readonly<{ action?: React.ReactNode; children: React.ReactNode; title: string }>) {
   return (
     <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-xl font-semibold">{title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -722,26 +1505,69 @@ function Checklist({ children }: Readonly<{ children: React.ReactNode }>) {
 
 function ChecklistItem({
   checked,
+  isPastDue = false,
   meta,
   onChange,
+  onEdit,
+  onRemove,
+  sourceLabel,
   title,
 }: {
   checked: boolean;
+  isPastDue?: boolean;
   meta: string;
   onChange: () => void;
+  onEdit?: () => void;
+  onRemove?: () => void;
+  sourceLabel: string;
   title: string;
 }) {
+  const itemClass = checked
+    ? "border-[#b7d8c3] bg-[#f1faf3]"
+    : isPastDue
+      ? "border-[#e0b9a7] bg-[#fff4ed]"
+      : "border-[#d7e0e7] bg-[#f8fafc]";
+
   return (
     <li>
-      <label className="grid cursor-pointer grid-cols-[24px_1fr] gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
-        <input checked={checked} className="mt-1 h-4 w-4" onChange={onChange} type="checkbox" />
-        <span>
-          <span className={checked ? "block font-semibold text-[#657381] line-through" : "block font-semibold"}>
-            {title}
+      <div className={`grid grid-cols-[1fr_auto] gap-2 border px-3 py-3 text-sm ${itemClass}`}>
+        <label className="grid cursor-pointer grid-cols-[24px_1fr] gap-3">
+          <input checked={checked} className="mt-1 h-4 w-4" onChange={onChange} type="checkbox" />
+          <span>
+            <span className={checked ? "block font-semibold text-[#657381] line-through" : "block font-semibold"}>
+              {title}
+            </span>
+            <span className="mt-1 block text-xs text-[#657381]">
+              {meta} · {sourceLabel}
+            </span>
           </span>
-          <span className="mt-1 block text-xs text-[#657381]">{meta}</span>
+        </label>
+        <span className="grid justify-items-end gap-2">
+          {isPastDue ? (
+            <span className="border border-[#e0b9a7] bg-white px-2 py-1 text-xs font-semibold text-[#8a3f2f]">
+              Missed
+            </span>
+          ) : null}
+          {onEdit ? (
+            <button
+              className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#1f6f8b]"
+              onClick={onEdit}
+              type="button"
+            >
+              Edit
+            </button>
+          ) : null}
+          {onRemove ? (
+            <button
+              className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#8a2f2f]"
+              onClick={onRemove}
+              type="button"
+            >
+              Remove
+            </button>
+          ) : null}
         </span>
-      </label>
+      </div>
     </li>
   );
 }
@@ -750,7 +1576,7 @@ function EventRow({ event }: { event: FixedEvent }) {
   return (
     <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[120px_1fr_80px]">
       <time className="font-semibold text-[#1f6f8b]">
-        {event.startTime}-{event.endTime}
+        {formatTimeRange(event.startTime, event.endTime)}
       </time>
       <div>
         <p className="font-semibold">{event.title}</p>
@@ -761,6 +1587,18 @@ function EventRow({ event }: { event: FixedEvent }) {
       </span>
     </li>
   );
+}
+
+function compareStrings(first: string, second: string) {
+  if (first < second) {
+    return -1;
+  }
+
+  if (first > second) {
+    return 1;
+  }
+
+  return 0;
 }
 
 function EmptyState({ text }: { text: string }) {

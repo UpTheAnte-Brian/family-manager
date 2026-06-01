@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { appliedCalendarEventsStorageKey, calendarSourcesStorageKey } from "@/lib/calendar/storage";
 import type {
@@ -31,16 +31,38 @@ const defaultFormState: CalendarFormState = {
   defaultMemberIds: [],
   notes: "",
 };
+const emptyCalendarSources: CalendarSource[] = [];
+const emptyAppliedEvents: AppliedCalendarEvent[] = [];
+const previewDisplayLimit = 20;
 
 export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
-  const [sources, setSources] = useLocalStorageState<CalendarSource[]>(calendarSourcesStorageKey, []);
+  const [sources, setSources] = useLocalStorageState<CalendarSource[]>(
+    calendarSourcesStorageKey,
+    emptyCalendarSources,
+  );
   const [appliedEvents, setAppliedEvents] = useLocalStorageState<AppliedCalendarEvent[]>(
     appliedCalendarEventsStorageKey,
-    [],
+    emptyAppliedEvents,
   );
   const [form, setForm] = useState(defaultFormState);
   const [previewBySource, setPreviewBySource] = useState<Record<string, CalendarPreviewResult>>({});
   const [isPreviewing, setIsPreviewing] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSources((current) =>
+      current.some((source) => source.lastSyncMessage === "Unexpected end of JSON input")
+        ? current.map((source) =>
+            source.lastSyncMessage === "Unexpected end of JSON input"
+              ? {
+                  ...source,
+                  lastSyncStatus: "never",
+                  lastSyncMessage: "Preview again to refresh this source with the updated calendar importer.",
+                }
+              : source,
+          )
+        : current,
+    );
+  }, [setSources]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,7 +128,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
     const nextEvents = preview.events.map((event) => ({
       ...event,
       sourceLabel: source.label,
-      assignedMemberIds: source.defaultMemberIds,
+      assignedMemberIds: source.defaultMemberIds ?? [],
       appliedAt,
     }));
 
@@ -124,6 +146,40 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
               lastSyncMessage: `Applied ${nextEvents.length} event${nextEvents.length === 1 ? "" : "s"} to the local dashboard feed.`,
             }
           : candidate,
+      ),
+    );
+  }
+
+  function toggleSourceMember(sourceId: string, memberId: string) {
+    let nextMemberIds: string[] = [];
+
+    setSources((current) =>
+      current.map((source) => {
+        if (source.id !== sourceId) {
+          return source;
+        }
+
+        const currentMemberIds = source.defaultMemberIds ?? [];
+
+        nextMemberIds = currentMemberIds.includes(memberId)
+          ? currentMemberIds.filter((id) => id !== memberId)
+          : [...currentMemberIds, memberId];
+
+        return {
+          ...source,
+          defaultMemberIds: nextMemberIds,
+          defaultVisibility: nextMemberIds.length > 0 ? "assigned-members" : "family",
+        };
+      }),
+    );
+    setAppliedEvents((current) =>
+      current.map((event) =>
+        event.sourceId === sourceId
+          ? {
+              ...event,
+              assignedMemberIds: nextMemberIds,
+            }
+          : event,
       ),
     );
   }
@@ -157,10 +213,10 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
           url: source.url,
         }),
       });
-      const data = await response.json();
+      const data = await readCalendarPreviewResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Preview failed");
+        throw new Error("error" in data ? data.error : "Preview failed");
       }
 
       setPreviewBySource((current) => ({
@@ -174,7 +230,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                 ...candidate,
                 lastSyncedAt: new Date().toISOString(),
                 lastSyncStatus: "success",
-                lastSyncMessage: `Previewed ${(data as CalendarPreviewResult).eventCount} event${(data as CalendarPreviewResult).eventCount === 1 ? "" : "s"}.`,
+                lastSyncMessage: getPreviewMessage(data as CalendarPreviewResult),
               }
             : candidate,
         ),
@@ -307,8 +363,26 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                     <h3 className="font-semibold">{source.label}</h3>
                     <p className="mt-1 break-all text-sm text-[#4c5965]">{source.url}</p>
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                      {source.kind} · {source.enabled ? "enabled" : "disabled"} · {source.lastSyncStatus ?? "never"}
+                      {source.kind} · {source.enabled ? "imports shown" : "imports hidden"} · {source.lastSyncStatus ?? "never"}
                     </p>
+                    <fieldset className="mt-3 grid gap-2 text-sm">
+                      <legend className="font-semibold text-[#17202a]">Show on dashboards for</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {members.map((member) => (
+                          <label
+                            className="flex items-center gap-2 border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold"
+                            key={member.id}
+                          >
+                            <input
+                              checked={(source.defaultMemberIds ?? []).includes(member.id)}
+                              onChange={() => toggleSourceMember(source.id, member.id)}
+                              type="checkbox"
+                            />
+                            {member.preferredName}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
                     {source.lastSyncMessage ? <p className="mt-2 text-sm text-[#4c5965]">{source.lastSyncMessage}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -333,7 +407,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                       onClick={() => toggleEnabled(source.id)}
                       type="button"
                     >
-                      {source.enabled ? "Disable" : "Enable"}
+                      {source.enabled ? "Hide" : "Show"}
                     </button>
                     <button
                       className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
@@ -347,15 +421,23 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
 
                 {previewBySource[source.id] ? (
                   <ol className="mt-3 grid gap-2">
-                    {previewBySource[source.id].events.map((event) => (
+                    {previewBySource[source.id].events.slice(0, previewDisplayLimit).map((event) => (
                       <li className="grid gap-1 border border-[#d7e0e7] bg-white px-3 py-2 text-sm" key={`${event.sourceId}-${event.sourceUid}-${event.date}-${event.startTime}-${event.title}`}>
                         <span className="font-semibold">{event.title}</span>
                         <span className="text-[#4c5965]">
                           {event.date} · {event.startTime}-{event.endTime} · {event.category}
                         </span>
+                        {event.teamLabel ? (
+                          <span className="text-xs font-semibold text-[#2f6f73]">{event.teamLabel}</span>
+                        ) : null}
                         {event.location ? <span className="text-xs text-[#657381]">{event.location}</span> : null}
                       </li>
                     ))}
+                    {previewBySource[source.id].events.length > previewDisplayLimit ? (
+                      <li className="border border-dashed border-[#cbd5df] bg-white px-3 py-3 text-sm text-[#4c5965]">
+                        Showing first {previewDisplayLimit} of {previewBySource[source.id].eventCount} events. Apply imports all {previewBySource[source.id].eventCount}.
+                      </li>
+                    ) : null}
                   </ol>
                 ) : null}
               </article>
@@ -373,4 +455,35 @@ function createId(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .slice(0, 80);
+}
+
+function getPreviewMessage(preview: CalendarPreviewResult) {
+  const shownCount = Math.min(previewDisplayLimit, preview.events.length);
+  const eventLabel = preview.eventCount === 1 ? "event" : "events";
+
+  if (preview.eventCount > shownCount) {
+    return `Found ${preview.eventCount} ${eventLabel}. Showing first ${shownCount}; Apply will import all ${preview.eventCount}.`;
+  }
+
+  return `Found ${preview.eventCount} ${eventLabel}. Apply will import ${preview.eventCount}.`;
+}
+
+async function readCalendarPreviewResponse(
+  response: Response,
+): Promise<CalendarPreviewResult | { error: string }> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return {
+      error: `Preview returned an empty ${response.status} response.`,
+    };
+  }
+
+  try {
+    return JSON.parse(text) as CalendarPreviewResult | { error: string };
+  } catch {
+    return {
+      error: text.slice(0, 240),
+    };
+  }
 }

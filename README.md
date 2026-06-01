@@ -23,10 +23,10 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 - Household members, summer schedule blocks, fixed calendar events, routine chores, weekly chores, and chore assignments in `data/summer-2026-planner.json`.
 - A manual profile dashboard that filters routines, events, and chores by selected family member.
 - Real-date Today Engine with explicit missing states when no baseline is configured for the current day.
-- Browser-local checklist completion tracking plus same-day task/reminder quick-add.
+- Browser-local checklist completion tracking plus editable routine steps, recurring responsibilities, and same-day task/reminder quick-add.
 - Admin setup route for shared calendar source URLs, ICS preview, and local apply-to-dashboard.
 - ICS importer for Apple Calendar and SportsEngine feeds.
-- Supabase client placeholder for the later sync layer.
+- Supabase migration target for recurring routines, recurring responsibilities, dated tasks, dated reminders, and shared completion records.
 
 ## Data Status
 
@@ -35,7 +35,7 @@ The app is not connected to Supabase or a live calendar yet.
 - Prototype configuration data lives in `data/summer-2026-planner.json`.
 - Local user actions are stored in browser `localStorage`.
 - Imported-looking calendar events are prototype data.
-- Supabase is planned for durable sync, backup, auth, and remote access.
+- Supabase is planned for durable sync, backup, auth, and remote access. The first durable action-item schema lives in `supabase/migrations`.
 
 ## Getting Started
 

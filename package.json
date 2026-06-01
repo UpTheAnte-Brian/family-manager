@@ -7,6 +7,8 @@
     "build": "next build",
     "import:calendar": "node scripts/import-ics-to-planner.mjs",
     "import:sports": "node scripts/import-ics-to-planner.mjs --source sportsengine-calendar --replace-source --env SPORTSENGINE_CALENDAR_URL",
+    "plan:summer-workdays": "tsx scripts/plan-summer-workdays.ts",
+    "refresh:family-calendar": "pnpm import:calendar && pnpm plan:summer-workdays",
     "start": "next start",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "lint": "eslint"

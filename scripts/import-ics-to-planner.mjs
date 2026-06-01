@@ -11,25 +11,28 @@ loadDotEnv("env.local");
 const input = args.input ?? readEnvInput(args.env) ?? defaultInputPath;
 const inputLabel = isUrl(input) ? input : path.resolve(input);
 const source = args.source ?? inferSource(input);
-const replaceSource = args.replaceSource ?? isUrl(input);
+const replaceSource = args.replaceSource ?? true;
 
 const planner = JSON.parse(fs.readFileSync(plannerPath, "utf8"));
 const seasonStart = parseDateOnly(planner.season.startsOn);
 const seasonEnd = endOfDay(parseDateOnly(planner.season.endsOn));
+const importWindowStart = getImportWindowStart(seasonStart);
+const importWindowStartsOn = formatDate(importWindowStart);
+const memberMatchers = createMemberMatchers(planner.household.members);
 const calendarText = await readCalendarText(inputLabel);
 const calendar = ical.sync.parseICS(calendarText);
 
 const importedEvents = Object.values(calendar)
   .filter((entry) => entry.type === "VEVENT")
-  .flatMap((event) => expandEvent(event, seasonStart, seasonEnd))
-  .map((event) => toFixedEvent(event, source))
+  .flatMap((event) => expandEvent(event, importWindowStart, seasonEnd))
+  .map((event) => toFixedEvent(event, source, memberMatchers))
   .filter(Boolean);
 
 const existingEvents = replaceSource
   ? planner.fixedEvents.filter(
       (event) =>
         event.source !== source ||
-        !isWithinImportedWindow(event.date, planner.season.startsOn, planner.season.endsOn),
+        !isWithinImportedWindow(event.date, importWindowStartsOn, planner.season.endsOn),
     )
   : planner.fixedEvents;
 const existingById = new Map(existingEvents.map((event) => [event.id, event]));
@@ -62,6 +65,7 @@ fs.writeFileSync(plannerPath, `${JSON.stringify(planner, null, 2)}\n`);
 
 console.log(`Imported ${importedEvents.length} fixed events from ${sourceDescription(inputLabel)}`);
 console.log(`Source: ${source}${replaceSource ? " (replaced existing source events)" : ""}`);
+console.log(`Import window: ${importWindowStartsOn} through ${planner.season.endsOn}`);
 console.log(`Updated ${plannerPath}`);
 
 async function readCalendarText(inputValue) {
@@ -101,7 +105,7 @@ function expandEvent(event, startsOn, endsOn) {
   }));
 }
 
-function toFixedEvent(event, source) {
+function toFixedEvent(event, source, memberMatchers) {
   if (!event.start || !event.summary) {
     return null;
   }
@@ -111,6 +115,7 @@ function toFixedEvent(event, source) {
   const allDay = isAllDay(event);
   const date = formatDate(start);
   const title = String(event.summary).trim();
+  const assignedMemberIds = inferAssignedMemberIds(event, memberMatchers);
 
   return {
     id: makeId(source, event.uid, date, formatTime(start), title),
@@ -122,6 +127,7 @@ function toFixedEvent(event, source) {
     title,
     category: inferCategory(title),
     calendarBehavior: "fixed",
+    ...(assignedMemberIds.length > 0 ? { assignedMemberIds } : {}),
     ...(event.location ? { locationNote: String(event.location) } : {}),
   };
 }
@@ -190,6 +196,47 @@ function compareFixedEvents(a, b) {
 
 function isWithinImportedWindow(date, startsOn, endsOn) {
   return date >= startsOn && date <= endsOn;
+}
+
+function getImportWindowStart(seasonStart) {
+  return new Date(seasonStart.getFullYear(), seasonStart.getMonth() - 1, 1);
+}
+
+function createMemberMatchers(members) {
+  return members.map((member) => {
+    const names = [member.preferredName, member.displayName].filter(Boolean);
+    const patterns = [...new Set(names)]
+      .filter((name) => name.toLowerCase() !== "me" && name.toLowerCase() !== "mom")
+      .map((name) => new RegExp(`(^|[^a-z0-9])${escapeRegExp(name)}(?:'s)?([^a-z0-9]|$)`, "i"));
+
+    return {
+      id: member.id,
+      patterns,
+    };
+  });
+}
+
+function inferAssignedMemberIds(event, memberMatchers) {
+  const searchableText = [
+    event.summary,
+    event.description,
+    event.location,
+  ]
+    .filter(Boolean)
+    .map(String)
+    .join(" ");
+
+  if (!searchableText) {
+    return [];
+  }
+
+  return memberMatchers
+    .filter((member) => member.patterns.some((pattern) => pattern.test(searchableText)))
+    .map((member) => member.id);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseArgs(values) {

@@ -24,6 +24,8 @@ export type CalendarSource = {
 export type ImportedCalendarEvent = {
   sourceId: string;
   sourceUid?: string;
+  teamId?: string;
+  teamLabel?: string;
   title: string;
   date: string;
   startTime: string;

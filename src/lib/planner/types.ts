@@ -53,6 +53,7 @@ export type FixedEvent = {
   title: string;
   category: string;
   calendarBehavior: CalendarBehavior;
+  assignedMemberIds?: string[];
   locationNote?: string;
 };
 

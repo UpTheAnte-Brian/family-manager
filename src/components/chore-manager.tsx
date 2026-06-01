@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
+import { useLocalStorageState } from "@/lib/storage/local";
 import type {
   ChoreCompletion,
   DayOfWeek,
@@ -11,109 +14,181 @@ import type {
   WeeklyChoreAssignmentTemplate,
 } from "@/lib/planner/types";
 
-type ChoreState = {
-  weeklyChores: WeeklyChore[];
-  weeklyAssignmentTemplates: WeeklyChoreAssignmentTemplate[];
-  completions: ChoreCompletion[];
-};
-
 type ChoreManagerProps = {
   chores: PlannerData["chores"];
   members: HouseholdMember[];
 };
 
-const storageKey = "family-manager:chores:v1";
+type AssignmentWithStatus = WeeklyChoreAssignmentTemplate & {
+  child?: HouseholdMember;
+  chore?: WeeklyChore;
+  isComplete: boolean;
+  completion?: ChoreCompletion;
+};
+
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+const dayLabels: Record<DayOfWeek, string> = {
+  MO: "Mon",
+  TU: "Tue",
+  WE: "Wed",
+  TH: "Thu",
+  FR: "Fri",
+  SA: "Sat",
+  SU: "Sun",
+};
+const warehouseSeedChores: WeeklyChore[] = [
+  {
+    id: "pick-rocks-grass",
+    title: "Pick rocks out of the grass",
+    category: "yard",
+    estimatedMinutes: 20,
+    eligibleAssigneeIds: [],
+    requiresAdultCheck: true,
+  },
+  {
+    id: "pick-up-dog-poop",
+    title: "Pick up dog poop",
+    category: "pets",
+    estimatedMinutes: 10,
+    eligibleAssigneeIds: [],
+    requiresAdultCheck: true,
+  },
+  {
+    id: "blow-off-trampoline",
+    title: "Blow off the trampoline",
+    category: "yard",
+    estimatedMinutes: 10,
+    eligibleAssigneeIds: [],
+  },
+  {
+    id: "water-flowers",
+    title: "Water the flowers",
+    category: "yard",
+    estimatedMinutes: 15,
+    eligibleAssigneeIds: [],
+  },
+];
 
 export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const childMembers = useMemo(
     () => members.filter((member) => member.role === "child"),
     [members],
   );
-  const [state, setState] = useState<ChoreState>(() => {
-    const initialState = {
-      weeklyChores: chores.weeklyChores,
+  const initialState = useMemo<ChoreStorageState>(
+    () => ({
+      routineChores: chores.routineChores,
+      weeklyChores: mergeChoreSeeds(chores.weeklyChores, warehouseSeedChores, childMembers),
       weeklyAssignmentTemplates: chores.weeklyAssignmentTemplates,
       completions: chores.completions,
-    };
-
-    if (typeof window === "undefined") {
-      return initialState;
-    }
-
-    const saved = window.localStorage.getItem(storageKey);
-
-    if (!saved) {
-      return initialState;
-    }
-
-    try {
-      return JSON.parse(saved) as ChoreState;
-    } catch {
-      window.localStorage.removeItem(storageKey);
-      return initialState;
-    }
-  });
+    }),
+    [
+      chores.completions,
+      chores.routineChores,
+      chores.weeklyAssignmentTemplates,
+      chores.weeklyChores,
+      childMembers,
+    ],
+  );
+  const [state, setState] = useLocalStorageState(choreStorageKey, initialState);
+  const [selectedDate, setSelectedDate] = useState(() => formatDateKey(new Date()));
+  const [selectedChoreId, setSelectedChoreId] = useState(
+    state.weeklyChores[0]?.id ?? initialState.weeklyChores[0]?.id ?? "",
+  );
   const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
-  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
-
-  useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(state));
-  }, [state]);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+  const [assignmentModal, setAssignmentModal] = useState<
+    | { mode: "add"; choreId?: string; childId?: string }
+    | { mode: "edit"; assignmentId: string }
+    | null
+  >(null);
 
   const choresById = useMemo(
     () => new Map(state.weeklyChores.map((chore) => [chore.id, chore])),
     [state.weeklyChores],
   );
+  const childById = useMemo(
+    () => new Map(childMembers.map((child) => [child.id, child])),
+    [childMembers],
+  );
+  const selectedDay = getDayOfWeekForDate(selectedDate);
+  const assignments = useMemo<AssignmentWithStatus[]>(
+    () =>
+      state.weeklyAssignmentTemplates
+        .map((assignment) => {
+          const completion = state.completions.find(
+            (candidate) =>
+              candidate.assignmentTemplateId === assignment.id &&
+              candidate.childId === assignment.childId &&
+              candidate.completedAt.startsWith(selectedDate),
+          );
 
-  const summaries = childMembers.map((child) => {
-    const assignments = state.weeklyAssignmentTemplates
-      .filter((assignment) => assignment.childId === child.id)
-      .map((assignment) => ({
-        ...assignment,
-        chore: choresById.get(assignment.choreId),
-        completions: state.completions.filter(
-          (completion) => completion.assignmentTemplateId === assignment.id,
+          return {
+            ...assignment,
+            child: childById.get(assignment.childId),
+            chore: choresById.get(assignment.choreId),
+            completion,
+            isComplete: Boolean(completion),
+          };
+        })
+        .sort((first, second) =>
+          compareStrings(
+            `${first.dayOfWeek}-${first.startTime}-${first.child?.preferredName ?? ""}`,
+            `${second.dayOfWeek}-${second.startTime}-${second.child?.preferredName ?? ""}`,
+          ),
         ),
-      }));
+    [childById, choresById, selectedDate, state.completions, state.weeklyAssignmentTemplates],
+  );
+  const selectedChore =
+    choresById.get(selectedChoreId) ?? state.weeklyChores[0] ?? initialState.weeklyChores[0];
+  const selectedChoreAssignments = assignments.filter(
+    (assignment) => assignment.choreId === selectedChore?.id,
+  );
+  const todaysAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
+  const scheduledChoreIds = new Set(state.weeklyAssignmentTemplates.map((assignment) => assignment.choreId));
+  const backlogChores = state.weeklyChores.filter((chore) => !scheduledChoreIds.has(chore.id));
+  const childSummaries = childMembers.map((child) => {
+    const childAssignments = assignments.filter((assignment) => assignment.childId === child.id);
+    const todayChildAssignments = childAssignments.filter(
+      (assignment) => assignment.dayOfWeek === selectedDay,
+    );
 
     return {
       child,
-      assignedCount: assignments.length,
-      completedCount: assignments.filter((assignment) => assignment.completions.length > 0).length,
-      targetCount: chores.weeklyTargetPerChild,
-      assignments,
+      assignedCount: childAssignments.length,
+      doneToday: todayChildAssignments.filter((assignment) => assignment.isComplete).length,
+      dueToday: todayChildAssignments.length,
     };
   });
 
-  function logCompletion(assignment: WeeklyChoreAssignmentTemplate) {
-    const completion: ChoreCompletion = {
-      id: createId("completion"),
-      assignmentTemplateId: assignment.id,
-      childId: assignment.childId,
-      choreId: assignment.choreId,
-      completedAt: new Date().toISOString(),
-    };
-
-    setState((current) => ({
-      ...current,
-      completions: [...current.completions, completion],
-    }));
-  }
-
-  function undoLatestCompletion(assignmentId: string) {
+  function toggleCompletion(assignment: WeeklyChoreAssignmentTemplate) {
     setState((current) => {
-      const latest = [...current.completions]
-        .filter((completion) => completion.assignmentTemplateId === assignmentId)
-        .sort((a, b) => b.completedAt.localeCompare(a.completedAt))[0];
+      const existing = current.completions.find(
+        (completion) =>
+          completion.assignmentTemplateId === assignment.id &&
+          completion.childId === assignment.childId &&
+          completion.completedAt.startsWith(selectedDate),
+      );
 
-      if (!latest) {
-        return current;
+      if (existing) {
+        return {
+          ...current,
+          completions: current.completions.filter((completion) => completion.id !== existing.id),
+        };
       }
 
       return {
         ...current,
-        completions: current.completions.filter((completion) => completion.id !== latest.id),
+        completions: [
+          ...current.completions,
+          {
+            id: createId(`${assignment.id}-${selectedDate}`),
+            assignmentTemplateId: assignment.id,
+            childId: assignment.childId,
+            choreId: assignment.choreId,
+            completedAt: `${selectedDate}T${assignment.endTime}:00`,
+            completedBy: assignment.childId,
+          },
+        ],
       };
     });
   }
@@ -129,7 +204,24 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           : [...current.weeklyChores, chore],
       };
     });
+    setSelectedChoreId(chore.id);
     setEditingChoreId(null);
+  }
+
+  function upsertRoutineChore(routineChore: RoutineChore) {
+    setState((current) => {
+      const exists = current.routineChores.some((candidate) => candidate.id === routineChore.id);
+
+      return {
+        ...current,
+        routineChores: exists
+          ? current.routineChores.map((candidate) =>
+              candidate.id === routineChore.id ? routineChore : candidate,
+            )
+          : [...current.routineChores, routineChore],
+      };
+    });
+    setEditingRoutineId(null);
   }
 
   function upsertAssignment(assignment: WeeklyChoreAssignmentTemplate) {
@@ -147,138 +239,266 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           : [...current.weeklyAssignmentTemplates, assignment],
       };
     });
-    setEditingAssignmentId(null);
+    setSelectedChoreId(assignment.choreId);
+    setAssignmentModal(null);
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Chores</h2>
-          <p className="text-sm text-[#6d665c]">
-            Morning routines are daily; weekly chores target {chores.weeklyTargetPerChild} per kid.
-          </p>
-        </div>
-        <p className="text-sm text-[#6d665c]">
-          {state.weeklyAssignmentTemplates.length} weekly assignments
-        </p>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {summaries.map((summary) => (
-          <article
-            className="border border-[#ded6c8] bg-[#fffaf2] p-4 shadow-sm"
-            key={summary.child.id}
-          >
-            <header className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold">{summary.child.preferredName}</h3>
-                <p className="text-sm text-[#6d665c]">
-                  {summary.completedCount}/{summary.assignedCount} assigned chores touched
-                </p>
-              </div>
-              <span className="border border-[#ded6c8] bg-white px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] text-[#7b5f39]">
-                target {summary.targetCount}
-              </span>
-            </header>
-
-            <ol className="space-y-2">
-              {summary.assignments.map((assignment) => (
-                <WeeklyAssignmentRow
-                  assignment={assignment}
-                  key={assignment.id}
-                  onEdit={() => setEditingAssignmentId(assignment.id)}
-                  onLog={() => logCompletion(assignment)}
-                  onUndo={() => undoLatestCompletion(assignment.id)}
-                />
-              ))}
-            </ol>
-          </article>
-        ))}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <article className="border border-[#ded6c8] bg-[#fffaf2] p-4 shadow-sm">
-          <h3 className="mb-3 text-lg font-semibold">Morning Routine</h3>
-          <ul className="space-y-2 text-sm">
-            {chores.routineChores.map((chore) => (
-              <RoutineChoreRow chore={chore} childMembers={childMembers} key={chore.id} />
-            ))}
-          </ul>
-        </article>
-
-        <article className="border border-[#ded6c8] bg-[#fffaf2] p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold">Chore Bank</h3>
-            <button
-              className="border border-[#7b5f39] bg-white px-3 py-1 text-sm font-medium text-[#7b5f39]"
-              onClick={() => setEditingChoreId("new")}
-              type="button"
-            >
-              Add
-            </button>
+    <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
+      <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-5 sm:px-8 lg:px-10">
+          <div className="flex flex-wrap gap-4">
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/">
+              Dashboard
+            </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
+              Calendar
+            </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
+              Admin setup
+            </Link>
           </div>
-          <ul className="space-y-2 text-sm">
-            {state.weeklyChores.map((chore) => (
-              <li
-                className="flex items-start justify-between gap-3 border-b border-[#e6ddcf] pb-2 last:border-b-0"
-                key={chore.id}
-              >
+          <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                Household work board
+              </p>
+              <h1 className="mt-2 text-4xl font-semibold tracking-normal sm:text-5xl">Chores</h1>
+              <p className="mt-3 max-w-3xl text-base leading-7 text-[#4c5965]">
+                Schedule repeat work, keep a warehouse of productive odd jobs, and track each kid&apos;s
+                completion separately even when siblings share the same chore.
+              </p>
+            </div>
+            <label className="grid gap-1 text-sm font-semibold text-[#4c5965]">
+              Date
+              <input
+                className="border border-[#cbd5df] bg-white px-3 py-2 text-[#17202a]"
+                onChange={(event) => setSelectedDate(event.target.value)}
+                type="date"
+                value={selectedDate}
+              />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
+        <div className="grid gap-3 md:grid-cols-3">
+          {childSummaries.map((summary) => (
+            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm" key={summary.child.id}>
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{chore.title}</p>
-                  <p className="text-xs text-[#6d665c]">
-                    {chore.category} · {chore.estimatedMinutes} min ·{" "}
-                    {chore.eligibleAssigneeIds.length} kids
+                  <h2 className="text-xl font-semibold">{summary.child.preferredName}</h2>
+                  <p className="mt-1 text-sm text-[#657381]">
+                    {summary.assignedCount} weekly slots
                   </p>
                 </div>
+                <span className="border border-[#bcd8dc] bg-[#e8f4f3] px-2 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                  {summary.doneToday}/{summary.dueToday} today
+                </span>
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <section className="grid gap-5">
+            <Panel
+              action={
                 <button
-                  className="text-sm font-medium text-[#7b5f39]"
-                  onClick={() => setEditingChoreId(chore.id)}
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setEditingChoreId("new")}
                   type="button"
                 >
-                  Edit
+                  Add chore
                 </button>
-              </li>
-            ))}
-          </ul>
-        </article>
-      </div>
+              }
+              title="Chore Tiles"
+            >
+              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                {state.weeklyChores.map((chore) => (
+                  <ChoreTile
+                    assignments={assignments.filter((assignment) => assignment.choreId === chore.id)}
+                    childMembers={childMembers}
+                    chore={chore}
+                    isSelected={selectedChore?.id === chore.id}
+                    key={chore.id}
+                    onAssign={() => setAssignmentModal({ mode: "add", choreId: chore.id })}
+                    onEdit={() => setEditingChoreId(chore.id)}
+                    onSelect={() => setSelectedChoreId(chore.id)}
+                    selectedDay={selectedDay}
+                  />
+                ))}
+              </div>
+            </Panel>
 
-      <article className="border border-[#ded6c8] bg-[#fffaf2] p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold">Weekly Assignment Slots</h3>
-          <button
-            className="border border-[#7b5f39] bg-white px-3 py-1 text-sm font-medium text-[#7b5f39]"
-            onClick={() => setEditingAssignmentId("new")}
-            type="button"
-          >
-            Add
-          </button>
-        </div>
-        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          {state.weeklyAssignmentTemplates.map((assignment) => {
-            const child = childMembers.find((candidate) => candidate.id === assignment.childId);
-            const chore = choresById.get(assignment.choreId);
+            <Panel
+              action={
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setAssignmentModal({ mode: "add" })}
+                  type="button"
+                >
+                  Add slot
+                </button>
+              }
+              title={`${dayLabels[selectedDay]} Assignments`}
+            >
+              {todaysAssignments.length > 0 ? (
+                <div className="grid gap-2 md:grid-cols-2">
+                  {todaysAssignments.map((assignment) => (
+                    <AssignmentCard
+                      assignment={assignment}
+                      key={assignment.id}
+                      onEdit={() => setAssignmentModal({ mode: "edit", assignmentId: assignment.id })}
+                      onToggle={() => toggleCompletion(assignment)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState text="No chores are assigned for this day yet." />
+              )}
+            </Panel>
+          </section>
 
-            return (
-              <button
-                className="border border-[#eadfce] bg-white p-3 text-left"
-                key={assignment.id}
-                onClick={() => setEditingAssignmentId(assignment.id)}
-                type="button"
+          <aside className="grid content-start gap-5">
+            {selectedChore ? (
+              <Panel
+                action={
+                  <button
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+                    onClick={() => setEditingChoreId(selectedChore.id)}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                }
+                title="Selected Chore"
               >
-                <p className="font-medium">
-                  {assignment.dayOfWeek} · {child?.preferredName ?? assignment.childId}
-                </p>
-                <p className="text-[#6d665c]">{chore?.title ?? assignment.choreId}</p>
-                <p className="text-xs text-[#6d665c]">
-                  {assignment.startTime}-{assignment.endTime}
-                </p>
-              </button>
-            );
-          })}
+                <div className="grid gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">{selectedChore.title}</h2>
+                    <p className="mt-1 text-sm text-[#657381]">
+                      {selectedChore.category} · {selectedChore.estimatedMinutes} min
+                      {selectedChore.requiresAdultCheck ? " · adult check" : ""}
+                    </p>
+                  </div>
+
+                  <section className="grid gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                        Kid status
+                      </h3>
+                      <button
+                        className="text-sm font-semibold text-[#1f6f8b]"
+                        onClick={() => setAssignmentModal({ mode: "add", choreId: selectedChore.id })}
+                        type="button"
+                      >
+                        Assign
+                      </button>
+                    </div>
+                    <div className="grid gap-2">
+                      {childMembers.map((child) => {
+                        const childAssignments = selectedChoreAssignments.filter(
+                          (assignment) => assignment.childId === child.id,
+                        );
+                        const dayAssignment = childAssignments.find(
+                          (assignment) => assignment.dayOfWeek === selectedDay,
+                        );
+
+                        return (
+                          <div
+                            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                            key={child.id}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-semibold">{child.preferredName}</p>
+                                <p className="text-xs text-[#657381]">
+                                  {childAssignments.length > 0
+                                    ? childAssignments.map((assignment) => dayLabels[assignment.dayOfWeek]).join(", ")
+                                    : "No assignment"}
+                                </p>
+                              </div>
+                              <StatusPill
+                                isComplete={dayAssignment?.isComplete ?? false}
+                                label={
+                                  dayAssignment
+                                    ? dayAssignment.isComplete
+                                      ? "Done"
+                                      : "Open"
+                                    : "Unassigned"
+                                }
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                </div>
+              </Panel>
+            ) : null}
+
+            <Panel
+              action={
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setEditingChoreId("new")}
+                  type="button"
+                >
+                  Capture
+                </button>
+              }
+              title="Warehouse"
+            >
+              {backlogChores.length > 0 ? (
+                <div className="grid gap-2">
+                  {backlogChores.map((chore) => (
+                    <button
+                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left"
+                      key={chore.id}
+                      onClick={() => setSelectedChoreId(chore.id)}
+                      type="button"
+                    >
+                      <span className="block font-semibold">{chore.title}</span>
+                      <span className="mt-1 block text-xs text-[#657381]">
+                        {chore.category} · {chore.estimatedMinutes} min
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState text="Every captured chore currently has at least one assignment slot." />
+              )}
+            </Panel>
+
+            <Panel
+              action={
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setEditingRoutineId("new")}
+                  type="button"
+                >
+                  Add step
+                </button>
+              }
+              title="Morning Routine"
+            >
+              <ul className="grid gap-2">
+                {state.routineChores.map((chore) => (
+                  <RoutineChoreRow
+                    chore={chore}
+                    childMembers={childMembers}
+                    key={chore.id}
+                    onEdit={() => setEditingRoutineId(chore.id)}
+                  />
+                ))}
+              </ul>
+            </Panel>
+          </aside>
         </div>
-      </article>
+      </section>
 
       {editingChoreId ? (
         <ChoreEditor
@@ -293,84 +513,171 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
         />
       ) : null}
 
-      {editingAssignmentId ? (
+      {assignmentModal ? (
         <AssignmentEditor
           assignment={
-            editingAssignmentId === "new"
-              ? undefined
-              : state.weeklyAssignmentTemplates.find(
-                  (assignment) => assignment.id === editingAssignmentId,
+            assignmentModal.mode === "edit"
+              ? state.weeklyAssignmentTemplates.find(
+                  (assignment) => assignment.id === assignmentModal.assignmentId,
                 )
+              : undefined
           }
           childMembers={childMembers}
           chores={state.weeklyChores}
-          onCancel={() => setEditingAssignmentId(null)}
+          defaultChildId={assignmentModal.mode === "add" ? assignmentModal.childId : undefined}
+          defaultChoreId={assignmentModal.mode === "add" ? assignmentModal.choreId : undefined}
+          onCancel={() => setAssignmentModal(null)}
           onSave={upsertAssignment}
         />
       ) : null}
-    </section>
+
+      {editingRoutineId ? (
+        <RoutineChoreEditor
+          childMembers={childMembers}
+          onCancel={() => setEditingRoutineId(null)}
+          onSave={upsertRoutineChore}
+          routineChore={
+            editingRoutineId === "new"
+              ? undefined
+              : state.routineChores.find((chore) => chore.id === editingRoutineId)
+          }
+        />
+      ) : null}
+    </main>
   );
 }
 
-function WeeklyAssignmentRow({
-  assignment,
+function ChoreTile({
+  assignments,
+  childMembers,
+  chore,
+  isSelected,
+  onAssign,
   onEdit,
-  onLog,
-  onUndo,
+  onSelect,
+  selectedDay,
 }: {
-  assignment: WeeklyChoreAssignmentTemplate & {
-    chore?: WeeklyChore;
-    completions: ChoreCompletion[];
-  };
+  assignments: AssignmentWithStatus[];
+  childMembers: HouseholdMember[];
+  chore: WeeklyChore;
+  isSelected: boolean;
+  onAssign: () => void;
   onEdit: () => void;
-  onLog: () => void;
-  onUndo: () => void;
+  onSelect: () => void;
+  selectedDay: DayOfWeek;
 }) {
-  const latest = [...assignment.completions].sort((a, b) =>
-    b.completedAt.localeCompare(a.completedAt),
-  )[0];
+  const todayAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
+  const completedToday = todayAssignments.filter((assignment) => assignment.isComplete).length;
 
   return (
-    <li className="grid grid-cols-[52px_1fr] gap-3 border-t border-[#eadfce] pt-2 text-sm">
-      <span className="font-medium text-[#7b5f39]">{assignment.dayOfWeek}</span>
-      <div className="space-y-2">
-        <div>
-          <p>{assignment.chore?.title ?? assignment.choreId}</p>
-          <p className="text-xs text-[#6d665c]">
-            {assignment.startTime}-{assignment.endTime}
-          </p>
-          <p className="text-xs text-[#6d665c]">
-            {assignment.completions.length} completed
-            {latest ? ` · last ${formatDateTime(latest.completedAt)}` : ""}
-          </p>
+    <article
+      className={`border bg-white p-4 shadow-sm ${
+        isSelected ? "border-[#1f6f8b] ring-2 ring-[#bcd8dc]" : "border-[#cbd5df]"
+      }`}
+    >
+      <button className="block w-full text-left" onClick={onSelect} type="button">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold">{chore.title}</h3>
+            <p className="mt-1 text-sm text-[#657381]">
+              {chore.category} · {chore.estimatedMinutes} min
+            </p>
+          </div>
+          <StatusPill
+            isComplete={todayAssignments.length > 0 && completedToday === todayAssignments.length}
+            label={
+              todayAssignments.length > 0
+                ? `${completedToday}/${todayAssignments.length}`
+                : "Backlog"
+            }
+          />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="border border-[#7b5f39] bg-[#7b5f39] px-2 py-1 text-xs font-medium text-white"
-            onClick={onLog}
-            type="button"
-          >
-            Done
-          </button>
-          <button
-            className="border border-[#cfc4b2] bg-white px-2 py-1 text-xs font-medium text-[#7b5f39]"
-            onClick={onEdit}
-            type="button"
-          >
-            Edit
-          </button>
-          {latest ? (
-            <button
-              className="border border-[#cfc4b2] bg-white px-2 py-1 text-xs font-medium text-[#7b5f39]"
-              onClick={onUndo}
-              type="button"
-            >
-              Undo
-            </button>
-          ) : null}
+        <div className="mt-4 grid gap-2">
+          {childMembers.map((child) => {
+            const childAssignments = assignments.filter((assignment) => assignment.childId === child.id);
+            const dayAssignment = childAssignments.find(
+              (assignment) => assignment.dayOfWeek === selectedDay,
+            );
+
+            return (
+              <div className="flex items-center justify-between gap-3 text-sm" key={child.id}>
+                <span className="font-medium">{child.preferredName}</span>
+                <span className={dayAssignment?.isComplete ? "text-[#2f6f73]" : "text-[#657381]"}>
+                  {dayAssignment
+                    ? dayAssignment.isComplete
+                      ? "Done today"
+                      : "Due today"
+                    : childAssignments.length > 0
+                      ? childAssignments.map((assignment) => dayLabels[assignment.dayOfWeek]).join(", ")
+                      : "No slot"}
+                </span>
+              </div>
+            );
+          })}
         </div>
+      </button>
+      <div className="mt-4 flex gap-2">
+        <button
+          className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+          onClick={onAssign}
+          type="button"
+        >
+          Assign
+        </button>
+        <button
+          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+          onClick={onEdit}
+          type="button"
+        >
+          Edit
+        </button>
       </div>
-    </li>
+    </article>
+  );
+}
+
+function AssignmentCard({
+  assignment,
+  onEdit,
+  onToggle,
+}: {
+  assignment: AssignmentWithStatus;
+  onEdit: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <article className="border border-[#d7e0e7] bg-[#f8fafc] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{assignment.chore?.title ?? assignment.choreId}</h3>
+          <p className="mt-1 text-sm text-[#657381]">
+            {assignment.child?.preferredName ?? assignment.childId} ·{" "}
+            {formatTimeRange(assignment.startTime, assignment.endTime)}
+          </p>
+        </div>
+        <StatusPill isComplete={assignment.isComplete} label={assignment.isComplete ? "Done" : "Open"} />
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button
+          className={`border px-3 py-2 text-sm font-semibold ${
+            assignment.isComplete
+              ? "border-[#bcd8dc] bg-white text-[#2f6f73]"
+              : "border-[#1f6f8b] bg-[#1f6f8b] text-white"
+          }`}
+          onClick={onToggle}
+          type="button"
+        >
+          {assignment.isComplete ? "Undo done" : "Mark done"}
+        </button>
+        <button
+          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+          onClick={onEdit}
+          type="button"
+        >
+          Edit
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -386,10 +693,11 @@ function ChoreEditor({
   onSave: (chore: WeeklyChore) => void;
 }) {
   const [title, setTitle] = useState(chore?.title ?? "");
-  const [category, setCategory] = useState(chore?.category ?? "house-reset");
+  const [category, setCategory] = useState(chore?.category ?? "yard");
   const [estimatedMinutes, setEstimatedMinutes] = useState(String(chore?.estimatedMinutes ?? 10));
+  const [requiresAdultCheck, setRequiresAdultCheck] = useState(Boolean(chore?.requiresAdultCheck));
   const [eligibleAssigneeIds, setEligibleAssigneeIds] = useState<string[]>(
-    chore?.eligibleAssigneeIds ?? childMembers.map((child) => child.id),
+    chore?.eligibleAssigneeIds.length ? chore.eligibleAssigneeIds : childMembers.map((child) => child.id),
   );
 
   function submit() {
@@ -405,37 +713,40 @@ function ChoreEditor({
       category,
       estimatedMinutes: Number(estimatedMinutes) || 10,
       eligibleAssigneeIds,
-      requiresAdultCheck: chore?.requiresAdultCheck,
+      requiresAdultCheck,
     });
   }
 
   return (
-    <EditorShell onCancel={onCancel} title={chore ? "Edit Chore" : "Add Chore"}>
+    <EditorShell onCancel={onCancel} title={chore ? "Edit chore" : "Capture chore"}>
       <label className="grid gap-1 text-sm">
-        <span className="font-medium">Name</span>
+        <span className="font-semibold">Name</span>
         <input
-          className="border border-[#cfc4b2] bg-white px-3 py-2"
+          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
           onChange={(event) => setTitle(event.target.value)}
+          placeholder="Water flowers, sweep garage, wipe patio table..."
           value={title}
         />
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Category</span>
+          <span className="font-semibold">Category</span>
           <select
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setCategory(event.target.value)}
             value={category}
           >
-            <option value="house-reset">House reset</option>
-            <option value="kitchen">Kitchen</option>
+            <option value="yard">Yard</option>
             <option value="pets">Pets</option>
+            <option value="kitchen">Kitchen</option>
+            <option value="house-reset">House reset</option>
+            <option value="laundry">Laundry</option>
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Minutes</span>
+          <span className="font-semibold">Minutes</span>
           <input
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             min="1"
             onChange={(event) => setEstimatedMinutes(event.target.value)}
             type="number"
@@ -444,11 +755,11 @@ function ChoreEditor({
         </label>
       </div>
       <fieldset className="grid gap-2 text-sm">
-        <legend className="font-medium">Eligible kids</legend>
+        <legend className="font-semibold">Eligible kids</legend>
         <div className="flex flex-wrap gap-2">
           {childMembers.map((child) => (
             <label
-              className="flex items-center gap-2 border border-[#e6ddcf] bg-white px-3 py-2"
+              className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
               key={child.id}
             >
               <input
@@ -467,6 +778,155 @@ function ChoreEditor({
           ))}
         </div>
       </fieldset>
+      <label className="flex items-center gap-2 text-sm font-semibold">
+        <input
+          checked={requiresAdultCheck}
+          onChange={(event) => setRequiresAdultCheck(event.target.checked)}
+          type="checkbox"
+        />
+        Needs adult check
+      </label>
+      <EditorActions onCancel={onCancel} onSave={submit} />
+    </EditorShell>
+  );
+}
+
+function RoutineChoreEditor({
+  childMembers,
+  onCancel,
+  onSave,
+  routineChore,
+}: {
+  childMembers: HouseholdMember[];
+  onCancel: () => void;
+  onSave: (routineChore: RoutineChore) => void;
+  routineChore?: RoutineChore;
+}) {
+  const [title, setTitle] = useState(routineChore?.title ?? "");
+  const [defaultAssigneeIds, setDefaultAssigneeIds] = useState<string[]>(
+    routineChore?.defaultAssigneeIds ?? childMembers.map((child) => child.id),
+  );
+  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>(
+    routineChore?.schedule.daysOfWeek ?? ["MO", "TU", "WE", "TH", "FR"],
+  );
+  const [startTime, setStartTime] = useState(routineChore?.schedule.startTime ?? "08:30");
+  const [endTime, setEndTime] = useState(routineChore?.schedule.endTime ?? "08:40");
+  const [countsTowardWeeklyTarget, setCountsTowardWeeklyTarget] = useState(
+    routineChore?.countsTowardWeeklyTarget ?? false,
+  );
+
+  function submit() {
+    const trimmedTitle = title.trim();
+
+    if (!trimmedTitle || daysOfWeek.length === 0 || defaultAssigneeIds.length === 0) {
+      return;
+    }
+
+    onSave({
+      id: routineChore?.id ?? createId(`routine-${trimmedTitle}`),
+      title: trimmedTitle,
+      category: "morning-routine",
+      defaultAssigneeIds,
+      schedule: {
+        daysOfWeek,
+        startTime,
+        endTime,
+      },
+      countsTowardWeeklyTarget,
+    });
+  }
+
+  function toggleDay(day: DayOfWeek) {
+    setDaysOfWeek((current) =>
+      current.includes(day)
+        ? current.filter((candidate) => candidate !== day)
+        : [...current, day],
+    );
+  }
+
+  function toggleAssignee(childId: string) {
+    setDefaultAssigneeIds((current) =>
+      current.includes(childId)
+        ? current.filter((candidate) => candidate !== childId)
+        : [...current, childId],
+    );
+  }
+
+  return (
+    <EditorShell onCancel={onCancel} title={routineChore ? "Edit routine step" : "Add routine step"}>
+      <label className="grid gap-1 text-sm">
+        <span className="font-semibold">Step</span>
+        <input
+          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Make bed, pack lunch, brush hair..."
+          value={title}
+        />
+      </label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm">
+          <span className="font-semibold">Start</span>
+          <input
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+            onChange={(event) => setStartTime(event.target.value)}
+            type="time"
+            value={startTime}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-semibold">End</span>
+          <input
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+            onChange={(event) => setEndTime(event.target.value)}
+            type="time"
+            value={endTime}
+          />
+        </label>
+      </div>
+
+      <fieldset className="grid gap-2 text-sm">
+        <legend className="font-semibold">Days</legend>
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+          {dayOptions.map((day) => (
+            <label
+              className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
+              key={day}
+            >
+              <input checked={daysOfWeek.includes(day)} onChange={() => toggleDay(day)} type="checkbox" />
+              {dayLabels[day]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="grid gap-2 text-sm">
+        <legend className="font-semibold">Kids</legend>
+        <div className="flex flex-wrap gap-2">
+          {childMembers.map((child) => (
+            <label
+              className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+              key={child.id}
+            >
+              <input
+                checked={defaultAssigneeIds.includes(child.id)}
+                onChange={() => toggleAssignee(child.id)}
+                type="checkbox"
+              />
+              {child.preferredName}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <label className="flex items-center gap-2 text-sm font-semibold">
+        <input
+          checked={countsTowardWeeklyTarget}
+          onChange={(event) => setCountsTowardWeeklyTarget(event.target.checked)}
+          type="checkbox"
+        />
+        Counts toward weekly chore target
+      </label>
       <EditorActions onCancel={onCancel} onSave={submit} />
     </EditorShell>
   );
@@ -476,17 +936,23 @@ function AssignmentEditor({
   assignment,
   childMembers,
   chores,
+  defaultChildId,
+  defaultChoreId,
   onCancel,
   onSave,
 }: {
   assignment?: WeeklyChoreAssignmentTemplate;
   childMembers: HouseholdMember[];
   chores: WeeklyChore[];
+  defaultChildId?: string;
+  defaultChoreId?: string;
   onCancel: () => void;
   onSave: (assignment: WeeklyChoreAssignmentTemplate) => void;
 }) {
-  const [childId, setChildId] = useState(assignment?.childId ?? childMembers[0]?.id ?? "");
-  const [choreId, setChoreId] = useState(assignment?.choreId ?? chores[0]?.id ?? "");
+  const [childId, setChildId] = useState(
+    assignment?.childId ?? defaultChildId ?? childMembers[0]?.id ?? "",
+  );
+  const [choreId, setChoreId] = useState(assignment?.choreId ?? defaultChoreId ?? chores[0]?.id ?? "");
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>(assignment?.dayOfWeek ?? "MO");
   const [startTime, setStartTime] = useState(assignment?.startTime ?? "16:00");
   const [endTime, setEndTime] = useState(assignment?.endTime ?? "16:15");
@@ -507,12 +973,12 @@ function AssignmentEditor({
   }
 
   return (
-    <EditorShell onCancel={onCancel} title={assignment ? "Edit Assignment" : "Add Assignment"}>
+    <EditorShell onCancel={onCancel} title={assignment ? "Edit assignment" : "Assign chore"}>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Kid</span>
+          <span className="font-semibold">Kid</span>
           <select
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setChildId(event.target.value)}
             value={childId}
           >
@@ -524,9 +990,9 @@ function AssignmentEditor({
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Chore</span>
+          <span className="font-semibold">Chore</span>
           <select
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setChoreId(event.target.value)}
             value={choreId}
           >
@@ -540,32 +1006,32 @@ function AssignmentEditor({
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Day</span>
+          <span className="font-semibold">Day</span>
           <select
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setDayOfWeek(event.target.value as DayOfWeek)}
             value={dayOfWeek}
           >
             {dayOptions.map((day) => (
               <option key={day} value={day}>
-                {day}
+                {dayLabels[day]}
               </option>
             ))}
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Start</span>
+          <span className="font-semibold">Start</span>
           <input
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setStartTime(event.target.value)}
             type="time"
             value={startTime}
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">End</span>
+          <span className="font-semibold">End</span>
           <input
-            className="border border-[#cfc4b2] bg-white px-3 py-2"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setEndTime(event.target.value)}
             type="time"
             value={endTime}
@@ -574,6 +1040,26 @@ function AssignmentEditor({
       </div>
       <EditorActions onCancel={onCancel} onSave={submit} />
     </EditorShell>
+  );
+}
+
+function Panel({
+  action,
+  children,
+  title,
+}: Readonly<{
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  title: string;
+}>) {
+  return (
+    <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -587,15 +1073,28 @@ function EditorShell({
   title: string;
 }>) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/30 p-4 sm:items-center sm:justify-center">
-      <section className="w-full max-w-2xl border border-[#ded6c8] bg-[#fffaf2] p-4 shadow-xl">
-        <header className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button className="text-sm font-medium text-[#7b5f39]" onClick={onCancel} type="button">
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-xl">
+        <header className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">{title}</h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Changes are saved in this browser for now.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onCancel}
+            type="button"
+          >
             Close
           </button>
         </header>
-        <div className="space-y-4">{children}</div>
+        <div className="grid gap-4">{children}</div>
       </section>
     </div>
   );
@@ -605,14 +1104,14 @@ function EditorActions({ onCancel, onSave }: { onCancel: () => void; onSave: () 
   return (
     <div className="flex justify-end gap-2">
       <button
-        className="border border-[#cfc4b2] bg-white px-4 py-2 text-sm font-medium text-[#7b5f39]"
+        className="border border-[#d7e0e7] bg-[#f8fafc] px-4 py-2 text-sm font-semibold"
         onClick={onCancel}
         type="button"
       >
         Cancel
       </button>
       <button
-        className="border border-[#7b5f39] bg-[#7b5f39] px-4 py-2 text-sm font-medium text-white"
+        className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
         onClick={onSave}
         type="button"
       >
@@ -625,9 +1124,11 @@ function EditorActions({ onCancel, onSave }: { onCancel: () => void; onSave: () 
 function RoutineChoreRow({
   chore,
   childMembers,
+  onEdit,
 }: {
   chore: RoutineChore;
   childMembers: HouseholdMember[];
+  onEdit: () => void;
 }) {
   const assignedKids = chore.defaultAssigneeIds
     .map((id) => childMembers.find((child) => child.id === id)?.preferredName)
@@ -635,16 +1136,58 @@ function RoutineChoreRow({
     .join(", ");
 
   return (
-    <li className="flex items-start justify-between gap-3 border-b border-[#e6ddcf] pb-2 last:border-b-0">
+    <li className="flex items-start justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
       <div>
-        <p className="font-medium">{chore.title}</p>
-        <p className="text-xs text-[#6d665c]">
-          {chore.schedule.startTime}-{chore.schedule.endTime} · {assignedKids}
+        <p className="font-semibold">{chore.title}</p>
+        <p className="mt-1 text-xs text-[#657381]">
+          {formatTimeRange(chore.schedule.startTime, chore.schedule.endTime)} · {assignedKids}
         </p>
       </div>
-      <span className="text-xs uppercase tracking-[0.12em] text-[#7b5f39]">Daily</span>
+      <button
+        className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#1f6f8b]"
+        onClick={onEdit}
+        type="button"
+      >
+        Edit
+      </button>
     </li>
   );
+}
+
+function StatusPill({ isComplete, label }: { isComplete: boolean; label: string }) {
+  return (
+    <span
+      className={`border px-2 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
+        isComplete
+          ? "border-[#bcd8dc] bg-[#e8f4f3] text-[#2f6f73]"
+          : "border-[#d7e0e7] bg-[#f8fafc] text-[#657381]"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] p-4 text-sm text-[#657381]">{text}</p>;
+}
+
+function mergeChoreSeeds(
+  configuredChores: WeeklyChore[],
+  seedChores: WeeklyChore[],
+  childMembers: HouseholdMember[],
+) {
+  const configuredIds = new Set(configuredChores.map((chore) => chore.id));
+  const childIds = childMembers.map((child) => child.id);
+  const normalizedSeeds = seedChores
+    .filter((chore) => !configuredIds.has(chore.id))
+    .map((chore) => ({
+      ...chore,
+      eligibleAssigneeIds:
+        chore.eligibleAssigneeIds.length > 0 ? chore.eligibleAssigneeIds : childIds,
+    }));
+
+  return [...configuredChores, ...normalizedSeeds];
 }
 
 function createId(value: string) {
@@ -662,11 +1205,25 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+function compareStrings(first: string, second: string) {
+  return first.localeCompare(second, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function formatTimeRange(startTime: string, endTime: string) {
+  return `${startTime}-${endTime}`;
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDayOfWeekForDate(date: string): DayOfWeek {
+  const dayCodes: DayOfWeek[] = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  const [year, month, day] = date.split("-").map(Number);
+
+  return dayCodes[new Date(year, month - 1, day).getDay()];
 }

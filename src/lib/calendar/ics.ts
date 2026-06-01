@@ -1,5 +1,6 @@
 import ical from "node-ical";
 import type { ImportedCalendarEvent } from "./types";
+import { getSportsEngineTeamId, inferSportsTeamLabel } from "./team-tags";
 
 export type ParseIcsOptions = {
   sourceId: string;
@@ -86,16 +87,25 @@ function toImportedEvent(event: ical.VEvent, sourceId: string): ImportedCalendar
   const end = event.end ?? event.start;
   const allDay = isAllDay(event);
   const title = String(event.summary).trim();
+  const teamId = getSportsEngineTeamId(event.description);
+  const teamLabel = inferSportsTeamLabel({
+    description: event.description ? String(event.description) : undefined,
+    sourceId,
+    teamId,
+    title,
+  });
 
   return {
     sourceId,
     sourceUid: event.uid,
+    ...(teamId ? { teamId } : {}),
+    ...(teamLabel ? { teamLabel } : {}),
     title,
     date: formatDate(start),
     startTime: allDay ? "00:00" : formatTime(start),
     endTime: allDay ? "23:59" : formatTime(end),
     ...(event.location ? { location: String(event.location) } : {}),
-    category: inferCategory(title),
+    category: inferCategory(title, sourceId),
   };
 }
 
@@ -127,8 +137,11 @@ function isAllDay(event: ical.VEvent) {
   );
 }
 
-function inferCategory(title: string) {
+function inferCategory(title: string, sourceId: string) {
   const normalized = title.toLowerCase();
+  const normalizedSourceId = sourceId.toLowerCase();
+
+  if (normalizedSourceId.includes("sports")) return "sports";
 
   if (normalized.includes("birthday")) return "birthday";
   if (normalized.includes("doctor") || normalized.includes("dentist")) return "appointment";

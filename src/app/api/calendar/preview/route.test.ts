@@ -111,4 +111,128 @@ describe("Calendar preview route", () => {
     assert.equal(body.eventCount, 1);
     assert.equal(body.events[0].title, "Soccer practice");
   });
+
+  it("previews a SportsEngine-style calendar URL", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-//sportsengine.com//ical-feed-v2//EN",
+          "NAME:My SportsEngine Events",
+          "X-WR-CALNAME:My SportsEngine Events",
+          "BEGIN:VEVENT",
+          "UID:08f63bb3-b957-4f3c-a2ad-155a342cf891@sportsengine.com",
+          "SEQUENCE:1747251567",
+          "DTSTAMP:20250514T193927Z",
+          "DTSTART;TZID=America/Chicago:20260603T184500",
+          "DTEND;TZID=America/Chicago:20260603T194500",
+          "SUMMARY:FURY U8@Orono",
+          "LOCATION:ORONO",
+          "DESCRIPTION:https://sportsengine.app.link/?al=sportsengine%3A%2F%2Fevent%2",
+          " F08f63bb3-b957-4f3c-a2ad-155a342cf891",
+          "END:VEVENT",
+          "END:VCALENDAR",
+        ].join("\r\n"),
+      );
+
+    const response = await POST(
+      new Request("http://localhost/api/calendar/preview", {
+        body: JSON.stringify({
+          sourceId: "sports-calendar",
+          url: "https://ical.sportsengine.com/v3/calendar/ical?uuid=test",
+        }),
+        method: "POST",
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.eventCount, 1);
+    assert.equal(body.events[0].title, "FURY U8@Orono");
+    assert.equal(body.events[0].category, "sports");
+  });
+
+  it("returns every event in the planner window instead of only the first preview rows", async () => {
+    const eventBlocks = Array.from({ length: 21 }, (_, index) => {
+      const day = String(index + 1).padStart(2, "0");
+
+      return [
+        "BEGIN:VEVENT",
+        `UID:test-event-${index}`,
+        `DTSTART:202607${day}T140000Z`,
+        `DTEND:202607${day}T150000Z`,
+        `SUMMARY:Soccer practice ${index + 1}`,
+        "END:VEVENT",
+      ].join("\r\n");
+    });
+
+    globalThis.fetch = async () =>
+      new Response(["BEGIN:VCALENDAR", "VERSION:2.0", ...eventBlocks, "END:VCALENDAR"].join("\r\n"));
+
+    const response = await POST(
+      new Request("http://localhost/api/calendar/preview", {
+        body: JSON.stringify({
+          sourceId: "sports",
+          url: "https://93.184.216.34/calendar.ics",
+        }),
+        method: "POST",
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.eventCount, 21);
+    assert.equal(body.events.length, 21);
+  });
+
+  it("includes the month before the configured season starts", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "BEGIN:VEVENT",
+          "UID:may-event",
+          "DTSTART:20260528T140000Z",
+          "DTEND:20260528T150000Z",
+          "SUMMARY:May soccer practice",
+          "END:VEVENT",
+          "END:VCALENDAR",
+        ].join("\r\n"),
+      );
+
+    const response = await POST(
+      new Request("http://localhost/api/calendar/preview", {
+        body: JSON.stringify({
+          sourceId: "sports",
+          url: "https://93.184.216.34/calendar.ics",
+        }),
+        method: "POST",
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.eventCount, 1);
+    assert.equal(body.events[0].date, "2026-05-28");
+  });
+
+  it("returns JSON when a calendar cannot be parsed", async () => {
+    globalThis.fetch = async () => new Response("not an ics calendar");
+
+    const response = await POST(
+      new Request("http://localhost/api/calendar/preview", {
+        body: JSON.stringify({
+          sourceId: "sports",
+          url: "https://93.184.216.34/calendar.ics",
+        }),
+        method: "POST",
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 422);
+    assert.equal(typeof body.error, "string");
+  });
 });

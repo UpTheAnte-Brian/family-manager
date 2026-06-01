@@ -24,6 +24,39 @@ export type TodayContext = {
 
 export type LocalHouseholdItemKind = "task" | "reminder";
 
+export type LocalRoutineItem = {
+  id: string;
+  title: string;
+  assigneeId: string;
+  daysOfWeek: DayOfWeek[];
+  startTime: string;
+  endTime: string;
+  createdAt: string;
+};
+
+export type LocalResponsibilityItem = {
+  id: string;
+  title: string;
+  category?: ResponsibilityCategory;
+  assigneeId: string;
+  daysOfWeek: DayOfWeek[];
+  startTime: string;
+  endTime: string;
+  createdAt: string;
+};
+
+export type ResponsibilityCategory =
+  | "morning-routine"
+  | "homework"
+  | "chores"
+  | "sports"
+  | "work"
+  | "personal"
+  | "investments"
+  | "family-planning"
+  | "home-maintenance"
+  | "finance";
+
 export type LocalHouseholdItem = {
   id: string;
   kind: LocalHouseholdItemKind;
