@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import {
   appliedCalendarEventsStorageKey,
   calendarEventAssignmentsStorageKey,
@@ -93,10 +94,14 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
     () => new Map(calendarSources.map((source) => [source.id, source.label])),
     [calendarSources],
   );
+  const displayConfiguredEvents = useMemo(
+    () => getConfiguredEventsAfterAppliedSourceReplacements(configuredEvents, calendarSources),
+    [calendarSources, configuredEvents],
+  );
   const rows = useMemo(
     () =>
       [
-        ...configuredEvents.map((event): CalendarEventRow => {
+        ...displayConfiguredEvents.map((event): CalendarEventRow => {
           const assignmentKey = getConfiguredEventAssignmentKey(event);
           const teamLabel = inferSportsTeamLabel({
             sourceId: event.source,
@@ -160,7 +165,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
           `${second.date} ${second.startTime} ${second.title}`,
         ),
       ),
-    [appliedEvents, assignmentOverrides, calendarSources, configuredEvents, sourceLabels, teamAssignments],
+    [appliedEvents, assignmentOverrides, calendarSources, displayConfiguredEvents, sourceLabels, teamAssignments],
   );
   const filteredRows = rows.filter((event) => {
     const matchesMonth = event.date.startsWith(selectedMonth);
@@ -267,7 +272,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
         <section className="grid gap-3 border border-[#cbd5df] bg-white p-4 shadow-sm lg:grid-cols-[1fr_170px_170px_220px_220px]">
           <div className="grid grid-cols-3 gap-3 text-sm">
-            <Stat label="Configured" value={configuredEvents.length} />
+            <Stat label="Configured" value={displayConfiguredEvents.length} />
             <Stat label="Imported" value={appliedEvents.length} />
             <Stat label="Showing" value={filteredRows.length} />
           </div>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
+import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import {
   appliedCalendarEventsStorageKey,
   calendarEventAssignmentsStorageKey,
@@ -210,7 +211,10 @@ export function ProfileDashboard({
     calendarTeamAssignments,
     displayedDay.date,
   );
-  const configuredEvents = displayedDay.fixedEvents.map((event) => ({
+  const configuredEvents = getConfiguredEventsAfterAppliedSourceReplacements(
+    displayedDay.fixedEvents,
+    calendarSources,
+  ).map((event) => ({
     ...event,
     assignedMemberIds:
       calendarEventAssignments[getConfiguredEventAssignmentKey(event)] ??
