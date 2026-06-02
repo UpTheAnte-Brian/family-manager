@@ -4,6 +4,22 @@ This file tracks useful features that are intentionally deferred so they do not 
 
 ## Backlog
 
+### Shared Grocery List
+
+- Goal: Give the whole family one shared grocery list that anyone can add to.
+- Desired behavior:
+  - Family members can quickly add grocery items from the dashboard.
+  - Items can be checked off when purchased without being tied to a calendar day.
+  - The list stays shared across devices so parent phones and the household display show the same needs.
+
+### General Household To-Do List
+
+- Goal: Track household tasks that need to get done but are not tied to a specific day on the calendar.
+- Desired behavior:
+  - Family members can add, assign, complete, and optionally prioritize tasks.
+  - Tasks can exist independently from daily routines, chores, reminders, and calendar events.
+  - The dashboard can surface open tasks without making them look overdue simply because a day changed.
+
 ### Count-Based Daily Habits
 
 - Goal: Track daily quantities for good behaviors instead of only checkoffs.

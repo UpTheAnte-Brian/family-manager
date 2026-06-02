@@ -224,6 +224,7 @@ export function ProfileDashboard({
   }));
   const effectiveEvents = [...configuredEvents, ...importedEvents];
   const events = getRelevantEvents(effectiveEvents, selectedMember);
+  const otherEvents = getOtherEvents(effectiveEvents, events, selectedMember);
   const dayTypeLabel = getEffectiveDayTypeLabel(displayedDay.dayTypeLabel, effectiveEvents);
   const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, displayedDay.date);
   const localTasks = visibleLocalItems.filter((item) => item.kind === "task");
@@ -647,6 +648,18 @@ export function ProfileDashboard({
                 </ol>
               ) : (
                 <EmptyState text="No fixed calendar events are attached to this profile on this date." />
+              )}
+            </Panel>
+
+            <Panel title={isTodaySelected ? "Other Events Today" : "Other Events"}>
+              {otherEvents.length > 0 ? (
+                <ol className="grid gap-2">
+                  {otherEvents.map((event) => (
+                    <OtherEventRow event={event} key={event.id} members={members} />
+                  ))}
+                </ol>
+              ) : (
+                <EmptyState text="No other household events are scheduled for this date." />
               )}
             </Panel>
 
@@ -1098,6 +1111,20 @@ function getRelevantEvents(events: DashboardEvent[], member: HouseholdMember) {
       event.source === "sportsengine-calendar"
     );
   });
+}
+
+function getOtherEvents(
+  allEvents: DashboardEvent[],
+  memberEvents: DashboardEvent[],
+  member: HouseholdMember,
+) {
+  if (member.role === "parent") {
+    return [];
+  }
+
+  const memberEventIds = new Set(memberEvents.map((event) => event.id));
+
+  return allEvents.filter((event) => !memberEventIds.has(event.id));
 }
 
 function getReminderItems(
@@ -1591,6 +1618,36 @@ function EventRow({ event }: { event: FixedEvent }) {
       </span>
     </li>
   );
+}
+
+function OtherEventRow({ event, members }: { event: FixedEvent; members: HouseholdMember[] }) {
+  const assignedMemberNames = getAssignedMemberNames(event, members);
+  const eventOwnerLabel =
+    assignedMemberNames.length > 0 ? assignedMemberNames.join(", ") : "Household";
+
+  return (
+    <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[120px_1fr_110px]">
+      <time className="font-semibold text-[#1f6f8b]">
+        {formatTimeRange(event.startTime, event.endTime)}
+      </time>
+      <div>
+        <p className="font-semibold">{event.title}</p>
+        <p className="mt-1 text-xs text-[#657381]">{eventOwnerLabel}</p>
+        {event.locationNote ? <p className="mt-1 text-xs text-[#657381]">{event.locationNote}</p> : null}
+      </div>
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+        {sourceLabel(event.source)}
+      </span>
+    </li>
+  );
+}
+
+function getAssignedMemberNames(event: FixedEvent, members: HouseholdMember[]) {
+  const assignedMemberIds = event.assignedMemberIds ?? [];
+
+  return assignedMemberIds
+    .map((memberId) => members.find((member) => member.id === memberId)?.preferredName)
+    .filter((name): name is string => Boolean(name));
 }
 
 function compareStrings(first: string, second: string) {
