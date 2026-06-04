@@ -20,21 +20,21 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 ## Current Prototype
 
 - Next.js app shell with TypeScript and Tailwind.
-- Household members, summer schedule blocks, fixed calendar events, routine chores, weekly chores, and chore assignments in `data/summer-2026-planner.json`.
+- Household members, summer schedule blocks, generated summer workday events, routine chores, weekly chores, and chore assignments in `data/summer-2026-planner.json`.
 - A manual profile dashboard that filters routines, events, and chores by selected family member.
 - Real-date Today Engine with explicit missing states when no baseline is configured for the current day.
 - Browser-local checklist completion tracking plus editable routine steps, recurring responsibilities, and same-day task/reminder quick-add.
 - Admin setup route for shared calendar source URLs, ICS preview, and local apply-to-dashboard.
-- ICS importer for Apple Calendar and SportsEngine feeds.
+- Browser-local ICS setup for Apple Calendar, SportsEngine, school, and other shared calendar feeds.
 - Supabase migration target for recurring routines, recurring responsibilities, dated tasks, dated reminders, and shared completion records.
 
 ## Data Status
 
-The app is not connected to Supabase or a live calendar yet.
+The app is not connected to Supabase yet.
 
 - Prototype configuration data lives in `data/summer-2026-planner.json`.
-- Local user actions are stored in browser `localStorage`.
-- Imported-looking calendar events are prototype data.
+- Local user actions, saved calendar sources, and applied calendar events are stored in browser `localStorage`.
+- Personal calendar data should be added through `/admin` on the deployed app, not committed into seed data.
 - Supabase is planned for durable sync, backup, auth, and remote access. The first durable action-item schema lives in `supabase/migrations`.
 
 ## Getting Started
@@ -54,35 +54,29 @@ Copy `.env.example` to `.env.local` when Supabase is ready. Keep real local env 
 - `docs/household-console-plan.md` describes the product and architecture plan.
 - `docs/schedule-data-model.md` documents the existing planner JSON and how it should feed the new dashboard.
 
-## Import Apple Calendar
+## Add Calendar Sources
 
-In Apple Calendar, select the calendar in the sidebar, then use `File > Export > Export...` and save the `.ics` file to `imports/family-calendar.ics`.
+Open `/admin` in the app to add shared calendar feeds.
 
-Then run:
+Use this flow for Apple/shared family calendars, SportsEngine, school calendars, and other public ICS or `webcal://` URLs:
 
-```bash
-pnpm import:calendar
-```
+1. Add a source label and shared URL.
+2. Choose the source type.
+3. Select default household members when the whole source usually belongs to one person.
+4. Preview the feed.
+5. Apply the preview to the local dashboard feed.
 
-The importer expands recurring events inside the summer date range and writes them into `data/summer-2026-planner.json` as fixed events.
+Calendar source setup is browser-local until Supabase persistence is added. Configure sources on the deployed URL and device/browser you want to use.
 
-## Refresh SportsEngine Calendar
+## Local Calendar Import Script
 
-SportsEngine should be imported from its subscription URL because schedules can change.
+`scripts/import-ics-to-planner.mjs` remains available as a development utility, but personal calendars should not be committed into `data/summer-2026-planner.json`.
 
-Add this to `.env.local`:
-
-```bash
-SPORTSENGINE_CALENDAR_URL="https://..."
-```
-
-Then run:
+For generated baseline planning, run:
 
 ```bash
-pnpm import:sports
+pnpm plan:summer-workdays
 ```
-
-This replaces existing `sportsengine-calendar` events inside the summer date range with the latest subscription feed.
 
 ## GitHub Remote Setup
 

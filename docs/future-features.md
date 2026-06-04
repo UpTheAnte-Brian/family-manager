@@ -46,10 +46,11 @@ This file tracks useful features that are intentionally deferred so they do not 
 
 ### Shared iCloud Family Calendar Sync
 
-- Goal: Keep non-SportsEngine family events in sync without manually exporting `family-calendar.ics`.
-- Current workaround: Export the Family calendar from Apple Calendar to `imports/family-calendar.ics`, then run `pnpm import:calendar`.
+- Goal: Keep non-SportsEngine family events in sync without each browser/device relying on local calendar source setup.
+- Current workaround: Add a shared Family calendar ICS or `webcal://` source through `/admin`, preview it, and apply it to the local dashboard feed.
 - Desired behavior: Use a refreshable calendar feed or local Mac-based sync process so changes from the shared iCloud Family calendar can be pulled into the family manager app automatically.
 - Notes:
   - A one-time `.ics` export is only a snapshot and does not receive push updates.
   - A public `webcal://` or `https://...ics` subscription URL would support periodic refreshes, but not true push.
-  - Once a Mac mini is available, evaluate whether it can run a scheduled sync job against Apple Calendar/iCloud data and update the app's calendar source data.
+  - Supabase should store calendar sources and applied events so setup follows the family across devices.
+  - Once a Mac mini is available, evaluate whether it can run a scheduled sync job against Apple Calendar/iCloud data and update Supabase.

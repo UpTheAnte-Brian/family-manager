@@ -67,18 +67,6 @@
   },
   "calendarSources": [
     {
-      "id": "family-calendar",
-      "label": "Family Calendar",
-      "status": "active",
-      "notes": "Imported from family-calendar.ics."
-    },
-    {
-      "id": "sportsengine-calendar",
-      "label": "SportsEngine Calendar",
-      "status": "active",
-      "notes": "Imported from subscription URL."
-    },
-    {
       "id": "summer-workday-plan",
       "label": "Summer Workday Plan",
       "status": "active",
@@ -298,891 +286,84 @@
   ],
   "fixedEvents": [
     {
-      "id": "family-calendar-16e1bb68-b9d9-4794-bbfe-4ff2c223a8ac-2026-05-01-08-00",
-      "source": "family-calendar",
-      "sourceUid": "16E1BB68-B9D9-4794-BBFE-4FF2C223A8AC",
-      "date": "2026-05-01",
+      "id": "summer-workday-plan-2026-06-02-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-02-quiet-me-time",
+      "date": "2026-06-02",
       "startTime": "08:00",
       "endTime": "09:00",
-      "title": "Orono soccer mound sign ups for mound",
-      "category": "sports",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-e2d5465e-fbfd-4323-9fe5-c512aadcd325-2026-05-01-13-30",
-      "source": "family-calendar",
-      "sourceUid": "E2D5465E-FBFD-4323-9FE5-C512AADCD325",
-      "date": "2026-05-01",
-      "startTime": "13:30",
-      "endTime": "14:30",
-      "title": "Kenzley Spring Concert",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Westonka Performing Arts Center\n5905 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-05-01-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-05-01",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
-      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-05-01-19-00",
-      "source": "family-calendar",
-      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
-      "date": "2026-05-01",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "Max heartguard and tick stuff",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-3ba1278c-dde3-4ac3-8808-b3d141bad7e5-2026-05-02-10-15",
-      "source": "family-calendar",
-      "sourceUid": "3BA1278C-DDE3-4AC3-8808-B3D141BAD7E5",
-      "date": "2026-05-02",
-      "startTime": "10:15",
-      "endTime": "11:15",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-05-03-00-00",
-      "source": "family-calendar",
-      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
-      "date": "2026-05-03",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Pay target bill",
-      "category": "admin",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-d78fa1f6-4a15-4a7b-9872-e7dc2c9cf6ac-2026-05-03-09-15",
-      "source": "family-calendar",
-      "sourceUid": "D78FA1F6-4A15-4A7B-9872-E7DC2C9CF6AC",
-      "date": "2026-05-03",
-      "startTime": "09:15",
-      "endTime": "10:00",
-      "title": "Kenzley Tennis",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-5149ca58-019c-4e1b-a0cb-10422fb25fd7-2026-05-03-10-00",
-      "source": "family-calendar",
-      "sourceUid": "5149CA58-019C-4E1B-A0CB-10422FB25FD7",
-      "date": "2026-05-03",
-      "startTime": "10:00",
-      "endTime": "11:00",
-      "title": "Reagan and Mas Tennis",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-3c3a7e8f-ca66-4bb3-a25a-8c65ecbda7b1-2026-05-05-13-00",
-      "source": "family-calendar",
-      "sourceUid": "3C3A7E8F-CA66-4BB3-A25A-8C65ECBDA7B1",
-      "date": "2026-05-05",
-      "startTime": "13:00",
-      "endTime": "14:30",
-      "title": "Dentist",
-      "category": "appointment",
-      "calendarBehavior": "fixed",
-      "locationNote": "Chanhassen Family Dentistry\n8116 Mallory Ct, Chanhassen, MN  55317, United States"
-    },
-    {
-      "id": "family-calendar-726541b1-3472-4981-a22d-fbdec66670e7-2026-05-05-14-00",
-      "source": "family-calendar",
-      "sourceUid": "726541B1-3472-4981-A22D-FBDEC66670E7",
-      "date": "2026-05-05",
-      "startTime": "14:00",
-      "endTime": "15:00",
-      "title": "Angela Dentist",
-      "category": "appointment",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "8126 Mallory Ct\nChanhassen MN 55317\nUnited States"
-    },
-    {
-      "id": "family-calendar-4af7c173-f0fb-4f70-b846-e5b93627b303-2026-05-05-16-30",
-      "source": "family-calendar",
-      "sourceUid": "4AF7C173-F0FB-4F70-B846-E5B93627B303",
-      "date": "2026-05-05",
-      "startTime": "16:30",
-      "endTime": "17:30",
-      "title": "Reagan Dance",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Lake Minnetonka Dance Academy\n4148 Shoreline Dr, Spring Park, MN 55384, United States"
-    },
-    {
-      "id": "family-calendar-85f15f75-27d0-4f70-baaf-432f31dea359-2026-05-06-07-00",
-      "source": "family-calendar",
-      "sourceUid": "85F15F75-27D0-4F70-BAAF-432F31DEA359",
-      "date": "2026-05-06",
-      "startTime": "07:00",
-      "endTime": "08:00",
-      "title": "Boots for Kids",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-224bb6cf-33f9-4686-9e88-846d903ccc11-2026-05-06-17-15",
-      "source": "family-calendar",
-      "sourceUid": "224BB6CF-33F9-4686-9E88-846D903CCC11",
-      "date": "2026-05-06",
-      "startTime": "17:15",
-      "endTime": "18:15",
-      "title": "Reagan gymnastics",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "North Shore Gymnastics Association\n5555 Pioneer Creek Dr, Maple Plain, MN  55359, United States"
-    },
-    {
-      "id": "family-calendar-8759afdc-e153-46f5-98bd-8189fbe97ed0-2026-05-07-07-00",
-      "source": "family-calendar",
-      "sourceUid": "8759AFDC-E153-46F5-98BD-8189FBE97ED0",
-      "date": "2026-05-07",
-      "startTime": "07:00",
-      "endTime": "08:00",
-      "title": "Mason and Kenzley need bag lunch",
-      "category": "family-calendar",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
+        "reagan",
         "kenzley"
       ]
     },
     {
-      "id": "family-calendar-a5db0dcf-4d2a-4cec-9c91-a32622e398c6-2026-05-07-08-00",
-      "source": "family-calendar",
-      "sourceUid": "A5DB0DCF-4D2A-4CEC-9C91-A32622E398C6",
-      "date": "2026-05-07",
-      "startTime": "08:00",
-      "endTime": "09:00",
-      "title": "First grade grandparents day",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-a2f54fec-eaf0-453a-a725-fa63e74b8ea5-2026-05-07-09-00",
-      "source": "family-calendar",
-      "sourceUid": "A2F54FEC-EAF0-453A-A725-FA63E74B8EA5",
-      "date": "2026-05-07",
+      "id": "summer-workday-plan-2026-06-02-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-02-away-activity",
+      "date": "2026-06-02",
       "startTime": "09:00",
-      "endTime": "10:00",
-      "title": "Olga",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-97617fb8-3232-4436-8097-56bd44af1fca-2026-05-07-18-30",
-      "source": "family-calendar",
-      "sourceUid": "97617FB8-3232-4436-8097-56BD44AF1FCA",
-      "date": "2026-05-07",
-      "startTime": "18:30",
-      "endTime": "19:30",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-510b4560-cc61-4276-bd37-0ac341323af8-2026-05-08-00-00",
-      "source": "family-calendar",
-      "sourceUid": "510B4560-CC61-4276-BD37-0AC341323AF8",
-      "date": "2026-05-08",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "2017/18 Hawks Red Tournament Dates",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-05-08-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-05-08",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
-      "id": "family-calendar-3ba1278c-dde3-4ac3-8808-b3d141bad7e5-2026-05-09-10-15",
-      "source": "family-calendar",
-      "sourceUid": "3BA1278C-DDE3-4AC3-8808-B3D141BAD7E5",
-      "date": "2026-05-09",
-      "startTime": "10:15",
-      "endTime": "11:15",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-d78fa1f6-4a15-4a7b-9872-e7dc2c9cf6ac-2026-05-10-09-15",
-      "source": "family-calendar",
-      "sourceUid": "D78FA1F6-4A15-4A7B-9872-E7DC2C9CF6AC",
-      "date": "2026-05-10",
-      "startTime": "09:15",
-      "endTime": "10:00",
-      "title": "Kenzley Tennis",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-5149ca58-019c-4e1b-a0cb-10422fb25fd7-2026-05-10-10-00",
-      "source": "family-calendar",
-      "sourceUid": "5149CA58-019C-4E1B-A0CB-10422FB25FD7",
-      "date": "2026-05-10",
-      "startTime": "10:00",
       "endTime": "11:00",
-      "title": "Reagan and Mas Tennis",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-4af7c173-f0fb-4f70-b846-e5b93627b303-2026-05-12-16-30",
-      "source": "family-calendar",
-      "sourceUid": "4AF7C173-F0FB-4F70-B846-E5B93627B303",
-      "date": "2026-05-12",
-      "startTime": "16:30",
-      "endTime": "17:30",
-      "title": "Reagan Dance",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Lake Minnetonka Dance Academy\n4148 Shoreline Dr, Spring Park, MN 55384, United States"
-    },
-    {
-      "id": "family-calendar-224bb6cf-33f9-4686-9e88-846d903ccc11-2026-05-13-17-15",
-      "source": "family-calendar",
-      "sourceUid": "224BB6CF-33F9-4686-9E88-846D903CCC11",
-      "date": "2026-05-13",
-      "startTime": "17:15",
-      "endTime": "18:15",
-      "title": "Reagan gymnastics",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "North Shore Gymnastics Association\n5555 Pioneer Creek Dr, Maple Plain, MN  55359, United States"
-    },
-    {
-      "id": "family-calendar-2f9763ce-eed8-43b9-8dda-cb4054c65db6-2026-05-14-08-25",
-      "source": "family-calendar",
-      "sourceUid": "2F9763CE-EED8-43B9-8DDA-CB4054C65DB6",
-      "date": "2026-05-14",
-      "startTime": "08:25",
-      "endTime": "10:30",
-      "title": "Kidney testing",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "500 Maple St S\nWaconia, MN, United States"
-    },
-    {
-      "id": "family-calendar-e219845b-cc60-4960-9457-b0aeda5651ef-2026-05-14-08-30",
-      "source": "family-calendar",
-      "sourceUid": "E219845B-CC60-4960-9457-B0AEDA5651EF",
-      "date": "2026-05-14",
-      "startTime": "08:30",
-      "endTime": "09:30",
-      "title": "Appointment: Visit at Ridgeview",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Ridgeview\n500 SOUTH MAPLE STREET WACONIA MN 55387-1752"
-    },
-    {
-      "id": "family-calendar-97617fb8-3232-4436-8097-56bd44af1fca-2026-05-14-18-30",
-      "source": "family-calendar",
-      "sourceUid": "97617FB8-3232-4436-8097-56BD44AF1FCA",
-      "date": "2026-05-14",
-      "startTime": "18:30",
-      "endTime": "19:30",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-a3420722-a6f3-4871-8cf9-3779d45ac9ef-2026-05-15-08-15",
-      "source": "family-calendar",
-      "sourceUid": "A3420722-A6F3-4871-8CF9-3779D45AC9EF",
-      "date": "2026-05-15",
-      "startTime": "08:15",
-      "endTime": "09:15",
-      "title": "Pancake breakfast",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-05-15-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-05-15",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
-      "id": "family-calendar-7049472e-ab75-4593-9f39-d200bbcbf825-2026-05-15-17-15",
-      "source": "family-calendar",
-      "sourceUid": "7049472E-AB75-4593-9F39-D200BBCBF825",
-      "date": "2026-05-15",
-      "startTime": "17:15",
-      "endTime": "18:15",
-      "title": "Reagan Dance Recital Rehearsal",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Chanhassen High School\n2200 Lyman Blvd, Chanhassen, MN 55317, United States"
-    },
-    {
-      "id": "family-calendar-3ba1278c-dde3-4ac3-8808-b3d141bad7e5-2026-05-16-10-15",
-      "source": "family-calendar",
-      "sourceUid": "3BA1278C-DDE3-4AC3-8808-B3D141BAD7E5",
-      "date": "2026-05-16",
-      "startTime": "10:15",
-      "endTime": "11:15",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-b2ab6df2-d196-4ea3-bfc7-6731c5afc6e0-2026-05-16-12-00",
-      "source": "family-calendar",
-      "sourceUid": "B2AB6DF2-D196-4EA3-BFC7-6731C5AFC6E0",
-      "date": "2026-05-16",
-      "startTime": "12:00",
-      "endTime": "15:00",
-      "title": "Reagan Dance Recital",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Chanhassen High School\n2200 Lyman Blvd, Chanhassen, MN 55317, United States"
-    },
-    {
-      "id": "family-calendar-d78fa1f6-4a15-4a7b-9872-e7dc2c9cf6ac-2026-05-17-09-15",
-      "source": "family-calendar",
-      "sourceUid": "D78FA1F6-4A15-4A7B-9872-E7DC2C9CF6AC",
-      "date": "2026-05-17",
-      "startTime": "09:15",
-      "endTime": "10:00",
-      "title": "Kenzley Tennis",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-5149ca58-019c-4e1b-a0cb-10422fb25fd7-2026-05-17-10-00",
-      "source": "family-calendar",
-      "sourceUid": "5149CA58-019C-4E1B-A0CB-10422FB25FD7",
-      "date": "2026-05-17",
-      "startTime": "10:00",
-      "endTime": "11:00",
-      "title": "Reagan and Mas Tennis",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-7ecb3f13-c3b5-470d-8dc6-b98d8812bfee-2026-05-19-11-00",
-      "source": "family-calendar",
-      "sourceUid": "7ECB3F13-C3B5-470D-8DC6-B98D8812BFEE",
-      "date": "2026-05-19",
-      "startTime": "11:00",
-      "endTime": "12:00",
-      "title": "Mason speech review",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason"
-      ],
-      "locationNote": "Hilltop Elementary School\n5700 Game Farm Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-5358a207-028c-433a-87f1-ce5286cac9b8-2026-05-19-15-00",
-      "source": "family-calendar",
-      "sourceUid": "5358A207-028C-433A-87F1-CE5286CAC9B8",
-      "date": "2026-05-19",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Therapy",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-ee0b18a3-ca13-4f2f-97eb-ceb669a25d68-2026-05-20-09-30",
-      "source": "family-calendar",
-      "sourceUid": "EE0B18A3-CA13-4F2F-97EB-CEB669A25D68",
-      "date": "2026-05-20",
-      "startTime": "09:30",
-      "endTime": "10:30",
-      "title": "Mason's Class Play",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason"
-      ]
-    },
-    {
-      "id": "family-calendar-2b0610d4-2a81-4c12-90c3-1bca1d7f5d6f-2026-05-20-12-45",
-      "source": "family-calendar",
-      "sourceUid": "2B0610D4-2A81-4C12-90C3-1BCA1D7F5D6F",
-      "date": "2026-05-20",
-      "startTime": "12:45",
-      "endTime": "14:45",
-      "title": "Kenzley Camp Christmas Tree Fieldtrip",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Camp Christmas Tree\n6365 Game Farm Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-224bb6cf-33f9-4686-9e88-846d903ccc11-2026-05-20-17-15",
-      "source": "family-calendar",
-      "sourceUid": "224BB6CF-33F9-4686-9E88-846D903CCC11",
-      "date": "2026-05-20",
-      "startTime": "17:15",
-      "endTime": "18:15",
-      "title": "Reagan gymnastics",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "North Shore Gymnastics Association\n5555 Pioneer Creek Dr, Maple Plain, MN  55359, United States"
-    },
-    {
-      "id": "family-calendar-b3f5e942-d316-455e-9403-9fd9ed7c0787-2026-05-21-08-00",
-      "source": "family-calendar",
-      "sourceUid": "B3F5E942-D316-455E-9403-9FD9ED7C0787",
-      "date": "2026-05-21",
-      "startTime": "08:00",
-      "endTime": "08:15",
-      "title": "check in at 745 Minneapolis Dr. Banik",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "Fulton St SE\nMinneapolis, MN, United States"
-    },
-    {
-      "id": "family-calendar-86073ef6-375a-4a9e-a967-779434a7d3ec-2026-05-21-12-30",
-      "source": "family-calendar",
-      "sourceUid": "86073EF6-375A-4A9E-A967-779434A7D3EC",
-      "date": "2026-05-21",
-      "startTime": "12:30",
-      "endTime": "15:30",
-      "title": "Gale Woods Field Trip",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-97617fb8-3232-4436-8097-56bd44af1fca-2026-05-21-18-30",
-      "source": "family-calendar",
-      "sourceUid": "97617FB8-3232-4436-8097-56BD44AF1FCA",
-      "date": "2026-05-21",
-      "startTime": "18:30",
-      "endTime": "19:30",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-a3d3bb8b-6096-42d1-97bb-d40032320eb6-2026-05-22-10-00",
-      "source": "family-calendar",
-      "sourceUid": "A3D3BB8B-6096-42D1-97BB-D40032320EB6",
-      "date": "2026-05-22",
-      "startTime": "10:00",
-      "endTime": "10:45",
-      "title": "Recruiter call",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-05-22-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-05-22",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
-      "id": "family-calendar-3ba1278c-dde3-4ac3-8808-b3d141bad7e5-2026-05-23-10-15",
-      "source": "family-calendar",
-      "sourceUid": "3BA1278C-DDE3-4AC3-8808-B3D141BAD7E5",
-      "date": "2026-05-23",
-      "startTime": "10:15",
-      "endTime": "11:15",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-fcf222fa-c1f0-4065-b9c6-d62e33d783be-2026-05-26-10-30",
-      "source": "family-calendar",
-      "sourceUid": "FCF222FA-C1F0-4065-B9C6-D62E33D783BE",
-      "date": "2026-05-26",
-      "startTime": "10:30",
-      "endTime": "11:00",
-      "title": "Desi Strait phone interview",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-c89af112-6a83-41c3-a258-044fe942cf36-2026-05-26-10-30",
-      "source": "family-calendar",
-      "sourceUid": "C89AF112-6A83-41C3-A258-044FE942CF36",
-      "date": "2026-05-26",
-      "startTime": "10:30",
-      "endTime": "11:00",
-      "title": "Google meet with Brian Johnson - Enterprise BA opportunity",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "brian"
-      ],
-      "locationNote": "https://meet.google.com/eek-azdd-oks"
-    },
-    {
-      "id": "family-calendar-42c7b1b4-bf7c-4fef-b764-923596ab201f-2026-05-26-18-30",
-      "source": "family-calendar",
-      "sourceUid": "42C7B1B4-BF7C-4FEF-B764-923596AB201F",
-      "date": "2026-05-26",
-      "startTime": "18:30",
-      "endTime": "19:30",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-2bf44e10-031c-4a10-970b-327958994daf-2026-05-27-10-00",
-      "source": "family-calendar",
-      "sourceUid": "2BF44E10-031C-4A10-970B-327958994DAF",
-      "date": "2026-05-27",
-      "startTime": "10:00",
-      "endTime": "11:00",
-      "title": "Order cakes",
-      "category": "family-calendar",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
+        "reagan",
         "kenzley"
       ]
     },
     {
-      "id": "family-calendar-33b37537-7a06-46f3-a256-7f0eceb8b665-2026-05-28-00-00",
-      "source": "family-calendar",
-      "sourceUid": "33B37537-7A06-46F3-A256-7F0ECEB8B665",
-      "date": "2026-05-28",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Kenzley's Birthday",
-      "category": "birthday",
+      "id": "summer-workday-plan-2026-06-02-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-02-lunch",
+      "date": "2026-06-02",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
+        "mason",
+        "reagan",
         "kenzley"
       ]
     },
     {
-      "id": "family-calendar-db0ece32-ec57-4da7-b770-414295f3b9f3-2026-05-28-07-00",
-      "source": "family-calendar",
-      "sourceUid": "DB0ECE32-EC57-4DA7-B770-414295F3B9F3",
-      "date": "2026-05-28",
-      "startTime": "07:00",
-      "endTime": "08:00",
-      "title": "Reagan’s pj and stuffy day",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-b3817384-523c-46ae-96cc-e83054d7f417-2026-05-28-16-00",
-      "source": "family-calendar",
-      "sourceUid": "B3817384-523C-46AE-96CC-E83054D7F417",
-      "date": "2026-05-28",
-      "startTime": "16:00",
-      "endTime": "17:00",
-      "title": "Kenz ear piercing",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "Ridgedale Center\n12401 Wayzata Blvd, Minnetonka, MN  55305, United States"
-    },
-    {
-      "id": "family-calendar-97617fb8-3232-4436-8097-56bd44af1fca-2026-05-28-18-30",
-      "source": "family-calendar",
-      "sourceUid": "97617FB8-3232-4436-8097-56BD44AF1FCA",
-      "date": "2026-05-28",
-      "startTime": "18:30",
-      "endTime": "19:30",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-497c242d-90bd-4bc1-bb7e-bb0e777461bd-2026-05-29-07-00",
-      "source": "family-calendar",
-      "sourceUid": "497C242D-90BD-4BC1-BB7E-BB0E777461BD",
-      "date": "2026-05-29",
-      "startTime": "07:00",
-      "endTime": "08:00",
-      "title": "Kenzley - show and tell day",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ]
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-05-29-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-05-29",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
-      "id": "family-calendar-3ba1278c-dde3-4ac3-8808-b3d141bad7e5-2026-05-30-10-15",
-      "source": "family-calendar",
-      "sourceUid": "3BA1278C-DDE3-4AC3-8808-B3D141BAD7E5",
-      "date": "2026-05-30",
-      "startTime": "10:15",
-      "endTime": "11:15",
-      "title": "Kenzley Soccer",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Mound Westonka High School\n5905 Sunnyfield Rd E, Minnetrista, MN 55364, United States"
-    },
-    {
-      "id": "family-calendar-4d231be0-f882-4ad0-a2d4-fa9efd668ec3-2026-05-31-14-30",
-      "source": "family-calendar",
-      "sourceUid": "4D231BE0-F882-4AD0-A2D4-FA9EFD668EC3",
-      "date": "2026-05-31",
-      "startTime": "14:30",
-      "endTime": "15:30",
-      "title": "Masons Birthday Party - Skate Part",
-      "category": "birthday",
-      "calendarBehavior": "fixed",
-      "locationNote": "Thaler"
-    },
-    {
-      "id": "family-calendar-eb1985ce-5885-4d98-b07c-79c2adc790be-2026-06-01-00-00",
-      "source": "family-calendar",
-      "sourceUid": "EB1985CE-5885-4D98-B07C-79C2ADC790BE",
-      "date": "2026-06-01",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Mason Birthday",
-      "category": "birthday",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason"
-      ]
-    },
-    {
-      "id": "family-calendar-9cc4d3e9-baf7-4276-8bf5-0ae9b0ebfa92-2026-06-01-07-00",
-      "source": "family-calendar",
-      "sourceUid": "9CC4D3E9-BAF7-4276-8BF5-0AE9B0EBFA92",
-      "date": "2026-06-01",
-      "startTime": "07:00",
-      "endTime": "08:00",
-      "title": "Kenzley - game day",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ]
-    },
-    {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-01-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
-      "date": "2026-06-01",
+      "id": "summer-workday-plan-2026-06-02-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-02-at-home-outside-time",
+      "date": "2026-06-02",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-06-01-19-00",
-      "source": "family-calendar",
-      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
-      "date": "2026-06-01",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "Max heartguard and tick stuff",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-019e539b-ff65-4b5d-b4d5-43eb1d5183d7-2026-06-02-00-00",
-      "source": "family-calendar",
-      "sourceUid": "019E539B-FF65-4B5D-B4D5-43EB1D5183D7",
+      "id": "summer-workday-plan-2026-06-02-toy-pickup-reset",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-02-toy-pickup-reset",
       "date": "2026-06-02",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Last Day of School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-5fe8fd87-948d-4670-bba2-f38c5acd5648-2026-06-02-07-00",
-      "source": "family-calendar",
-      "sourceUid": "5FE8FD87-948D-4670-BBA2-F38C5ACD5648",
-      "date": "2026-06-02",
-      "startTime": "07:00",
-      "endTime": "08:00",
-      "title": "Field day- All kids",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "sportsengine-calendar-ea18df00-333e-408b-b6eb-5198d38834cf-sportsengine-com-2026-06-02-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "ea18df00-333e-408b-b6eb-5198d38834cf@sportsengine.com",
-      "date": "2026-06-02",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
+      "startTime": "15:30",
+      "endTime": "16:00",
+      "title": "Toy pickup and house reset",
+      "category": "chores",
       "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
-    },
-    {
-      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-06-03-00-00",
-      "source": "family-calendar",
-      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
-      "date": "2026-06-03",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Pay target bill",
-      "category": "admin",
-      "calendarBehavior": "fixed"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-03-quiet-me-time",
@@ -1249,17 +430,6 @@
       ]
     },
     {
-      "id": "family-calendar-ac8095b6-70ad-40ee-96d7-d232b5ba2cd5-2026-06-03-13-00",
-      "source": "family-calendar",
-      "sourceUid": "AC8095B6-70AD-40EE-96D7-D232B5BA2CD5",
-      "date": "2026-06-03",
-      "startTime": "13:00",
-      "endTime": "14:00",
-      "title": "Therapy",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-06-03-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-03-toy-pickup-reset",
@@ -1274,18 +444,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-185e1512-cd63-4adf-b8ee-78697052d0af-sportsengine-com-2026-06-03-17-30",
-      "source": "sportsengine-calendar",
-      "sourceUid": "185e1512-cd63-4adf-b8ee-78697052d0af@sportsengine.com",
-      "date": "2026-06-03",
-      "startTime": "17:30",
-      "endTime": "18:30",
-      "title": "Keliix-Intra Soccer Club 18 Boys Blue at U9 Boys Select 2",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "685 Old Crystal Bay Rd N, Orono, MN, 55356, US"
     },
     {
       "id": "summer-workday-plan-2026-06-04-quiet-me-time",
@@ -1368,18 +526,6 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-5cdf0947-6ff7-4960-8e15-3f43f7412e95-sportsengine-com-2026-06-04-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "5cdf0947-6ff7-4960-8e15-3f43f7412e95@sportsengine.com",
-      "date": "2026-06-04",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
-    },
-    {
       "id": "summer-workday-plan-2026-06-05-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-05-quiet-me-time",
@@ -1444,21 +590,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-05-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-06-05",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-06-05-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-05-toy-pickup-reset",
@@ -1475,30 +606,68 @@
       ]
     },
     {
-      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-08-09-00",
-      "source": "family-calendar",
-      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "id": "summer-workday-plan-2026-06-08-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-08-quiet-me-time",
       "date": "2026-06-08",
-      "startTime": "09:00",
-      "endTime": "12:00",
-      "title": "Good Shepherd VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-08-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
-      "date": "2026-06-08",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-08-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-08-away-activity",
+      "date": "2026-06-08",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-08-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-08-lunch",
+      "date": "2026-06-08",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-08-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-08-at-home-outside-time",
+      "date": "2026-06-08",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-08-toy-pickup-reset",
@@ -1517,15 +686,52 @@
       ]
     },
     {
-      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-09-09-00",
-      "source": "family-calendar",
-      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "id": "summer-workday-plan-2026-06-09-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-09-quiet-me-time",
+      "date": "2026-06-09",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-09-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-09-away-activity",
       "date": "2026-06-09",
       "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-09-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-09-lunch",
+      "date": "2026-06-09",
+      "startTime": "11:30",
       "endTime": "12:00",
-      "title": "Good Shepherd VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-09-at-home-outside-time",
@@ -1560,38 +766,52 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-bca31f66-3e12-4b62-9887-54468f5de4a3-sportsengine-com-2026-06-09-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "bca31f66-3e12-4b62-9887-54468f5de4a3@sportsengine.com",
-      "date": "2026-06-09",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
+      "id": "summer-workday-plan-2026-06-10-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-10-quiet-me-time",
+      "date": "2026-06-10",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-2f2baf63-6621-4a14-b6da-d46ef97db902-2026-06-10-09-00",
-      "source": "family-calendar",
-      "sourceUid": "2F2BAF63-6621-4A14-B6DA-D46EF97DB902",
+      "id": "summer-workday-plan-2026-06-10-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-10-away-activity",
       "date": "2026-06-10",
       "startTime": "09:00",
-      "endTime": "10:00",
-      "title": "Bring Soccer Snacks tonight",
-      "category": "sports",
-      "calendarBehavior": "fixed"
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-10-09-00",
-      "source": "family-calendar",
-      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "id": "summer-workday-plan-2026-06-10-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-10-lunch",
       "date": "2026-06-10",
-      "startTime": "09:00",
+      "startTime": "11:30",
       "endTime": "12:00",
-      "title": "Good Shepherd VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-10-at-home-outside-time",
@@ -1626,38 +846,52 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-d9d3d797-5696-4d50-89c1-eabee8afc831-sportsengine-com-2026-06-10-19-15",
-      "source": "sportsengine-calendar",
-      "sourceUid": "d9d3d797-5696-4d50-89c1-eabee8afc831@sportsengine.com",
-      "date": "2026-06-10",
-      "startTime": "19:15",
-      "endTime": "20:15",
-      "title": "U9 Boys Select 2 at Fusion Soccer Club Boys 17 Navy 4",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "14800 34th Ave N, Plymouth, MN, 55447, US"
-    },
-    {
-      "id": "family-calendar-1077645f-c538-4e03-a287-f2c6b692ca62-2026-06-11-08-30",
-      "source": "family-calendar",
-      "sourceUid": "1077645F-C538-4E03-A287-F2C6B692CA62",
+      "id": "summer-workday-plan-2026-06-11-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-11-quiet-me-time",
       "date": "2026-06-11",
-      "startTime": "08:30",
-      "endTime": "09:30",
-      "title": "Kenz doctor",
-      "category": "appointment",
-      "calendarBehavior": "fixed"
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-4037cd96-1dc6-43b0-8d57-c56ed19db6f8-2026-06-11-09-00",
-      "source": "family-calendar",
-      "sourceUid": "4037CD96-1DC6-43B0-8D57-C56ED19DB6F8",
+      "id": "summer-workday-plan-2026-06-11-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-11-away-activity",
       "date": "2026-06-11",
       "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-11-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-11-lunch",
+      "date": "2026-06-11",
+      "startTime": "11:30",
       "endTime": "12:00",
-      "title": "Good Shepherd VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-11-at-home-outside-time",
@@ -1690,29 +924,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-1a61f495-5b28-4960-8272-5e06bbd4f75b-sportsengine-com-2026-06-11-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "1a61f495-5b28-4960-8272-5e06bbd4f75b@sportsengine.com",
-      "date": "2026-06-11",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
-    },
-    {
-      "id": "sportsengine-calendar-f69d5782-56c9-467b-a895-a1b6a60be0cb-sportsengine-com-2026-06-12-00-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "f69d5782-56c9-467b-a895-a1b6a60be0cb@sportsengine.com",
-      "date": "2026-06-12",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Hold for Tonka Splash Tournament",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
     },
     {
       "id": "summer-workday-plan-2026-06-12-quiet-me-time",
@@ -1779,21 +990,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-12-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-06-12",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-06-12-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-12-toy-pickup-reset",
@@ -1810,53 +1006,68 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-0c9192d3-d59f-4c6e-8e61-95475d0bab03-sportsengine-com-2026-06-13-00-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "0c9192d3-d59f-4c6e-8e61-95475d0bab03@sportsengine.com",
-      "date": "2026-06-13",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Hold for Tonka Splash Tournament",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "sportsengine-calendar-045968eb-f766-4a6d-8301-0a1110d82d45-sportsengine-com-2026-06-14-00-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "045968eb-f766-4a6d-8301-0a1110d82d45@sportsengine.com",
-      "date": "2026-06-14",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Hold for Tonka Splash Tournament",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-20260615t090000-0-27mia-myvbs-app-2026-06-15-10-00",
-      "source": "family-calendar",
-      "sourceUid": "20260615T090000-0-27mia@myvbs.app",
+      "id": "summer-workday-plan-2026-06-15-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-15-quiet-me-time",
       "date": "2026-06-15",
-      "startTime": "10:00",
-      "endTime": "13:00",
-      "title": "St. John's Lutheran Church VBS  2026",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
-    },
-    {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-15-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
-      "date": "2026-06-15",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-15-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-15-away-activity",
+      "date": "2026-06-15",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-15-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-15-lunch",
+      "date": "2026-06-15",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-15-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-15-at-home-outside-time",
+      "date": "2026-06-15",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-15-toy-pickup-reset",
@@ -1875,28 +1086,68 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-f5314bba-dcea-479d-b85c-f774587ccfcd-sportsengine-com-2026-06-15-18-45",
-      "source": "sportsengine-calendar",
-      "sourceUid": "f5314bba-dcea-479d-b85c-f774587ccfcd@sportsengine.com",
-      "date": "2026-06-15",
-      "startTime": "18:45",
-      "endTime": "19:45",
-      "title": "Minneapolis United 2017 Boys Tango at U9 Boys Select 2",
-      "category": "sports",
+      "id": "summer-workday-plan-2026-06-16-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-16-quiet-me-time",
+      "date": "2026-06-16",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN, 55356, US"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-20260616t090000-1-dtmu64-myvbs-app-2026-06-16-10-00",
-      "source": "family-calendar",
-      "sourceUid": "20260616T090000-1-dtmu64@myvbs.app",
+      "id": "summer-workday-plan-2026-06-16-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-16-away-activity",
       "date": "2026-06-16",
-      "startTime": "10:00",
-      "endTime": "13:00",
-      "title": "St. John's Lutheran Church VBS  2026",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
-      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-16-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-16-lunch",
+      "date": "2026-06-16",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-16-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-16-at-home-outside-time",
+      "date": "2026-06-16",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-16-toy-pickup-reset",
@@ -1915,28 +1166,68 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-e9fe183f-a240-4857-9511-ec7e4d42b7d3-sportsengine-com-2026-06-16-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "e9fe183f-a240-4857-9511-ec7e4d42b7d3@sportsengine.com",
-      "date": "2026-06-16",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
+      "id": "summer-workday-plan-2026-06-17-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-17-quiet-me-time",
+      "date": "2026-06-17",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-20260617t090000-2-ka3og9-myvbs-app-2026-06-17-10-00",
-      "source": "family-calendar",
-      "sourceUid": "20260617T090000-2-ka3og9@myvbs.app",
+      "id": "summer-workday-plan-2026-06-17-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-17-away-activity",
       "date": "2026-06-17",
-      "startTime": "10:00",
-      "endTime": "13:00",
-      "title": "St. John's Lutheran Church VBS  2026",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
-      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-17-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-17-lunch",
+      "date": "2026-06-17",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-17-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-17-at-home-outside-time",
+      "date": "2026-06-17",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-17-toy-pickup-reset",
@@ -1955,16 +1246,68 @@
       ]
     },
     {
-      "id": "family-calendar-20260618t090000-3-1w1mia-myvbs-app-2026-06-18-10-00",
-      "source": "family-calendar",
-      "sourceUid": "20260618T090000-3-1w1mia@myvbs.app",
+      "id": "summer-workday-plan-2026-06-18-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-18-quiet-me-time",
       "date": "2026-06-18",
-      "startTime": "10:00",
-      "endTime": "13:00",
-      "title": "St. John's Lutheran Church VBS  2026",
-      "category": "family-calendar",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
-      "locationNote": "St. John's Church, 2451 Fairview Lane, Mound, MN, 55364"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-18-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-18-away-activity",
+      "date": "2026-06-18",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-18-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-18-lunch",
+      "date": "2026-06-18",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-06-18-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-18-at-home-outside-time",
+      "date": "2026-06-18",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-18-toy-pickup-reset",
@@ -1981,18 +1324,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-3faabab9-bccd-4b3e-a55d-f9280c7542ce-sportsengine-com-2026-06-18-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "3faabab9-bccd-4b3e-a55d-f9280c7542ce@sportsengine.com",
-      "date": "2026-06-18",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
     },
     {
       "id": "summer-workday-plan-2026-06-19-quiet-me-time",
@@ -2059,21 +1390,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-19-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-06-19",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-06-19-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-19-toy-pickup-reset",
@@ -2138,19 +1454,20 @@
       ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-22-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-06-22-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-22-at-home-outside-time",
       "date": "2026-06-22",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-22-toy-pickup-reset",
@@ -2167,18 +1484,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-f525ef7d-260e-4641-a258-0dd4a9b24e6f-sportsengine-com-2026-06-22-17-30",
-      "source": "sportsengine-calendar",
-      "sourceUid": "f525ef7d-260e-4641-a258-0dd4a9b24e6f@sportsengine.com",
-      "date": "2026-06-22",
-      "startTime": "17:30",
-      "endTime": "18:30",
-      "title": "U9 Boys Select 2 at Legacy FC 2017 LFC Boys Blue",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "683 Tiger Drive, Delano, MN, 55328, US"
     },
     {
       "id": "summer-workday-plan-2026-06-23-quiet-me-time",
@@ -2261,18 +1566,6 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-45082c7b-bd01-42fe-b2b3-38df852eaa83-sportsengine-com-2026-06-23-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "45082c7b-bd01-42fe-b2b3-38df852eaa83@sportsengine.com",
-      "date": "2026-06-23",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
-    },
-    {
       "id": "summer-workday-plan-2026-06-24-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-24-quiet-me-time",
@@ -2351,18 +1644,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-6b5433fd-d8c0-45d0-97d9-3064b022606c-sportsengine-com-2026-06-24-18-45",
-      "source": "sportsengine-calendar",
-      "sourceUid": "6b5433fd-d8c0-45d0-97d9-3064b022606c@sportsengine.com",
-      "date": "2026-06-24",
-      "startTime": "18:45",
-      "endTime": "19:45",
-      "title": "Bloomington United 2017 Boys Jaguars at U9 Boys Select 2",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN, 55356, US"
     },
     {
       "id": "summer-workday-plan-2026-06-25-quiet-me-time",
@@ -2445,18 +1726,6 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-bdef7d7c-9fa0-4252-9552-089ff71ee396-sportsengine-com-2026-06-25-19-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "bdef7d7c-9fa0-4252-9552-089ff71ee396@sportsengine.com",
-      "date": "2026-06-25",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "U9 Boys Select 2 Practice",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "800 Old Crystal Bay Rd N, Long Lake, MN 55356, US"
-    },
-    {
       "id": "summer-workday-plan-2026-06-26-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-06-26-quiet-me-time",
@@ -2519,21 +1788,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-06-26-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-06-26",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
     },
     {
       "id": "summer-workday-plan-2026-06-26-toy-pickup-reset",
@@ -2600,19 +1854,20 @@
       ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-06-29-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-06-29-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-06-29-at-home-outside-time",
       "date": "2026-06-29",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-06-29-toy-pickup-reset",
@@ -2629,18 +1884,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-9d0165d7-9feb-4c76-a9b8-d075868119ce-sportsengine-com-2026-06-29-18-45",
-      "source": "sportsengine-calendar",
-      "sourceUid": "9d0165d7-9feb-4c76-a9b8-d075868119ce@sportsengine.com",
-      "date": "2026-06-29",
-      "startTime": "18:45",
-      "endTime": "19:45",
-      "title": "CC United Soccer Club 2017 Boys Blue 2 at U9 Boys Select 2",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "locationNote": "685 Old Crystal Bay Rd N, Orono, MN, 55356, US"
     },
     {
       "id": "summer-workday-plan-2026-06-30-quiet-me-time",
@@ -2803,17 +2046,6 @@
       ]
     },
     {
-      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-07-01-19-00",
-      "source": "family-calendar",
-      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
-      "date": "2026-07-01",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "Max heartguard and tick stuff",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-07-02-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-02-quiet-me-time",
@@ -2894,17 +2126,6 @@
       ]
     },
     {
-      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-07-03-00-00",
-      "source": "family-calendar",
-      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
-      "date": "2026-07-03",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Pay target bill",
-      "category": "admin",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-07-03-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-03-quiet-me-time",
@@ -2969,21 +2190,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-03-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-07-03",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-07-03-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-03-toy-pickup-reset",
@@ -3000,64 +2206,68 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-06-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-06-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-06-quiet-me-time",
       "date": "2026-07-06",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-06-10-45",
-      "source": "family-calendar",
-      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
-      "date": "2026-07-06",
-      "startTime": "10:45",
-      "endTime": "11:45",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-06-12-00",
-      "source": "family-calendar",
-      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
-      "date": "2026-07-06",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-06-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-07-06-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-06-away-activity",
       "date": "2026-07-06",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-06-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-06-lunch",
+      "date": "2026-07-06",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-06-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-06-at-home-outside-time",
+      "date": "2026-07-06",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-06-toy-pickup-reset",
@@ -3076,33 +2286,68 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-07-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-07-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-07-quiet-me-time",
       "date": "2026-07-07",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
+        "mason",
+        "reagan",
+        "kenzley"
       ]
     },
     {
-      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-07-12-00",
-      "source": "family-calendar",
-      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "id": "summer-workday-plan-2026-07-07-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-07-away-activity",
       "date": "2026-07-07",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
+        "mason",
+        "reagan",
         "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-07-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-07-lunch",
+      "date": "2026-07-07",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-07-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-07-at-home-outside-time",
+      "date": "2026-07-07",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-07-toy-pickup-reset",
@@ -3121,17 +2366,67 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-08-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-08-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-08-quiet-me-time",
       "date": "2026-07-08",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-08-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-08-away-activity",
+      "date": "2026-07-08",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-08-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-08-lunch",
+      "date": "2026-07-08",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-08-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-08-at-home-outside-time",
+      "date": "2026-07-08",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
       ]
     },
     {
@@ -3151,34 +2446,68 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-09-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-09-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-09-quiet-me-time",
       "date": "2026-07-09",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-09-12-00",
-      "source": "family-calendar",
-      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
-      "date": "2026-07-09",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-09-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-09-away-activity",
+      "date": "2026-07-09",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-09-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-09-lunch",
+      "date": "2026-07-09",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-09-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-09-at-home-outside-time",
+      "date": "2026-07-09",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-09-toy-pickup-reset",
@@ -3261,21 +2590,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-10-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-07-10",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-07-10-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-10-toy-pickup-reset",
@@ -3292,75 +2606,68 @@
       ]
     },
     {
-      "id": "family-calendar-74060de1-1055-403a-b0b5-7de87a16d645-2026-07-10-21-00",
-      "source": "family-calendar",
-      "sourceUid": "74060DE1-1055-403A-B0B5-7DE87A16D645",
-      "date": "2026-07-10",
-      "startTime": "21:00",
-      "endTime": "21:30",
-      "title": "Kaylee and Cash visit",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-13-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-13-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-13-quiet-me-time",
       "date": "2026-07-13",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-13-10-45",
-      "source": "family-calendar",
-      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
-      "date": "2026-07-13",
-      "startTime": "10:45",
-      "endTime": "11:45",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-13-12-00",
-      "source": "family-calendar",
-      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
-      "date": "2026-07-13",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-13-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-07-13-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-13-away-activity",
       "date": "2026-07-13",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-13-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-13-lunch",
+      "date": "2026-07-13",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-13-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-13-at-home-outside-time",
+      "date": "2026-07-13",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-13-toy-pickup-reset",
@@ -3379,48 +2686,68 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-14-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-14-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-14-quiet-me-time",
       "date": "2026-07-14",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
+        "mason",
+        "reagan",
+        "kenzley"
       ]
     },
     {
-      "id": "family-calendar-5cdcb865-9038-473d-b810-fcc270d54d92-2026-07-14-09-00",
-      "source": "family-calendar",
-      "sourceUid": "5CDCB865-9038-473D-B810-FCC270D54D92",
+      "id": "summer-workday-plan-2026-07-14-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-14-away-activity",
       "date": "2026-07-14",
       "startTime": "09:00",
-      "endTime": "10:00",
-      "title": "Mason Johnson",
-      "category": "family-calendar",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "mason"
-      ],
-      "locationNote": "Wayzata Children's Clinic\n14001 Ridgedale Dr, Unit 100, Hopkins, MN  55305, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-14-12-00",
-      "source": "family-calendar",
-      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "id": "summer-workday-plan-2026-07-14-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-14-lunch",
       "date": "2026-07-14",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
+        "mason",
+        "reagan",
         "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-14-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-14-at-home-outside-time",
+      "date": "2026-07-14",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-14-toy-pickup-reset",
@@ -3439,17 +2766,67 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-15-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-15-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-15-quiet-me-time",
       "date": "2026-07-15",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-15-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-15-away-activity",
+      "date": "2026-07-15",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-15-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-15-lunch",
+      "date": "2026-07-15",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-15-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-15-at-home-outside-time",
+      "date": "2026-07-15",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
       ]
     },
     {
@@ -3469,34 +2846,68 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-16-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-16-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-16-quiet-me-time",
       "date": "2026-07-16",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-16-12-00",
-      "source": "family-calendar",
-      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
-      "date": "2026-07-16",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-16-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-16-away-activity",
+      "date": "2026-07-16",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-16-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-16-lunch",
+      "date": "2026-07-16",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-16-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-16-at-home-outside-time",
+      "date": "2026-07-16",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-16-toy-pickup-reset",
@@ -3512,20 +2923,6 @@
         "mason",
         "reagan",
         "kenzley"
-      ]
-    },
-    {
-      "id": "family-calendar-2eb47c48-c44e-45e6-bf21-bf122af6d459-2026-07-16-17-00",
-      "source": "family-calendar",
-      "sourceUid": "2EB47C48-C44E-45E6-BF21-BF122AF6D459",
-      "date": "2026-07-16",
-      "startTime": "17:00",
-      "endTime": "19:00",
-      "title": "Mason U10 Soccer Tryout",
-      "category": "sports",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason"
       ]
     },
     {
@@ -3593,21 +2990,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-17-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-07-17",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-07-17-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-17-toy-pickup-reset",
@@ -3624,76 +3006,68 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-b5c3d02c-2a37-4c8f-b7ab-2dd5b5f781f2-sportsengine-com-2026-07-19-15-45",
-      "source": "sportsengine-calendar",
-      "sourceUid": "b5c3d02c-2a37-4c8f-b7ab-2dd5b5f781f2@sportsengine.com",
-      "date": "2026-07-19",
-      "startTime": "15:45",
-      "endTime": "16:45",
-      "title": "2017/2018 Practice w/ 2016 Gray",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
-    },
-    {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-20-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-20-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-20-quiet-me-time",
       "date": "2026-07-20",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-20-10-45",
-      "source": "family-calendar",
-      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
-      "date": "2026-07-20",
-      "startTime": "10:45",
-      "endTime": "11:45",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-20-12-00",
-      "source": "family-calendar",
-      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
-      "date": "2026-07-20",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-20-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-07-20-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-20-away-activity",
       "date": "2026-07-20",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-20-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-20-lunch",
+      "date": "2026-07-20",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-20-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-20-at-home-outside-time",
+      "date": "2026-07-20",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-20-toy-pickup-reset",
@@ -3712,33 +3086,68 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-21-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-21-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-21-quiet-me-time",
       "date": "2026-07-21",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
+        "mason",
+        "reagan",
+        "kenzley"
       ]
     },
     {
-      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-21-12-00",
-      "source": "family-calendar",
-      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
+      "id": "summer-workday-plan-2026-07-21-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-21-away-activity",
       "date": "2026-07-21",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
+        "mason",
+        "reagan",
         "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-21-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-21-lunch",
+      "date": "2026-07-21",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-21-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-21-at-home-outside-time",
+      "date": "2026-07-21",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-21-toy-pickup-reset",
@@ -3757,17 +3166,67 @@
       ]
     },
     {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-22-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-22-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-22-quiet-me-time",
       "date": "2026-07-22",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-22-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-22-away-activity",
+      "date": "2026-07-22",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-22-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-22-lunch",
+      "date": "2026-07-22",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-22-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-22-at-home-outside-time",
+      "date": "2026-07-22",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
       ]
     },
     {
@@ -3787,46 +3246,68 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-edc8d1ea-dec8-499c-ad60-c31305455da9-sportsengine-com-2026-07-22-17-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "edc8d1ea-dec8-499c-ad60-c31305455da9@sportsengine.com",
-      "date": "2026-07-22",
-      "startTime": "17:00",
-      "endTime": "18:00",
-      "title": "2017/2018 Practice w/ 2016 Gray",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
-    },
-    {
-      "id": "family-calendar-bdb581ec-313c-4825-98d1-e7e4b9894cf9-2026-07-23-08-00",
-      "source": "family-calendar",
-      "sourceUid": "BDB581EC-313C-4825-98D1-E7E4B9894CF9",
+      "id": "summer-workday-plan-2026-07-23-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-23-quiet-me-time",
       "date": "2026-07-23",
       "startTime": "08:00",
-      "endTime": "15:00",
-      "title": "Reagan Summer School",
-      "category": "school-camp",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ]
-    },
-    {
-      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-23-12-00",
-      "source": "family-calendar",
-      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
-      "date": "2026-07-23",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-23-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-23-away-activity",
+      "date": "2026-07-23",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-23-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-23-lunch",
+      "date": "2026-07-23",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-07-23-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-23-at-home-outside-time",
+      "date": "2026-07-23",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-23-toy-pickup-reset",
@@ -3909,21 +3390,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-24-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-07-24",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-07-24-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-24-toy-pickup-reset",
@@ -3938,29 +3404,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-103f031d-595c-4ab9-81dc-57c3c55d637a-2026-07-25-00-00",
-      "source": "family-calendar",
-      "sourceUid": "103F031D-595C-4AB9-81DC-57C3C55D637A",
-      "date": "2026-07-25",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Brookside Cabin",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "sportsengine-calendar-38874e74-4fe2-4f95-8347-0f03b27e878b-sportsengine-com-2026-07-26-15-45",
-      "source": "sportsengine-calendar",
-      "sourceUid": "38874e74-4fe2-4f95-8347-0f03b27e878b@sportsengine.com",
-      "date": "2026-07-26",
-      "startTime": "15:45",
-      "endTime": "16:45",
-      "title": "2017/2018 Practice w/ 2016 Gray",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
     },
     {
       "id": "summer-workday-plan-2026-07-27-quiet-me-time",
@@ -3995,21 +3438,6 @@
       ]
     },
     {
-      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-07-27-10-45",
-      "source": "family-calendar",
-      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
-      "date": "2026-07-27",
-      "startTime": "10:45",
-      "endTime": "11:45",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
       "id": "summer-workday-plan-2026-07-27-lunch",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-27-lunch",
@@ -4026,35 +3454,20 @@
       ]
     },
     {
-      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-07-27-12-00",
-      "source": "family-calendar",
-      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "id": "summer-workday-plan-2026-07-27-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-07-27-at-home-outside-time",
       "date": "2026-07-27",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-07-27-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
-      "date": "2026-07-27",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-07-27-toy-pickup-reset",
@@ -4071,18 +3484,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "sportsengine-calendar-16582685-9be6-4a40-adc6-d29435df200e-sportsengine-com-2026-07-27-17-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "16582685-9be6-4a40-adc6-d29435df200e@sportsengine.com",
-      "date": "2026-07-27",
-      "startTime": "17:00",
-      "endTime": "18:00",
-      "title": "2017/2018 Practice - Solo",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
     },
     {
       "id": "summer-workday-plan-2026-07-28-quiet-me-time",
@@ -4147,21 +3548,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-07-28-12-00",
-      "source": "family-calendar",
-      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
-      "date": "2026-07-28",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
     },
     {
       "id": "summer-workday-plan-2026-07-28-toy-pickup-reset",
@@ -4324,22 +3710,6 @@
       ]
     },
     {
-      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-07-30-12-00",
-      "source": "family-calendar",
-      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
-      "date": "2026-07-30",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
       "id": "summer-workday-plan-2026-07-30-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-30-toy-pickup-reset",
@@ -4354,17 +3724,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-66a7c2ff-027a-44b1-adcc-83a49800906a-2026-07-31-00-00",
-      "source": "family-calendar",
-      "sourceUid": "66A7C2FF-027A-44B1-ADCC-83A49800906A",
-      "date": "2026-07-31",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "2017/18 Hawks Red Tournament Dates",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
     },
     {
       "id": "summer-workday-plan-2026-07-31-quiet-me-time",
@@ -4431,21 +3790,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-07-31-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-07-31",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-07-31-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-07-31-toy-pickup-reset",
@@ -4462,83 +3806,68 @@
       ]
     },
     {
-      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-08-01-19-00",
-      "source": "family-calendar",
-      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
-      "date": "2026-08-01",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "Max heartguard and tick stuff",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-08-03-00-00",
-      "source": "family-calendar",
-      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
+      "id": "summer-workday-plan-2026-08-03-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-03-quiet-me-time",
       "date": "2026-08-03",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Pay target bill",
-      "category": "admin",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-03-09-30",
-      "source": "family-calendar",
-      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
-      "date": "2026-08-03",
-      "startTime": "09:30",
-      "endTime": "12:00",
-      "title": "Woodridge VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
-      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-08-03-10-45",
-      "source": "family-calendar",
-      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
-      "date": "2026-08-03",
-      "startTime": "10:45",
-      "endTime": "11:45",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-08-03-12-00",
-      "source": "family-calendar",
-      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
-      "date": "2026-08-03",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-03-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-08-03-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-03-away-activity",
       "date": "2026-08-03",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-03-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-03-lunch",
+      "date": "2026-08-03",
+      "startTime": "11:30",
+      "endTime": "12:00",
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-03-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-03-at-home-outside-time",
+      "date": "2026-08-03",
+      "startTime": "12:00",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-03-toy-pickup-reset",
@@ -4557,27 +3886,52 @@
       ]
     },
     {
-      "id": "sportsengine-calendar-afb7215c-d770-47dc-9257-a8bf599b6273-sportsengine-com-2026-08-03-17-00",
-      "source": "sportsengine-calendar",
-      "sourceUid": "afb7215c-d770-47dc-9257-a8bf599b6273@sportsengine.com",
-      "date": "2026-08-03",
-      "startTime": "17:00",
-      "endTime": "18:00",
-      "title": "2017/2018 Practice w/ 2016 Red",
-      "category": "family-calendar",
+      "id": "summer-workday-plan-2026-08-04-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-04-quiet-me-time",
+      "date": "2026-08-04",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
       "calendarBehavior": "fixed",
-      "locationNote": "5909 Sunnyfield Rd E, Mound, MN 55364, USA, Mound, MN, 55364, United States"
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
-      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-04-09-30",
-      "source": "family-calendar",
-      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "id": "summer-workday-plan-2026-08-04-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-04-away-activity",
       "date": "2026-08-04",
-      "startTime": "09:30",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-04-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-04-lunch",
+      "date": "2026-08-04",
+      "startTime": "11:30",
       "endTime": "12:00",
-      "title": "Woodridge VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-04-at-home-outside-time",
@@ -4596,21 +3950,6 @@
       ]
     },
     {
-      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-08-04-12-00",
-      "source": "family-calendar",
-      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
-      "date": "2026-08-04",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
       "id": "summer-workday-plan-2026-08-04-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-04-toy-pickup-reset",
@@ -4627,15 +3966,52 @@
       ]
     },
     {
-      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-05-09-30",
-      "source": "family-calendar",
-      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "id": "summer-workday-plan-2026-08-05-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-05-quiet-me-time",
       "date": "2026-08-05",
-      "startTime": "09:30",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-05-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-05-away-activity",
+      "date": "2026-08-05",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-05-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-05-lunch",
+      "date": "2026-08-05",
+      "startTime": "11:30",
       "endTime": "12:00",
-      "title": "Woodridge VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-05-at-home-outside-time",
@@ -4670,15 +4046,52 @@
       ]
     },
     {
-      "id": "family-calendar-33c36836-c8ae-4b46-802a-548e1e0dd806-2026-08-06-09-30",
-      "source": "family-calendar",
-      "sourceUid": "33C36836-C8AE-4B46-802A-548E1E0DD806",
+      "id": "summer-workday-plan-2026-08-06-quiet-me-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-06-quiet-me-time",
       "date": "2026-08-06",
-      "startTime": "09:30",
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "title": "Quiet me time: reading or pickup",
+      "category": "quiet-work",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-06-away-activity",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-06-away-activity",
+      "date": "2026-08-06",
+      "startTime": "09:00",
+      "endTime": "11:00",
+      "title": "Away activity: biking, soccer, park, or outing",
+      "category": "activity",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
+    },
+    {
+      "id": "summer-workday-plan-2026-08-06-lunch",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-06-lunch",
+      "date": "2026-08-06",
+      "startTime": "11:30",
       "endTime": "12:00",
-      "title": "Woodridge VBS",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
+      "title": "Lunch",
+      "category": "meal",
+      "calendarBehavior": "fixed",
+      "assignedMemberIds": [
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-06-at-home-outside-time",
@@ -4695,22 +4108,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-08-06-12-00",
-      "source": "family-calendar",
-      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
-      "date": "2026-08-06",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
     },
     {
       "id": "summer-workday-plan-2026-08-06-toy-pickup-reset",
@@ -4793,21 +4190,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-07-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-08-07",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-08-07-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-07-toy-pickup-reset",
@@ -4856,21 +4238,6 @@
       ]
     },
     {
-      "id": "family-calendar-392162e3-9596-4948-b157-441e3c436280-2026-08-10-10-45",
-      "source": "family-calendar",
-      "sourceUid": "392162E3-9596-4948-B157-441E3C436280",
-      "date": "2026-08-10",
-      "startTime": "10:45",
-      "endTime": "11:45",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
       "id": "summer-workday-plan-2026-08-10-lunch",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-10-lunch",
@@ -4887,35 +4254,20 @@
       ]
     },
     {
-      "id": "family-calendar-fb52a2cf-9c28-414a-970d-05c0aec66aad-2026-08-10-12-00",
-      "source": "family-calendar",
-      "sourceUid": "FB52A2CF-9C28-414A-970D-05C0AEC66AAD",
+      "id": "summer-workday-plan-2026-08-10-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-10-at-home-outside-time",
       "date": "2026-08-10",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
         "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-10-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
-      "date": "2026-08-10",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-10-toy-pickup-reset",
@@ -4996,21 +4348,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-aab80aea-9bba-42b3-84b4-c6c9ca080d90-2026-08-11-12-00",
-      "source": "family-calendar",
-      "sourceUid": "AAB80AEA-9BBA-42B3-84B4-C6C9CA080D90",
-      "date": "2026-08-11",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Kenzley STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "kenzley"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
     },
     {
       "id": "summer-workday-plan-2026-08-11-toy-pickup-reset",
@@ -5173,22 +4510,6 @@
       ]
     },
     {
-      "id": "family-calendar-500de188-8952-4920-be5d-38faf1bce041-2026-08-13-12-00",
-      "source": "family-calendar",
-      "sourceUid": "500DE188-8952-4920-BE5D-38FAF1BCE041",
-      "date": "2026-08-13",
-      "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Mason and Reagan STP",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "mason",
-        "reagan"
-      ],
-      "locationNote": "Thaler Arena\n5909 Sunnyfield Rd E, Mound, MN  55364, United States"
-    },
-    {
       "id": "summer-workday-plan-2026-08-13-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-13-toy-pickup-reset",
@@ -5269,21 +4590,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-14-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-08-14",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-08-14-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-14-toy-pickup-reset",
@@ -5348,19 +4654,20 @@
       ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-17-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-08-17-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-17-at-home-outside-time",
       "date": "2026-08-17",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-17-toy-pickup-reset",
@@ -5683,21 +4990,6 @@
       ]
     },
     {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-21-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-08-21",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
-    },
-    {
       "id": "summer-workday-plan-2026-08-21-toy-pickup-reset",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-21-toy-pickup-reset",
@@ -5762,19 +5054,20 @@
       ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-24-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-08-24-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-24-at-home-outside-time",
       "date": "2026-08-24",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-24-toy-pickup-reset",
@@ -5953,17 +5246,6 @@
       ]
     },
     {
-      "id": "family-calendar-8376db1a-1cff-40c7-908b-390d405591b3-2026-08-27-00-00",
-      "source": "family-calendar",
-      "sourceUid": "8376DB1A-1CFF-40C7-908B-390D405591B3",
-      "date": "2026-08-27",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Tommy’s bday",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-08-27-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-27-quiet-me-time",
@@ -6044,17 +5326,6 @@
       ]
     },
     {
-      "id": "family-calendar-4eeaeec3-34fb-42d4-b3fe-f7738c0961ab-2026-08-28-00-00",
-      "source": "family-calendar",
-      "sourceUid": "4EEAEEC3-34FB-42D4-B3FE-F7738C0961AB",
-      "date": "2026-08-28",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "2017/18 Hawks Red Tournament Dates",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-08-28-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-08-28-quiet-me-time",
@@ -6117,21 +5388,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-08-28-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-08-28",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
     },
     {
       "id": "summer-workday-plan-2026-08-28-toy-pickup-reset",
@@ -6198,19 +5454,20 @@
       ]
     },
     {
-      "id": "family-calendar-f9b472f5-2f96-4531-97eb-0c9daf612cf3-2026-08-31-12-00",
-      "source": "family-calendar",
-      "sourceUid": "F9B472F5-2F96-4531-97EB-0C9DAF612CF3",
+      "id": "summer-workday-plan-2026-08-31-at-home-outside-time",
+      "source": "summer-workday-plan",
+      "sourceUid": "2026-08-31-at-home-outside-time",
       "date": "2026-08-31",
       "startTime": "12:00",
-      "endTime": "13:00",
-      "title": "Reagan 3 on 3 Hockey",
-      "category": "family-calendar",
+      "endTime": "14:00",
+      "title": "At-home outside time",
+      "category": "activity",
       "calendarBehavior": "fixed",
       "assignedMemberIds": [
-        "reagan"
-      ],
-      "locationNote": "2201 Florida Ave S\nMinneapolis, MN, United States"
+        "mason",
+        "reagan",
+        "kenzley"
+      ]
     },
     {
       "id": "summer-workday-plan-2026-08-31-toy-pickup-reset",
@@ -6309,17 +5566,6 @@
       ]
     },
     {
-      "id": "family-calendar-b034c322-db87-4c0f-823c-eb18102522dd-2026-09-01-19-00",
-      "source": "family-calendar",
-      "sourceUid": "B034C322-DB87-4C0F-823C-EB18102522DD",
-      "date": "2026-09-01",
-      "startTime": "19:00",
-      "endTime": "20:00",
-      "title": "Max heartguard and tick stuff",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-09-02-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-09-02-quiet-me-time",
@@ -6400,17 +5646,6 @@
       ]
     },
     {
-      "id": "family-calendar-6ab39b08-8ebf-40c9-8075-a564076a389f-2026-09-03-00-00",
-      "source": "family-calendar",
-      "sourceUid": "6AB39B08-8EBF-40C9-8075-A564076A389F",
-      "date": "2026-09-03",
-      "startTime": "00:00",
-      "endTime": "23:59",
-      "title": "Pay target bill",
-      "category": "admin",
-      "calendarBehavior": "fixed"
-    },
-    {
       "id": "summer-workday-plan-2026-09-03-quiet-me-time",
       "source": "summer-workday-plan",
       "sourceUid": "2026-09-03-quiet-me-time",
@@ -6441,21 +5676,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-739108db-b376-4f85-9d66-ffba17c94321-2026-09-03-09-10",
-      "source": "family-calendar",
-      "sourceUid": "739108DB-B376-4F85-9D66-FFBA17C94321",
-      "date": "2026-09-03",
-      "startTime": "09:10",
-      "endTime": "11:10",
-      "title": "Angela Urology",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Minnesota Urology\n560 Maple St S, Waconia, MN  55387, United States"
     },
     {
       "id": "summer-workday-plan-2026-09-03-lunch",
@@ -6568,21 +5788,6 @@
         "reagan",
         "kenzley"
       ]
-    },
-    {
-      "id": "family-calendar-85b8d19d-e915-4277-a914-fde1eef0ea53-2026-09-04-15-00",
-      "source": "family-calendar",
-      "sourceUid": "85B8D19D-E915-4277-A914-FDE1EEF0EA53",
-      "date": "2026-09-04",
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "title": "Angela and Bri Weekly Touch Base/Connect",
-      "category": "family-calendar",
-      "calendarBehavior": "fixed",
-      "assignedMemberIds": [
-        "angela"
-      ],
-      "locationNote": "Living Room"
     },
     {
       "id": "summer-workday-plan-2026-09-04-toy-pickup-reset",

@@ -13,22 +13,19 @@ The dashboard must not treat this file as the source of truth for the current da
 - Weekday work-from-home protection matters most from `08:00-16:00`.
 - Draft blocks inside quiet house hours should bias toward daily reading, workbook time, crafts, puzzles, independent projects, outside activity, lunch/reset, and rest.
 - School-year weekday and weekend baselines are not modeled yet.
-- Calendar data is imported prototype data, not a live calendar connection.
+- Personal and sports calendar data is configured through `/admin` and stored browser-locally until Supabase persistence exists.
 
-## Import Path
+## Calendar Setup Path
 
 1. Keep baseline schedule blocks as `draft` calendar items.
-2. Export Apple Calendar data to `imports/family-calendar.ics`.
-3. Run `pnpm import:calendar`.
-4. Import the family calendar as `fixed` items.
-5. Run `pnpm plan:summer-workdays` to regenerate the summer weekday coverage plan.
-6. Resolve conflicts by date and time, preferring fixed events over draft blocks.
-7. Use the imported and generated events as today-dashboard context.
-8. Promote the stable parts of the JSON shape into Supabase tables once the dashboard behavior feels right.
+2. Use `/admin` to add Apple/shared family, SportsEngine, school, and other ICS or `webcal://` sources.
+3. Preview each source and apply it to the local dashboard feed.
+4. Run `pnpm plan:summer-workdays` during development to regenerate the summer weekday coverage plan.
+5. Resolve conflicts by date and time, preferring applied fixed events over generated draft-like blocks.
+6. Use the applied and generated events as today-dashboard context.
+7. Promote calendar sources and applied events into Supabase so setup syncs across devices.
 
-`pnpm refresh:family-calendar` runs the family calendar import and then regenerates the summer workday plan.
-
-For SportsEngine, use `SPORTSENGINE_CALENDAR_URL` in `.env.local` and run `pnpm import:sports`. That source is replaced on each refresh because subscription calendars change after the first import.
+The old `pnpm import:calendar`, `pnpm import:sports`, and `pnpm refresh:family-calendar` scripts remain development utilities. Do not commit personal calendar exports or imported personal calendar events into seed data.
 
 ## Generated Summer Workday Plan
 
@@ -42,7 +39,7 @@ The generated plan applies to Monday-Friday dates inside the summer season and a
 - `12:00-14:00`: At-home outside time.
 - `15:30-16:00`: Toy pickup and house reset.
 
-Substantive child activities such as VBS, camp, school, lessons, practices, games, appointments, doctor, dentist, soccer, tennis, gymnastics, and hockey suppress overlapping generated blocks. Reminder-like events such as paying, ordering, calling, packing, registering, signing up, or bringing snacks do not suppress the plan by themselves.
+Substantive child activities such as VBS, camp, school, lessons, practices, games, appointments, doctor, dentist, soccer, tennis, gymnastics, and hockey should suppress overlapping generated blocks once they are applied from calendar feeds. Reminder-like events such as paying, ordering, calling, packing, registering, signing up, or bringing snacks should not suppress the plan by themselves.
 
 ## Likely Supabase Tables
 
