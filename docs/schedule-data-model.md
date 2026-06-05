@@ -67,20 +67,22 @@ Chores now live under `chores` in `data/summer-2026-planner.json`.
 
 The current target is five weekly assigned chores per child. Morning routine chores do not count toward that weekly target.
 
-The old chore manager stored chore edits and completions in browser `localStorage` under `family-manager:chores:v1`. The profile dashboard stores checklist completions under `family-manager:dashboard:v1`. Both are temporary persistence layers until these records move into Supabase.
+The old chore manager stored chore edits and completions in browser `localStorage` under `family-manager:chores:v1`. The profile dashboard stores checklist completions under `family-manager:dashboard:v1`.
 
 The dashboard now also stores user-created same-day tasks, same-day reminders, locally added recurring routine steps, and locally added recurring responsibilities in `family-manager:dashboard:v1`.
 
+These browser storage keys are temporary. Supabase durable tables now exist for households, members, calendar records, action items, assignments, completions, chores, and chore templates. The next step is moving each UI surface from browser-local JSON into those normalized tables.
+
 ## Durable Action Item Model
 
-The Supabase migration in `supabase/migrations` promotes the dashboard's three editable surfaces into one durable action-item model.
+The first Supabase migration in `supabase/migrations` promotes the dashboard's three editable surfaces into one durable action-item model.
 
 - `routine`: recurring checklist step with `days_of_week`, `start_time`, and `end_time`.
 - `task`: dated responsibility with `occurrence_date`, or recurring responsibility with `days_of_week`, `start_time`, and `end_time`.
 - `reminder`: dated remember item with `occurrence_date`.
 - `household_action_item_completions`: occurrence-level checkoff records for routines and tasks.
 
-This keeps the v1 browser-local UI simple while giving the later Supabase sync layer a single durable contract to target.
+The durable action-item contract remains the target shape for routines, tasks, reminders, and completions. All durable household tables carry `household_id`, and RLS checks `household_users` membership to separate one family's data from another household.
 
 Count-based habits should extend this contract rather than becoming a separate checklist system. Examples include push-ups, sit-ups, cups of water, pages read, or minutes practiced. The action item should define a numeric unit and optional daily target, while the occurrence record stores the value entered for that person and date.
 

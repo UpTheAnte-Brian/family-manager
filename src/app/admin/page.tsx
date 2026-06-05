@@ -17,6 +17,9 @@ export default function AdminPage() {
             <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
               Chores
             </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/setup">
+              Setup
+            </Link>
           </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">

@@ -30,12 +30,12 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 
 ## Data Status
 
-The app is not connected to Supabase yet.
+The app has the Supabase household schema in place, but the main dashboard still renders from browser-local state until the UI is moved onto normalized tables.
 
 - Prototype configuration data lives in `data/summer-2026-planner.json`.
-- Local user actions, saved calendar sources, and applied calendar events are stored in browser `localStorage`.
+- User actions, saved calendar sources, applied calendar events, chore edits, and assignment overrides currently render from browser `localStorage`.
 - Personal calendar data should be added through `/admin` on the deployed app, not committed into seed data.
-- Supabase is planned for durable sync, backup, auth, and remote access. The first durable action-item schema lives in `supabase/migrations`.
+- Supabase access is scoped by `household_users`, so each account only sees households it belongs to.
 
 ## Getting Started
 
@@ -48,6 +48,29 @@ pnpm dev
 Open [http://localhost:3000](http://localhost:3000).
 
 Copy `.env.example` to `.env.local` when Supabase is ready. Keep real local env files out of git.
+
+## Supabase Sync
+
+Apply the Supabase migrations, then configure these values locally and in Vercel:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL="https://..."
+NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
+```
+
+Supabase data access requires an authenticated Supabase session and a matching `household_users` row. Without that session, the app keeps working from browser `localStorage`.
+
+After deployment, open `/setup` to create or sign in to an owner account and create a household. A separate family can create its own household without seeing yours.
+
+The normalized Supabase schema includes durable tables for:
+
+- households and household users
+- household members
+- calendar sources and calendar events
+- action items, assignments, and completions
+- chores, chore assignment templates, and chore completions
+
+The next step is moving the UI surfaces from browser-local storage onto those tables.
 
 ## Planning Docs
 
@@ -66,7 +89,7 @@ Use this flow for Apple/shared family calendars, SportsEngine, school calendars,
 4. Preview the feed.
 5. Apply the preview to the local dashboard feed.
 
-Calendar source setup is browser-local until Supabase persistence is added. Configure sources on the deployed URL and device/browser you want to use.
+Calendar source setup syncs through Supabase when the Supabase env vars are configured. Without Supabase, it remains browser-local.
 
 ## Local Calendar Import Script
 
