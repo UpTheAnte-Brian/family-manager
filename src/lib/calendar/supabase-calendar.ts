@@ -52,8 +52,28 @@ type CalendarEventRow = {
   } | null;
 };
 
+export type ManualCalendarEventInput = {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  category: string;
+  assignedMemberIds: string[];
+};
+
 const emptyCalendarSources: CalendarSource[] = [];
 const emptyAppliedEvents: AppliedCalendarEvent[] = [];
+const manualCalendarSource: CalendarSource = {
+  id: "manual-household",
+  label: "Manual household events",
+  kind: "manual-upload",
+  enabled: true,
+  syncMode: "manual",
+  defaultVisibility: "family",
+  defaultMemberIds: [],
+  notes: "App-only events entered from Family Manager.",
+};
 
 export function useCalendarFeed() {
   const [localSources, setLocalSources] = useLocalStorageState<CalendarSource[]>(
@@ -295,6 +315,65 @@ export function useCalendarFeed() {
     [householdId, saveSource, setLocalAppliedEvents],
   );
 
+  const saveManualEvent = useCallback(
+    async (input: ManualCalendarEventInput) => {
+      const now = new Date().toISOString();
+      const event: AppliedCalendarEvent = {
+        sourceId: manualCalendarSource.id,
+        sourceUid: `manual:${input.date}:${input.startTime}:${crypto.randomUUID()}`,
+        title: input.title,
+        date: input.date,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        location: input.location || undefined,
+        category: input.category,
+        sourceLabel: manualCalendarSource.label,
+        assignedMemberIds: input.assignedMemberIds,
+        appliedAt: now,
+      };
+
+      if (!householdId) {
+        setLocalSources((current) =>
+          current.some((source) => source.id === manualCalendarSource.id)
+            ? current
+            : [...current, manualCalendarSource],
+        );
+        setLocalAppliedEvents((current) => [...current, event]);
+        return;
+      }
+
+      await saveSource(manualCalendarSource);
+
+      const supabase = createBrowserSupabaseClient();
+      const { data: sourceRow, error: sourceError } = await supabase
+        .from("calendar_sources")
+        .select("id")
+        .eq("household_id", householdId)
+        .eq("external_key", manualCalendarSource.id)
+        .single<{ id: string }>();
+
+      if (sourceError) {
+        throw sourceError;
+      }
+
+      const { error } = await supabase
+        .from("calendar_events")
+        .insert(mapEventToInsert(householdId, sourceRow.id, event));
+
+      if (error) {
+        throw error;
+      }
+
+      setRemoteSources((current) =>
+        current.some((source) => source.id === manualCalendarSource.id)
+          ? current
+          : [...current, manualCalendarSource],
+      );
+      setRemoteAppliedEvents((current) => [...current, event]);
+    },
+    [householdId, saveSource, setLocalAppliedEvents, setLocalSources],
+  );
+
   return useMemo(
     () => ({
       appliedEvents,
@@ -302,6 +381,7 @@ export function useCalendarFeed() {
       errorMessage,
       refresh,
       removeSource,
+      saveManualEvent,
       saveSource,
       setAppliedEvents,
       setSources,
@@ -315,6 +395,7 @@ export function useCalendarFeed() {
       errorMessage,
       refresh,
       removeSource,
+      saveManualEvent,
       saveSource,
       setAppliedEvents,
       setSources,

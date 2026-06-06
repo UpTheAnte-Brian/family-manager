@@ -50,6 +50,7 @@ export type LocalTemporaryRoutineOccurrence = {
   label: string;
   startTime: string;
   endTime: string;
+  remoteActionItemId?: string;
 };
 
 export type LocalTemporaryRoutineItem = {

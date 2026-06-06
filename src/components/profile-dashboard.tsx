@@ -19,6 +19,8 @@ import {
 } from "@/lib/calendar/team-tags";
 import type { AppliedCalendarEvent, CalendarSource } from "@/lib/calendar/types";
 import { useLocalStorageState } from "@/lib/storage/local";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useCurrentHousehold } from "@/lib/supabase/household";
 import type {
   ChoreCompletion,
   DayTemplate,
@@ -89,7 +91,49 @@ type DashboardResponsibilityItem = {
   localResponsibility?: LocalResponsibilityItem;
   localTaskId?: string;
   temporaryRoutineId?: string;
+  remoteActionItemId?: string;
   completionKey?: string;
+};
+
+type RemoteTemporaryRoutineMetadata = {
+  kind?: string;
+  temporaryRoutineId?: string;
+  occurrenceId?: string;
+  occurrenceLabel?: string;
+  startsOn?: string;
+  endsOn?: string;
+  category?: ResponsibilityCategory;
+};
+
+type RemoteHouseholdMemberRow = {
+  id: string;
+  external_key: string;
+};
+
+type RemoteActionItemRow = {
+  id: string;
+  title: string;
+  start_time: string | null;
+  end_time: string | null;
+  metadata: RemoteTemporaryRoutineMetadata;
+  created_at: string;
+};
+
+type RemoteAssignmentRow = {
+  assignable_id: string;
+  household_member_id: string | null;
+};
+
+type RemoteActionCompletionRow = {
+  action_item_id: string;
+  occurrence_date: string;
+};
+
+type RemoteTemporaryRoutineLoad = {
+  routines: LocalTemporaryRoutineItem[];
+  completionMap: Record<string, boolean>;
+  memberIdsByExternalKey: Record<string, string>;
+  externalKeysByMemberId: Record<string, string>;
 };
 
 type DashboardEvent = FixedEvent & {
@@ -171,6 +215,12 @@ export function ProfileDashboard({
     calendarTeamAssignmentsStorageKey,
     [],
   );
+  const { household, status: householdStatus } = useCurrentHousehold();
+  const [remoteTemporaryRoutines, setRemoteTemporaryRoutines] = useState<LocalTemporaryRoutineItem[]>([]);
+  const [remoteTemporaryCompletions, setRemoteTemporaryCompletions] = useState<Record<string, boolean>>({});
+  const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
+  const [remoteTemporaryRoutineError, setRemoteTemporaryRoutineError] = useState("");
+  const [temporaryRoutineSyncVersion, setTemporaryRoutineSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
   const [responsibilityModal, setResponsibilityModal] = useState<
     | { mode: "add" }
@@ -236,12 +286,27 @@ export function ProfileDashboard({
   const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, displayedDay.date);
   const localTasks = visibleLocalItems.filter((item) => item.kind === "task");
   const localReminders = visibleLocalItems.filter((item) => item.kind === "reminder");
+  const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
+  const temporaryRoutines = isRemoteHouseholdReady
+    ? remoteTemporaryRoutines
+    : state.localTemporaryRoutines;
+  const dashboardStateForView = useMemo<DashboardState>(
+    () => ({
+      ...state,
+      actionCompletions: {
+        ...state.actionCompletions,
+        ...remoteTemporaryCompletions,
+      },
+      localTemporaryRoutines: temporaryRoutines,
+    }),
+    [remoteTemporaryCompletions, state, temporaryRoutines],
+  );
   const responsibilityItems = getResponsibilityItems(
     routineItems,
     assignments,
     configuredResponsibilities,
     state.localResponsibilities,
-    state.localTemporaryRoutines,
+    temporaryRoutines,
     localTasks,
     selectedMember,
     displayedDay,
@@ -256,6 +321,45 @@ export function ProfileDashboard({
   const isPastSelectedDate = displayedDay.date < today.date;
   const isTodaySelected = displayedDay.date === today.date;
   const groupedResponsibilityItems = groupResponsibilitiesByCategory(responsibilityItems);
+  const householdId = household?.householdId;
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadRemoteTemporaryRoutinesForHousehold() {
+      try {
+        const remoteState = await loadRemoteTemporaryRoutines(currentHouseholdId);
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteTemporaryRoutines(remoteState.routines);
+        setRemoteTemporaryCompletions(remoteState.completionMap);
+        setRemoteMemberIdsByExternalKey(remoteState.memberIdsByExternalKey);
+        setRemoteTemporaryRoutineError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteTemporaryRoutineError(
+          error instanceof Error ? error.message : "Could not load temporary routines from Supabase.",
+        );
+      }
+    }
+
+    void loadRemoteTemporaryRoutinesForHousehold();
+
+    return () => {
+      isActive = false;
+    };
+  }, [householdId, householdStatus, temporaryRoutineSyncVersion]);
 
   useEffect(() => {
     const morningRoutineItems =
@@ -266,7 +370,7 @@ export function ProfileDashboard({
     }
 
     const isMorningRoutineComplete = morningRoutineItems.every((item) =>
-      isResponsibilityComplete(item, state, displayedDay.date, selectedMember.id),
+      isResponsibilityComplete(item, dashboardStateForView, displayedDay.date, selectedMember.id),
     );
 
     const wasMorningRoutineComplete = wasMorningRoutineCompleteRef.current;
@@ -286,7 +390,7 @@ export function ProfileDashboard({
         "morning-routine": false,
       }));
     }
-  }, [displayedDay.date, groupedResponsibilityItems, selectedMember.id, state]);
+  }, [dashboardStateForView, displayedDay.date, groupedResponsibilityItems, selectedMember.id]);
 
   function selectMember(memberId: string) {
     setState((current) => ({
@@ -360,7 +464,7 @@ export function ProfileDashboard({
     });
   }
 
-  function toggleResponsibility(item: DashboardResponsibilityItem) {
+  async function toggleResponsibility(item: DashboardResponsibilityItem) {
     if (item.assignment) {
       toggleAssignment(item.assignment);
       return;
@@ -372,6 +476,36 @@ export function ProfileDashboard({
     }
 
     const key = item.completionKey ?? getActionKey(displayedDay.date, selectedMember.id, item.id);
+    const isComplete = Boolean(dashboardStateForView.actionCompletions[key]);
+
+    if (isRemoteHouseholdReady && item.source === "temporary-routine" && item.remoteActionItemId) {
+      setRemoteTemporaryCompletions((current) => ({
+        ...current,
+        [key]: !isComplete,
+      }));
+
+      try {
+        await saveRemoteTemporaryRoutineCompletion({
+          actionItemId: item.remoteActionItemId,
+          completed: !isComplete,
+          date: displayedDay.date,
+          householdId: household!.householdId,
+          memberId: remoteMemberIdsByExternalKey[selectedMember.id],
+        });
+        setTemporaryRoutineSyncVersion((current) => current + 1);
+        setRemoteTemporaryRoutineError("");
+      } catch (error) {
+        setRemoteTemporaryCompletions((current) => ({
+          ...current,
+          [key]: isComplete,
+        }));
+        setRemoteTemporaryRoutineError(
+          error instanceof Error ? error.message : "Could not save temporary routine completion.",
+        );
+      }
+
+      return;
+    }
 
     setState((current) => ({
       ...current,
@@ -456,7 +590,7 @@ export function ProfileDashboard({
     });
   }
 
-  function addTemporaryRoutine(input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) {
+  async function addTemporaryRoutine(input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) {
     const title = input.title.trim();
     const occurrences = input.occurrences.filter((occurrence) => occurrence.startTime && occurrence.endTime);
 
@@ -465,25 +599,79 @@ export function ProfileDashboard({
     }
 
     const createdAt = new Date().toISOString();
+    const routine: LocalTemporaryRoutineItem = {
+      ...input,
+      title,
+      occurrences,
+      createdAt,
+      id: createId(`temporary-routine-${input.assigneeId}-${createdAt}-${title}`),
+    };
+
+    if (isRemoteHouseholdReady) {
+      try {
+        const savedRoutine = await saveRemoteTemporaryRoutine({
+          householdId: household!.householdId,
+          memberId: remoteMemberIdsByExternalKey[input.assigneeId],
+          routine,
+        });
+
+        setRemoteTemporaryRoutines((current) => [...current, savedRoutine]);
+        setTemporaryRoutineSyncVersion((current) => current + 1);
+        setRemoteTemporaryRoutineError("");
+        return true;
+      } catch (error) {
+        setRemoteTemporaryRoutineError(
+          error instanceof Error ? error.message : "Could not save temporary routine to Supabase.",
+        );
+        return false;
+      }
+    }
 
     setState((current) => ({
       ...current,
       localTemporaryRoutines: [
         ...current.localTemporaryRoutines,
-        {
-          ...input,
-          title,
-          occurrences,
-          createdAt,
-          id: createId(`temporary-routine-${input.assigneeId}-${createdAt}-${title}`),
-        },
+        routine,
       ],
     }));
 
     return true;
   }
 
-  function removeTemporaryRoutine(routineId: string) {
+  async function removeTemporaryRoutine(routineId: string) {
+    if (isRemoteHouseholdReady) {
+      const routine = remoteTemporaryRoutines.find((candidate) => candidate.id === routineId);
+
+      if (!routine) {
+        return;
+      }
+
+      const actionItemIds = routine.occurrences
+        .map((occurrence) => occurrence.remoteActionItemId)
+        .filter((actionItemId): actionItemId is string => Boolean(actionItemId));
+
+      try {
+        await removeRemoteTemporaryRoutine({
+          actionItemIds,
+          householdId: household!.householdId,
+        });
+        setRemoteTemporaryRoutines((current) => current.filter((candidate) => candidate.id !== routineId));
+        setRemoteTemporaryCompletions((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(([key]) => !key.includes(`:${routineId}:`)),
+          ),
+        );
+        setTemporaryRoutineSyncVersion((current) => current + 1);
+        setRemoteTemporaryRoutineError("");
+      } catch (error) {
+        setRemoteTemporaryRoutineError(
+          error instanceof Error ? error.message : "Could not remove temporary routine from Supabase.",
+        );
+      }
+
+      return;
+    }
+
     setState((current) => {
       const actionCompletions = Object.fromEntries(
         Object.entries(current.actionCompletions).filter(([key]) => !key.includes(`:${routineId}:`)),
@@ -605,7 +793,12 @@ export function ProfileDashboard({
                 <div className="grid gap-4">
                   {groupedResponsibilityItems.map(([category, items]) => {
                     const completedCount = items.filter((item) =>
-                      isResponsibilityComplete(item, state, displayedDay.date, selectedMember.id),
+                      isResponsibilityComplete(
+                        item,
+                        dashboardStateForView,
+                        displayedDay.date,
+                        selectedMember.id,
+                      ),
                     ).length;
                     const isCollapsed = Boolean(collapsedResponsibilityCategories[category]);
 
@@ -639,7 +832,7 @@ export function ProfileDashboard({
                             {items.map((item) => {
                               const checked = isResponsibilityComplete(
                                 item,
-                                state,
+                                dashboardStateForView,
                                 displayedDay.date,
                                 selectedMember.id,
                               );
@@ -661,13 +854,13 @@ export function ProfileDashboard({
                                           endTime: item.endTime,
                                           source: "configured",
                                         })
-                                      : toggleResponsibility(item)
+                                      : void toggleResponsibility(item)
                                   }
                                   onRemove={
                                     item.source === "local"
                                       ? () => removeLocalResponsibility(item.id)
                                       : item.source === "temporary-routine" && item.temporaryRoutineId
-                                        ? () => removeTemporaryRoutine(item.temporaryRoutineId!)
+                                        ? () => void removeTemporaryRoutine(item.temporaryRoutineId!)
                                       : item.source === "routine" && item.id.startsWith("routine-")
                                         ? () => removeLocalRoutine(item.id)
                                         : undefined
@@ -751,9 +944,16 @@ export function ProfileDashboard({
               <h2 className="text-lg font-semibold">Operating Mode</h2>
               <ul className="mt-3 space-y-2 text-sm text-[#4c5965]">
                 <li>Manual profile switching is active.</li>
-                <li>Routine steps, tasks, reminders, and checkoffs are saved in this browser.</li>
-                <li>Supabase sync, calendar connection, and Mac Mini service are planned next layers.</li>
+                <li>
+                  Temporary routines sync through Supabase when a household is connected.
+                </li>
+                <li>Local browser storage is still used for prototype-only routines, tasks, and reminders.</li>
               </ul>
+              {isRemoteHouseholdReady && remoteTemporaryRoutineError ? (
+                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                  {remoteTemporaryRoutineError}
+                </p>
+              ) : null}
             </section>
 
             <Panel title="History Notes">
@@ -817,8 +1017,8 @@ export function ProfileDashboard({
           defaultDate={displayedDay.date}
           members={members}
           onClose={() => setTemporaryRoutineModal(false)}
-          onSave={(input) => {
-            if (addTemporaryRoutine(input)) {
+          onSave={async (input) => {
+            if (await addTemporaryRoutine(input)) {
               setTemporaryRoutineModal(false);
             }
           }}
@@ -1177,6 +1377,7 @@ function getResponsibilityItems(
       source: "temporary-routine" as const,
       completionKey: getTemporaryRoutineCompletionKey(today.date, member.id, routine.id, occurrence.id),
       temporaryRoutineId: routine.id,
+      remoteActionItemId: occurrence.remoteActionItemId,
     }));
   });
 
@@ -1406,6 +1607,335 @@ function getTemporaryRoutineCompletionKey(
   return `${date}:${memberId}:temporary-routine:${routineId}:${occurrenceId}`;
 }
 
+async function loadRemoteTemporaryRoutines(householdId: string): Promise<RemoteTemporaryRoutineLoad> {
+  const supabase = createBrowserSupabaseClient();
+  const { data: members, error: membersError } = await supabase
+    .from("household_members")
+    .select("id, external_key")
+    .eq("household_id", householdId)
+    .returns<RemoteHouseholdMemberRow[]>();
+
+  if (membersError) {
+    throw membersError;
+  }
+
+  const memberIdsByExternalKey = Object.fromEntries(
+    (members ?? []).map((member) => [member.external_key, member.id]),
+  );
+  const externalKeysByMemberId = Object.fromEntries(
+    (members ?? []).map((member) => [member.id, member.external_key]),
+  );
+
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, title, start_time, end_time, metadata, created_at")
+    .eq("household_id", householdId)
+    .eq("item_kind", "routine")
+    .eq("status", "active")
+    .eq("metadata->>kind", "temporary-routine")
+    .returns<RemoteActionItemRow[]>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const actionItemIds = (actionItems ?? []).map((item) => item.id);
+
+  if (actionItemIds.length === 0) {
+    return {
+      completionMap: {},
+      externalKeysByMemberId,
+      memberIdsByExternalKey,
+      routines: [],
+    };
+  }
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("household_assignments")
+    .select("assignable_id, household_member_id")
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .in("assignable_id", actionItemIds)
+    .returns<RemoteAssignmentRow[]>();
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const { data: completions, error: completionsError } = await supabase
+    .from("household_action_item_completions")
+    .select("action_item_id, occurrence_date")
+    .eq("household_id", householdId)
+    .in("action_item_id", actionItemIds)
+    .returns<RemoteActionCompletionRow[]>();
+
+  if (completionsError) {
+    throw completionsError;
+  }
+
+  const assignmentByActionItemId = new Map(
+    (assignments ?? [])
+      .filter((assignment) => assignment.household_member_id)
+      .map((assignment) => [assignment.assignable_id, assignment.household_member_id!]),
+  );
+  const actionItemById = new Map((actionItems ?? []).map((item) => [item.id, item]));
+  const routineGroups = new Map<string, LocalTemporaryRoutineItem>();
+
+  for (const item of actionItems ?? []) {
+    const memberId = assignmentByActionItemId.get(item.id);
+    const assigneeId = memberId ? externalKeysByMemberId[memberId] : undefined;
+    const metadata = item.metadata ?? {};
+    const routineId = metadata.temporaryRoutineId;
+    const occurrenceId = metadata.occurrenceId;
+
+    if (!assigneeId || !routineId || !occurrenceId || !metadata.startsOn || !metadata.endsOn) {
+      continue;
+    }
+
+    const groupKey = `${assigneeId}:${routineId}`;
+    const existingRoutine = routineGroups.get(groupKey);
+    const routine =
+      existingRoutine ??
+      {
+        id: routineId,
+        title: item.title,
+        category: metadata.category ?? "personal-hygiene",
+        assigneeId,
+        startsOn: metadata.startsOn,
+        endsOn: metadata.endsOn,
+        occurrences: [],
+        createdAt: item.created_at,
+      };
+
+    routine.occurrences.push({
+      id: occurrenceId,
+      label: metadata.occurrenceLabel ?? "",
+      startTime: normalizeTimeForInput(item.start_time),
+      endTime: normalizeTimeForInput(item.end_time),
+      remoteActionItemId: item.id,
+    });
+    routineGroups.set(groupKey, routine);
+  }
+
+  const routines = [...routineGroups.values()]
+    .map((routine) => ({
+      ...routine,
+      occurrences: routine.occurrences.sort((first, second) =>
+        compareStrings(`${first.startTime}-${first.label}`, `${second.startTime}-${second.label}`),
+      ),
+    }))
+    .sort((first, second) => compareStrings(`${first.assigneeId}-${first.title}`, `${second.assigneeId}-${second.title}`));
+
+  const completionMap: Record<string, boolean> = {};
+
+  for (const completion of completions ?? []) {
+    const actionItem = actionItemById.get(completion.action_item_id);
+    const memberId = assignmentByActionItemId.get(completion.action_item_id);
+    const memberExternalKey = memberId ? externalKeysByMemberId[memberId] : undefined;
+    const metadata = actionItem?.metadata ?? {};
+
+    if (!actionItem || !memberExternalKey || !metadata.temporaryRoutineId || !metadata.occurrenceId) {
+      continue;
+    }
+
+    completionMap[
+      getTemporaryRoutineCompletionKey(
+        completion.occurrence_date,
+        memberExternalKey,
+        metadata.temporaryRoutineId,
+        metadata.occurrenceId,
+      )
+    ] = true;
+  }
+
+  return {
+    completionMap,
+    externalKeysByMemberId,
+    memberIdsByExternalKey,
+    routines,
+  };
+}
+
+async function saveRemoteTemporaryRoutine({
+  householdId,
+  memberId,
+  routine,
+}: {
+  householdId: string;
+  memberId?: string;
+  routine: LocalTemporaryRoutineItem;
+}) {
+  if (!memberId) {
+    throw new Error("Create household members in setup before assigning a temporary routine.");
+  }
+
+  const supabase = createBrowserSupabaseClient();
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .insert(
+      routine.occurrences.map((occurrence) => ({
+        household_id: householdId,
+        item_kind: "routine",
+        title: routine.title,
+        source: "manual",
+        days_of_week: dayOptions,
+        start_time: occurrence.startTime,
+        end_time: occurrence.endTime,
+        metadata: {
+          kind: "temporary-routine",
+          temporaryRoutineId: routine.id,
+          occurrenceId: occurrence.id,
+          occurrenceLabel: occurrence.label,
+          startsOn: routine.startsOn,
+          endsOn: routine.endsOn,
+          category: routine.category ?? "personal-hygiene",
+        },
+      })),
+    )
+    .select("id, metadata")
+    .returns<Array<{ id: string; metadata: RemoteTemporaryRoutineMetadata }>>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const actionItemsByOccurrenceId = new Map(
+    (actionItems ?? []).map((item) => [item.metadata.occurrenceId, item.id]),
+  );
+  const assignmentRows = (actionItems ?? []).map((item) => ({
+    household_id: householdId,
+    assignable_type: "action_item",
+    assignable_id: item.id,
+    assignee_type: "member",
+    household_member_id: memberId,
+  }));
+
+  const { error: assignmentsError } = await supabase.from("household_assignments").insert(assignmentRows);
+
+  if (assignmentsError) {
+    await supabase
+      .from("household_action_items")
+      .delete()
+      .eq("household_id", householdId)
+      .in(
+        "id",
+        (actionItems ?? []).map((item) => item.id),
+      );
+    throw assignmentsError;
+  }
+
+  return {
+    ...routine,
+    occurrences: routine.occurrences.map((occurrence) => ({
+      ...occurrence,
+      remoteActionItemId: actionItemsByOccurrenceId.get(occurrence.id),
+    })),
+  };
+}
+
+async function removeRemoteTemporaryRoutine({
+  actionItemIds,
+  householdId,
+}: {
+  actionItemIds: string[];
+  householdId: string;
+}) {
+  if (actionItemIds.length === 0) {
+    return;
+  }
+
+  const supabase = createBrowserSupabaseClient();
+  const { error: completionsError } = await supabase
+    .from("household_action_item_completions")
+    .delete()
+    .eq("household_id", householdId)
+    .in("action_item_id", actionItemIds);
+
+  if (completionsError) {
+    throw completionsError;
+  }
+
+  const { error: assignmentsError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .in("assignable_id", actionItemIds);
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const { error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .delete()
+    .eq("household_id", householdId)
+    .in("id", actionItemIds);
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+}
+
+async function saveRemoteTemporaryRoutineCompletion({
+  actionItemId,
+  completed,
+  date,
+  householdId,
+  memberId,
+}: {
+  actionItemId: string;
+  completed: boolean;
+  date: string;
+  householdId: string;
+  memberId?: string;
+}) {
+  if (!memberId) {
+    throw new Error("Create household members in setup before completing a temporary routine.");
+  }
+
+  const supabase = createBrowserSupabaseClient();
+
+  if (!completed) {
+    const { error } = await supabase
+      .from("household_action_item_completions")
+      .delete()
+      .eq("household_id", householdId)
+      .eq("action_item_id", actionItemId)
+      .eq("occurrence_date", date);
+
+    if (error) {
+      throw error;
+    }
+
+    return;
+  }
+
+  const { error } = await supabase.from("household_action_item_completions").upsert(
+    {
+      household_id: householdId,
+      action_item_id: actionItemId,
+      occurrence_date: date,
+      completed_by_member_id: memberId,
+      completed_at: new Date().toISOString(),
+      metadata: {
+        source: "profile-dashboard",
+      },
+    },
+    {
+      onConflict: "household_id,action_item_id,occurrence_date",
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+function normalizeTimeForInput(value: string | null) {
+  return value ? value.slice(0, 5) : "";
+}
+
 function TemporaryRoutineModal({
   defaultAssigneeId,
   defaultDate,
@@ -1417,7 +1947,7 @@ function TemporaryRoutineModal({
   defaultDate: string;
   members: HouseholdMember[];
   onClose: () => void;
-  onSave: (input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) => void;
+  onSave: (input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) => void | Promise<void>;
 }) {
   const [title, setTitle] = useState("Clean ears");
   const [category, setCategory] = useState<ResponsibilityCategory>("personal-hygiene");
