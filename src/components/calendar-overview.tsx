@@ -3,10 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
+import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
 import {
-  appliedCalendarEventsStorageKey,
   calendarEventAssignmentsStorageKey,
-  calendarSourcesStorageKey,
   calendarTeamAssignmentsStorageKey,
 } from "@/lib/calendar/storage";
 import {
@@ -47,8 +46,6 @@ type CalendarEventRow = {
   assignedMemberIds: string[];
 };
 
-const emptyCalendarSources: CalendarSource[] = [];
-const emptyAppliedEvents: AppliedCalendarEvent[] = [];
 const emptyAssignmentOverrides: Record<string, string[]> = {};
 const emptyTeamAssignments: CalendarTeamAssignment[] = [];
 const monthNames = [
@@ -69,14 +66,7 @@ const shortMonthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
 const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function CalendarOverview({ configuredEvents, members, season }: CalendarOverviewProps) {
-  const [calendarSources] = useLocalStorageState<CalendarSource[]>(
-    calendarSourcesStorageKey,
-    emptyCalendarSources,
-  );
-  const [appliedEvents, setAppliedEvents] = useLocalStorageState<AppliedCalendarEvent[]>(
-    appliedCalendarEventsStorageKey,
-    emptyAppliedEvents,
-  );
+  const { appliedEvents, setAppliedEvents, sources: calendarSources } = useCalendarFeed();
   const [assignmentOverrides, setAssignmentOverrides] = useLocalStorageState<Record<string, string[]>>(
     calendarEventAssignmentsStorageKey,
     emptyAssignmentOverrides,

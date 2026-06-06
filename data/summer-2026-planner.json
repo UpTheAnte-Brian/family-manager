@@ -5919,7 +5919,7 @@
       {
         "id": "make-bed",
         "title": "Make bed",
-        "category": "morning-routine",
+        "category": "house-reset",
         "defaultAssigneeIds": [
           "mason",
           "reagan",
@@ -5941,7 +5941,7 @@
       {
         "id": "brush-teeth",
         "title": "Brush teeth",
-        "category": "morning-routine",
+        "category": "personal-hygiene",
         "defaultAssigneeIds": [
           "mason",
           "reagan",
@@ -5963,7 +5963,7 @@
       {
         "id": "dirty-clothes-hamper",
         "title": "Put dirty clothes in hamper",
-        "category": "morning-routine",
+        "category": "laundry",
         "defaultAssigneeIds": [
           "mason",
           "reagan",
@@ -5985,7 +5985,7 @@
       {
         "id": "clear-breakfast-dishes",
         "title": "Clear breakfast dishes",
-        "category": "morning-routine",
+        "category": "kitchen",
         "defaultAssigneeIds": [
           "mason",
           "reagan",

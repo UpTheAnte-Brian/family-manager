@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { appliedCalendarEventsStorageKey, calendarSourcesStorageKey } from "@/lib/calendar/storage";
+import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
 import type {
   AppliedCalendarEvent,
   CalendarPreviewResult,
@@ -10,7 +10,6 @@ import type {
   CalendarSourceKind,
 } from "@/lib/calendar/types";
 import type { HouseholdMember } from "@/lib/planner/types";
-import { useLocalStorageState } from "@/lib/storage/local";
 
 type AdminCalendarSourcesProps = {
   members: HouseholdMember[];
@@ -31,19 +30,21 @@ const defaultFormState: CalendarFormState = {
   defaultMemberIds: [],
   notes: "",
 };
-const emptyCalendarSources: CalendarSource[] = [];
-const emptyAppliedEvents: AppliedCalendarEvent[] = [];
 const previewDisplayLimit = 20;
 
 export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
-  const [sources, setSources] = useLocalStorageState<CalendarSource[]>(
-    calendarSourcesStorageKey,
-    emptyCalendarSources,
-  );
-  const [appliedEvents, setAppliedEvents] = useLocalStorageState<AppliedCalendarEvent[]>(
-    appliedCalendarEventsStorageKey,
-    emptyAppliedEvents,
-  );
+  const {
+    appliedEvents,
+    applySourceEvents,
+    errorMessage,
+    removeSource: removePersistedSource,
+    saveSource,
+    setAppliedEvents,
+    setSources,
+    sources,
+    status,
+    usesSupabase,
+  } = useCalendarFeed();
   const [form, setForm] = useState(defaultFormState);
   const [previewBySource, setPreviewBySource] = useState<Record<string, CalendarPreviewResult>>({});
   const [isPreviewing, setIsPreviewing] = useState<string | null>(null);
@@ -92,24 +93,32 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
         : [...current, source];
     });
     setForm(defaultFormState);
+    void saveCalendarSource(source);
   }
 
   function toggleEnabled(sourceId: string) {
+    let nextSource: CalendarSource | undefined;
+
     setSources((current) =>
       current.map((source) =>
         source.id === sourceId
-          ? {
+          ? (nextSource = {
               ...source,
               enabled: !source.enabled,
-            }
+            })
           : source,
       ),
     );
+
+    if (nextSource) {
+      void saveCalendarSource(nextSource);
+    }
   }
 
   function removeSource(sourceId: string) {
-    setSources((current) => current.filter((source) => source.id !== sourceId));
-    setAppliedEvents((current) => current.filter((event) => event.sourceId !== sourceId));
+    void runCalendarAction(async () => {
+      await removePersistedSource(sourceId);
+    });
     setPreviewBySource((current) => {
       const next = { ...current };
       delete next[sourceId];
@@ -131,6 +140,12 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       assignedMemberIds: source.defaultMemberIds ?? [],
       appliedAt,
     }));
+    const nextSource = {
+      ...source,
+      lastAppliedAt: appliedAt,
+      lastSyncStatus: "success" as const,
+      lastSyncMessage: `Applied ${nextEvents.length} event${nextEvents.length === 1 ? "" : "s"} to the ${usesSupabase ? "Supabase" : "local"} dashboard feed.`,
+    };
 
     setAppliedEvents((current) => [
       ...current.filter((event) => event.sourceId !== source.id),
@@ -138,20 +153,19 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
     ]);
     setSources((current) =>
       current.map((candidate) =>
-        candidate.id === source.id
-          ? {
-              ...candidate,
-              lastAppliedAt: appliedAt,
-              lastSyncStatus: "success",
-              lastSyncMessage: `Applied ${nextEvents.length} event${nextEvents.length === 1 ? "" : "s"} to the local dashboard feed.`,
-            }
-          : candidate,
+        candidate.id === source.id ? nextSource : candidate,
       ),
     );
+    void runCalendarAction(async () => {
+      await applySourceEvents(nextSource, nextEvents);
+      await saveSource(nextSource);
+    });
   }
 
   function toggleSourceMember(sourceId: string, memberId: string) {
     let nextMemberIds: string[] = [];
+    let nextSource: CalendarSource | undefined;
+    let nextAppliedEvents: AppliedCalendarEvent[] = [];
 
     setSources((current) =>
       current.map((source) => {
@@ -165,23 +179,36 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
           ? currentMemberIds.filter((id) => id !== memberId)
           : [...currentMemberIds, memberId];
 
-        return {
+        nextSource = {
           ...source,
           defaultMemberIds: nextMemberIds,
           defaultVisibility: nextMemberIds.length > 0 ? "assigned-members" : "family",
         };
+
+        return nextSource;
       }),
     );
     setAppliedEvents((current) =>
-      current.map((event) =>
+      (nextAppliedEvents = current.map((event) =>
         event.sourceId === sourceId
           ? {
               ...event,
               assignedMemberIds: nextMemberIds,
             }
           : event,
-      ),
+      )),
     );
+
+    if (nextSource) {
+      const source = nextSource;
+      void runCalendarAction(async () => {
+        await saveSource(source);
+        await applySourceEvents(
+          source,
+          nextAppliedEvents.filter((event) => event.sourceId === sourceId),
+        );
+      });
+    }
   }
 
   async function previewSource(source: CalendarSource) {
@@ -223,31 +250,47 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
         ...current,
         [source.id]: data as CalendarPreviewResult,
       }));
+      const lastSyncedAt = new Date().toISOString();
+      const lastSyncMessage = getPreviewMessage(data as CalendarPreviewResult);
       setSources((current) =>
         current.map((candidate) =>
           candidate.id === source.id
             ? {
                 ...candidate,
-                lastSyncedAt: new Date().toISOString(),
+                lastSyncedAt,
                 lastSyncStatus: "success",
-                lastSyncMessage: getPreviewMessage(data as CalendarPreviewResult),
+                lastSyncMessage,
               }
             : candidate,
         ),
       );
+      void saveCalendarSource({
+        ...source,
+        lastSyncedAt,
+        lastSyncStatus: "success",
+        lastSyncMessage,
+      });
     } catch (error) {
+      const lastSyncedAt = new Date().toISOString();
+      const lastSyncMessage = error instanceof Error ? error.message : "Preview failed";
       setSources((current) =>
         current.map((candidate) =>
           candidate.id === source.id
             ? {
                 ...candidate,
-                lastSyncedAt: new Date().toISOString(),
+                lastSyncedAt,
                 lastSyncStatus: "error",
-                lastSyncMessage: error instanceof Error ? error.message : "Preview failed",
+                lastSyncMessage,
               }
             : candidate,
         ),
       );
+      void saveCalendarSource({
+        ...source,
+        lastSyncedAt,
+        lastSyncStatus: "error",
+        lastSyncMessage,
+      });
     } finally {
       setIsPreviewing(null);
     }
@@ -260,6 +303,28 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
         ? current.defaultMemberIds.filter((id) => id !== memberId)
         : [...current.defaultMemberIds, memberId],
     }));
+  }
+
+  async function saveCalendarSource(source: CalendarSource) {
+    await runCalendarAction(async () => {
+      await saveSource(source);
+    });
+  }
+
+  async function runCalendarAction(action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (error) {
+      setSources((current) =>
+        current.map((source) => ({
+          ...source,
+          lastSyncStatus: source.lastSyncStatus ?? "error",
+          lastSyncMessage:
+            source.lastSyncMessage ??
+            (error instanceof Error ? error.message : "Calendar persistence failed."),
+        })),
+      );
+    }
   }
 
   return (
@@ -342,13 +407,22 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Saved Sources</h2>
-            <p className="text-sm text-[#4c5965]">Stored locally until Supabase persistence is added.</p>
+            <p className="text-sm text-[#4c5965]">
+              {usesSupabase
+                ? "Stored in Supabase for this household."
+                : "Stored in this browser until you sign in and create a household."}
+            </p>
           </div>
           <span className="text-sm font-semibold text-[#2f6f73]">
             {sources.length} source{sources.length === 1 ? "" : "s"} · {appliedEvents.length} applied event
             {appliedEvents.length === 1 ? "" : "s"}
           </span>
         </div>
+        {status === "error" || errorMessage ? (
+          <p className="mt-3 border border-[#d7a7a7] bg-[#fff7f7] px-3 py-2 text-sm text-[#8a2f2f]">
+            {errorMessage || "Calendar data could not be loaded from Supabase."}
+          </p>
+        ) : null}
 
         <div className="mt-4 grid gap-3">
           {sources.length === 0 ? (

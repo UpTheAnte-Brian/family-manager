@@ -3,14 +3,32 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
+import type { HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 type SetupStatus = "idle" | "loading" | "success" | "error";
 
-export function HouseholdSetup() {
+type MemberDraft = {
+  birthDate: string;
+  displayName: string;
+  externalKey: string;
+  preferredName: string;
+  relationship: string;
+  role: "parent" | "child";
+  tempId: string;
+};
+
+type HouseholdSetupProps = {
+  plannerMembers: HouseholdMember[];
+};
+
+const emptyMemberDraft = createBlankMemberDraft("parent");
+
+export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [householdName, setHouseholdName] = useState("");
+  const [memberDrafts, setMemberDrafts] = useState<MemberDraft[]>([emptyMemberDraft]);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<SetupStatus>("idle");
   const [message, setMessage] = useState("");
@@ -108,7 +126,33 @@ export function HouseholdSetup() {
         throw error;
       }
 
-      return `Created ${data?.name ?? "household"}. Next, add household members and move app data into normalized Supabase tables.`;
+      const household = data as { id?: string; name?: string } | null;
+      const householdId = household?.id;
+      const memberRows = getValidMemberDrafts(memberDrafts);
+
+      if (householdId && memberRows.length > 0) {
+        const { error: membersError } = await supabase.from("household_members").upsert(
+          memberRows.map((member) => ({
+            household_id: householdId,
+            external_key: member.externalKey,
+            preferred_name: member.preferredName,
+            display_name: member.displayName || member.preferredName,
+            role: member.role,
+            relationship: member.relationship || null,
+            birth_date: member.birthDate || null,
+            metadata: {},
+          })),
+          {
+            onConflict: "household_id,external_key",
+          },
+        );
+
+        if (membersError) {
+          throw membersError;
+        }
+      }
+
+      return `Created ${household?.name ?? "household"} with ${memberRows.length} member${memberRows.length === 1 ? "" : "s"}. Calendar sources now sync through Supabase when this account is signed in.`;
     });
   }
 
@@ -138,6 +182,37 @@ export function HouseholdSetup() {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Setup failed.");
     }
+  }
+
+  function loadPlannerMembers() {
+    setMemberDrafts(plannerMembers.map(mapPlannerMemberToDraft));
+  }
+
+  function addMember(role: "parent" | "child") {
+    setMemberDrafts((current) => [...current, createBlankMemberDraft(role)]);
+  }
+
+  function removeMember(tempId: string) {
+    setMemberDrafts((current) =>
+      current.length === 1 ? [createBlankMemberDraft("parent")] : current.filter((member) => member.tempId !== tempId),
+    );
+  }
+
+  function updateMember(tempId: string, patch: Partial<MemberDraft>) {
+    setMemberDrafts((current) =>
+      current.map((member) =>
+        member.tempId === tempId
+          ? {
+              ...member,
+              ...patch,
+              externalKey:
+                patch.preferredName && member.externalKey === createMemberExternalKey(member.preferredName)
+                  ? createMemberExternalKey(patch.preferredName)
+                  : patch.externalKey ?? member.externalKey,
+            }
+          : member,
+      ),
+    );
   }
 
   return (
@@ -240,8 +315,8 @@ export function HouseholdSetup() {
             <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
               <h2 className="text-xl font-semibold">Household</h2>
               <p className="mt-2 text-sm leading-6 text-[#4c5965]">
-                Create a household for this account. This does not copy Johnson family browser
-                state or calendar data; those will be moved into normalized household tables next.
+                Create a household for this account, then add the people whose dashboards and
+                assignments should exist in Supabase.
               </p>
               <label className="mt-4 grid gap-1 text-sm">
                 <span className="font-semibold">Household name</span>
@@ -252,9 +327,106 @@ export function HouseholdSetup() {
                   value={householdName}
                 />
               </label>
+              <div className="mt-5 grid gap-3">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold">Members</h3>
+                    <p className="mt-1 text-sm leading-6 text-[#4c5965]">
+                      Start blank for a new family, or load the current planner names for this
+                      household.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#33414f]"
+                      disabled={status === "loading"}
+                      onClick={loadPlannerMembers}
+                      type="button"
+                    >
+                      Use planner defaults
+                    </button>
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#33414f]"
+                      disabled={status === "loading"}
+                      onClick={() => addMember("parent")}
+                      type="button"
+                    >
+                      Add parent
+                    </button>
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#33414f]"
+                      disabled={status === "loading"}
+                      onClick={() => addMember("child")}
+                      type="button"
+                    >
+                      Add child
+                    </button>
+                  </div>
+                </div>
+
+                <ol className="grid gap-2">
+                  {memberDrafts.map((member) => (
+                    <li
+                      className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_120px_150px_auto]"
+                      key={member.tempId}
+                    >
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Preferred name</span>
+                        <input
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) => updateMember(member.tempId, { preferredName: event.target.value })}
+                          value={member.preferredName}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Display name</span>
+                        <input
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) => updateMember(member.tempId, { displayName: event.target.value })}
+                          value={member.displayName}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Role</span>
+                        <select
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) =>
+                            updateMember(member.tempId, { role: event.target.value as "parent" | "child" })
+                          }
+                          value={member.role}
+                        >
+                          <option value="parent">Parent</option>
+                          <option value="child">Child</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Relationship</span>
+                        <input
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) => updateMember(member.tempId, { relationship: event.target.value })}
+                          value={member.relationship}
+                        />
+                      </label>
+                      <button
+                        className="self-end border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
+                        disabled={status === "loading"}
+                        onClick={() => removeMember(member.tempId)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </div>
               <button
                 className="mt-4 border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                disabled={status === "loading" || !session || !householdName.trim()}
+                disabled={
+                  status === "loading" ||
+                  !session ||
+                  !householdName.trim() ||
+                  getValidMemberDrafts(memberDrafts).length === 0
+                }
                 onClick={createHousehold}
                 type="button"
               >
@@ -277,5 +449,53 @@ export function HouseholdSetup() {
         )}
       </section>
     </main>
+  );
+}
+
+function createBlankMemberDraft(role: "parent" | "child"): MemberDraft {
+  const tempId = crypto.randomUUID();
+
+  return {
+    birthDate: "",
+    displayName: "",
+    externalKey: `${role}-${tempId}`,
+    preferredName: "",
+    relationship: "",
+    role,
+    tempId,
+  };
+}
+
+function mapPlannerMemberToDraft(member: HouseholdMember): MemberDraft {
+  return {
+    birthDate: member.birthDate ?? "",
+    displayName: member.displayName,
+    externalKey: member.id,
+    preferredName: member.preferredName,
+    relationship: member.relationship,
+    role: member.role,
+    tempId: member.id,
+  };
+}
+
+function getValidMemberDrafts(members: MemberDraft[]) {
+  return members
+    .map((member) => ({
+      ...member,
+      displayName: member.displayName.trim(),
+      externalKey: member.externalKey.trim() || createMemberExternalKey(member.preferredName),
+      preferredName: member.preferredName.trim(),
+      relationship: member.relationship.trim(),
+    }))
+    .filter((member) => member.preferredName && member.externalKey);
+}
+
+function createMemberExternalKey(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 80) || crypto.randomUUID()
   );
 }

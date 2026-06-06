@@ -45,11 +45,30 @@ export type LocalResponsibilityItem = {
   createdAt: string;
 };
 
+export type LocalTemporaryRoutineOccurrence = {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+};
+
+export type LocalTemporaryRoutineItem = {
+  id: string;
+  title: string;
+  category?: ResponsibilityCategory;
+  assigneeId: string;
+  startsOn: string;
+  endsOn: string;
+  occurrences: LocalTemporaryRoutineOccurrence[];
+  createdAt: string;
+};
+
 export type ResponsibilityCategory =
   | "morning-routine"
   | "homework"
   | "chores"
   | "sports"
+  | "personal-hygiene"
   | "work"
   | "personal"
   | "investments"

@@ -5,10 +5,9 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
+import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
 import {
-  appliedCalendarEventsStorageKey,
   calendarEventAssignmentsStorageKey,
-  calendarSourcesStorageKey,
   calendarTeamAssignmentsStorageKey,
 } from "@/lib/calendar/storage";
 import {
@@ -35,6 +34,7 @@ import type {
   LocalHouseholdItem,
   LocalResponsibilityItem,
   LocalRoutineItem,
+  LocalTemporaryRoutineItem,
   ResponsibilityCategory,
   TodayContext,
 } from "@/lib/today/types";
@@ -47,6 +47,7 @@ type DashboardState = {
   localItems: LocalHouseholdItem[];
   localRoutines: LocalRoutineItem[];
   localResponsibilities: LocalResponsibilityItem[];
+  localTemporaryRoutines: LocalTemporaryRoutineItem[];
 };
 
 type ProfileDashboardProps = {
@@ -77,10 +78,17 @@ type DashboardResponsibilityItem = {
   startTime: string;
   endTime: string;
   category: ResponsibilityCategory;
-  source: "routine" | "configured" | "configured-responsibility" | "local" | "dated-task";
+  source:
+    | "routine"
+    | "configured"
+    | "configured-responsibility"
+    | "local"
+    | "dated-task"
+    | "temporary-routine";
   assignment?: AssignmentWithChore;
   localResponsibility?: LocalResponsibilityItem;
   localTaskId?: string;
+  temporaryRoutineId?: string;
   completionKey?: string;
 };
 
@@ -95,6 +103,7 @@ const responsibilityCategories: ResponsibilityCategory[] = [
   "homework",
   "chores",
   "sports",
+  "personal-hygiene",
   "work",
   "personal",
   "investments",
@@ -138,6 +147,7 @@ export function ProfileDashboard({
       localItems: [],
       localRoutines: [],
       localResponsibilities: [],
+      localTemporaryRoutines: [],
     }),
     [chores.completions, defaultMemberId],
   );
@@ -152,11 +162,7 @@ export function ProfileDashboard({
     [chores.completions, chores.routineChores, chores.weeklyAssignmentTemplates, chores.weeklyChores],
   );
   const [choreConfig] = useLocalStorageState(choreStorageKey, fallbackChoreConfig);
-  const [appliedCalendarEvents] = useLocalStorageState<AppliedCalendarEvent[]>(
-    appliedCalendarEventsStorageKey,
-    [],
-  );
-  const [calendarSources] = useLocalStorageState<CalendarSource[]>(calendarSourcesStorageKey, []);
+  const { appliedEvents: appliedCalendarEvents, sources: calendarSources } = useCalendarFeed();
   const [calendarEventAssignments] = useLocalStorageState<Record<string, string[]>>(
     calendarEventAssignmentsStorageKey,
     {},
@@ -171,6 +177,7 @@ export function ProfileDashboard({
     | { mode: "edit"; responsibility: LocalResponsibilityItem }
     | null
   >(null);
+  const [temporaryRoutineModal, setTemporaryRoutineModal] = useState(false);
   const [collapsedResponsibilityCategories, setCollapsedResponsibilityCategories] = useState<
     Partial<Record<ResponsibilityCategory, boolean>>
   >({});
@@ -234,6 +241,7 @@ export function ProfileDashboard({
     assignments,
     configuredResponsibilities,
     state.localResponsibilities,
+    state.localTemporaryRoutines,
     localTasks,
     selectedMember,
     displayedDay,
@@ -363,7 +371,7 @@ export function ProfileDashboard({
       return;
     }
 
-    const key = getActionKey(displayedDay.date, selectedMember.id, item.id);
+    const key = item.completionKey ?? getActionKey(displayedDay.date, selectedMember.id, item.id);
 
     setState((current) => ({
       ...current,
@@ -444,6 +452,47 @@ export function ProfileDashboard({
         localResponsibilities: current.localResponsibilities.filter(
           (responsibility) => responsibility.id !== responsibilityId,
         ),
+      };
+    });
+  }
+
+  function addTemporaryRoutine(input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) {
+    const title = input.title.trim();
+    const occurrences = input.occurrences.filter((occurrence) => occurrence.startTime && occurrence.endTime);
+
+    if (!title || !input.assigneeId || !input.startsOn || !input.endsOn || occurrences.length === 0) {
+      return false;
+    }
+
+    const createdAt = new Date().toISOString();
+
+    setState((current) => ({
+      ...current,
+      localTemporaryRoutines: [
+        ...current.localTemporaryRoutines,
+        {
+          ...input,
+          title,
+          occurrences,
+          createdAt,
+          id: createId(`temporary-routine-${input.assigneeId}-${createdAt}-${title}`),
+        },
+      ],
+    }));
+
+    return true;
+  }
+
+  function removeTemporaryRoutine(routineId: string) {
+    setState((current) => {
+      const actionCompletions = Object.fromEntries(
+        Object.entries(current.actionCompletions).filter(([key]) => !key.includes(`:${routineId}:`)),
+      );
+
+      return {
+        ...current,
+        actionCompletions,
+        localTemporaryRoutines: current.localTemporaryRoutines.filter((routine) => routine.id !== routineId),
       };
     });
   }
@@ -533,13 +582,22 @@ export function ProfileDashboard({
           <div className="space-y-5">
             <Panel
               action={
-                <button
-                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
-                  onClick={() => setResponsibilityModal({ mode: "add" })}
-                  type="button"
-                >
-                  Add responsibility
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                    onClick={() => setTemporaryRoutineModal(true)}
+                    type="button"
+                  >
+                    Add temp routine
+                  </button>
+                  <button
+                    className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                    onClick={() => setResponsibilityModal({ mode: "add" })}
+                    type="button"
+                  >
+                    Add responsibility
+                  </button>
+                </div>
               }
               title="Responsibilities"
             >
@@ -608,6 +666,8 @@ export function ProfileDashboard({
                                   onRemove={
                                     item.source === "local"
                                       ? () => removeLocalResponsibility(item.id)
+                                      : item.source === "temporary-routine" && item.temporaryRoutineId
+                                        ? () => removeTemporaryRoutine(item.temporaryRoutineId!)
                                       : item.source === "routine" && item.id.startsWith("routine-")
                                         ? () => removeLocalRoutine(item.id)
                                         : undefined
@@ -751,6 +811,19 @@ export function ProfileDashboard({
           }}
         />
       ) : null}
+      {temporaryRoutineModal ? (
+        <TemporaryRoutineModal
+          defaultAssigneeId={selectedMember?.id ?? defaultQuickAddAssignee}
+          defaultDate={displayedDay.date}
+          members={members}
+          onClose={() => setTemporaryRoutineModal(false)}
+          onSave={(input) => {
+            if (addTemporaryRoutine(input)) {
+              setTemporaryRoutineModal(false);
+            }
+          }}
+        />
+      ) : null}
     </main>
   );
 }
@@ -884,6 +957,8 @@ function categoryLabel(category: ResponsibilityCategory) {
       return "Chores";
     case "sports":
       return "Sports";
+    case "personal-hygiene":
+      return "Personal Hygiene";
     case "work":
       return "Work";
     case "personal":
@@ -911,6 +986,8 @@ function responsibilitySourceLabel(item: DashboardResponsibilityItem) {
       return "Custom";
     case "dated-task":
       return "Today";
+    case "temporary-routine":
+      return "Temporary routine";
   }
 }
 
@@ -921,6 +998,10 @@ function choreCategoryToResponsibilityCategory(category?: string): Responsibilit
 
   if (category === "homework") {
     return "homework";
+  }
+
+  if (category === "personal-hygiene") {
+    return "personal-hygiene";
   }
 
   return "chores";
@@ -950,6 +1031,10 @@ function isResponsibilityComplete(
 
   if (item.source === "routine") {
     return Boolean(state.routineCompletions[getRoutineKey(date, memberId, item.id)]);
+  }
+
+  if (item.completionKey) {
+    return Boolean(state.actionCompletions[item.completionKey]);
   }
 
   return Boolean(state.actionCompletions[getActionKey(date, memberId, item.id)]);
@@ -1018,6 +1103,7 @@ function getResponsibilityItems(
   assignments: AssignmentWithChore[],
   configuredResponsibilities: LocalResponsibilityItem[],
   localResponsibilities: LocalResponsibilityItem[],
+  localTemporaryRoutines: LocalTemporaryRoutineItem[],
   localTasks: LocalHouseholdItem[],
   member: HouseholdMember,
   today: TodayContext,
@@ -1077,6 +1163,22 @@ function getResponsibilityItems(
     source: "dated-task" as const,
     localTaskId: item.id,
   }));
+  const temporaryRoutineItems = localTemporaryRoutines.flatMap((routine) => {
+    if (routine.assigneeId !== member.id || today.date < routine.startsOn || today.date > routine.endsOn) {
+      return [];
+    }
+
+    return routine.occurrences.map((occurrence) => ({
+      id: `temporary-routine:${routine.id}:${occurrence.id}`,
+      title: occurrence.label ? `${routine.title}: ${occurrence.label}` : routine.title,
+      startTime: occurrence.startTime,
+      endTime: occurrence.endTime,
+      category: routine.category ?? "personal-hygiene",
+      source: "temporary-routine" as const,
+      completionKey: getTemporaryRoutineCompletionKey(today.date, member.id, routine.id, occurrence.id),
+      temporaryRoutineId: routine.id,
+    }));
+  });
 
   return [
     ...routineResponsibilities,
@@ -1084,6 +1186,7 @@ function getResponsibilityItems(
     ...configuredResponsibilityItems,
     ...localItems,
     ...datedTasks,
+    ...temporaryRoutineItems,
   ].sort((first, second) =>
     compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
   );
@@ -1292,6 +1395,192 @@ function getRoutineKey(date: string, memberId: string, routineId: string) {
 
 function getActionKey(date: string, memberId: string, actionId: string) {
   return `${date}:${memberId}:${actionId}`;
+}
+
+function getTemporaryRoutineCompletionKey(
+  date: string,
+  memberId: string,
+  routineId: string,
+  occurrenceId: string,
+) {
+  return `${date}:${memberId}:temporary-routine:${routineId}:${occurrenceId}`;
+}
+
+function TemporaryRoutineModal({
+  defaultAssigneeId,
+  defaultDate,
+  members,
+  onClose,
+  onSave,
+}: {
+  defaultAssigneeId: string;
+  defaultDate: string;
+  members: HouseholdMember[];
+  onClose: () => void;
+  onSave: (input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) => void;
+}) {
+  const [title, setTitle] = useState("Clean ears");
+  const [category, setCategory] = useState<ResponsibilityCategory>("personal-hygiene");
+  const [assigneeId, setAssigneeId] = useState(defaultAssigneeId);
+  const [startsOn, setStartsOn] = useState(defaultDate);
+  const [endsOn, setEndsOn] = useState(shiftDate(defaultDate, 42));
+  const [occurrences, setOccurrences] = useState([
+    { id: "morning", label: "Morning", startTime: "08:00", endTime: "08:05" },
+    { id: "afternoon", label: "Afternoon", startTime: "14:00", endTime: "14:05" },
+    { id: "bedtime", label: "Bedtime", startTime: "20:00", endTime: "20:05" },
+  ]);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    onSave({
+      assigneeId,
+      category,
+      endsOn,
+      occurrences,
+      startsOn,
+      title,
+    });
+  }
+
+  function updateOccurrence(
+    occurrenceId: string,
+    patch: Partial<(typeof occurrences)[number]>,
+  ) {
+    setOccurrences((current) =>
+      current.map((occurrence) =>
+        occurrence.id === occurrenceId
+          ? {
+              ...occurrence,
+              ...patch,
+            }
+          : occurrence,
+      ),
+    );
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Add temp routine</h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Use this for short-term care routines that need several checkoffs per day.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <form className="grid gap-3" onSubmit={submit}>
+          <div className="grid gap-3 lg:grid-cols-[1fr_180px_170px]">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Routine</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setTitle(event.target.value)}
+                value={title}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Category</span>
+              <select
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setCategory(event.target.value as ResponsibilityCategory)}
+                value={category}
+              >
+                {responsibilityCategories.map((option) => (
+                  <option key={option} value={option}>
+                    {categoryLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">For</span>
+              <select
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setAssigneeId(event.target.value)}
+                value={assigneeId}
+              >
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.preferredName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Starts</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setStartsOn(event.target.value)}
+                type="date"
+                value={startsOn}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Ends</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) => setEndsOn(event.target.value)}
+                type="date"
+                value={endsOn}
+              />
+            </label>
+          </div>
+
+          <fieldset className="grid gap-2 text-sm">
+            <legend className="font-semibold">Daily checkoffs</legend>
+            <div className="grid gap-2">
+              {occurrences.map((occurrence) => (
+                <div className="grid gap-2 sm:grid-cols-[1fr_140px_140px]" key={occurrence.id}>
+                  <input
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                    onChange={(event) => updateOccurrence(occurrence.id, { label: event.target.value })}
+                    value={occurrence.label}
+                  />
+                  <input
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                    onChange={(event) => updateOccurrence(occurrence.id, { startTime: event.target.value })}
+                    type="time"
+                    value={occurrence.startTime}
+                  />
+                  <input
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                    onChange={(event) => updateOccurrence(occurrence.id, { endTime: event.target.value })}
+                    type="time"
+                    value={occurrence.endTime}
+                  />
+                </div>
+              ))}
+            </div>
+          </fieldset>
+
+          <button
+            className="justify-self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!title.trim() || !assigneeId || !startsOn || !endsOn || startsOn > endsOn}
+            type="submit"
+          >
+            Add routine
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function ResponsibilityModal({

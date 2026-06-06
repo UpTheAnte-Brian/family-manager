@@ -1,3 +1,5 @@
+import type { ChoreCategoryId } from "@/lib/chores/categories";
+
 export type DayOfWeek = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 
 export type NoiseLevel = "low" | "medium" | "high" | "variable";
@@ -60,7 +62,7 @@ export type FixedEvent = {
 export type RoutineChore = {
   id: string;
   title: string;
-  category: "morning-routine";
+  category: ChoreCategoryId;
   defaultAssigneeIds: string[];
   schedule: {
     daysOfWeek: DayOfWeek[];
@@ -73,7 +75,7 @@ export type RoutineChore = {
 export type WeeklyChore = {
   id: string;
   title: string;
-  category: string;
+  category: ChoreCategoryId;
   estimatedMinutes: number;
   eligibleAssigneeIds: string[];
   requiresAdultCheck?: boolean;

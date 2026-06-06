@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  choreCategories,
+  getChoreCategoryLabel,
+  normalizeChoreCategory,
+  type ChoreCategoryId,
+} from "@/lib/chores/categories";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { useLocalStorageState } from "@/lib/storage/local";
 import type {
@@ -68,7 +74,6 @@ const warehouseSeedChores: WeeklyChore[] = [
     eligibleAssigneeIds: [],
   },
 ];
-
 export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const childMembers = useMemo(
     () => members.filter((member) => member.role === "child"),
@@ -97,7 +102,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [assignmentModal, setAssignmentModal] = useState<
-    | { mode: "add"; choreId?: string; childId?: string }
+    | { mode: "add"; choreId?: string; childId?: string; dayOfWeek?: DayOfWeek }
     | { mode: "edit"; assignmentId: string }
     | null
   >(null);
@@ -323,7 +328,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                     chore={chore}
                     isSelected={selectedChore?.id === chore.id}
                     key={chore.id}
-                    onAssign={() => setAssignmentModal({ mode: "add", choreId: chore.id })}
+                    onAssign={() => setAssignmentModal({ mode: "add", choreId: chore.id, dayOfWeek: selectedDay })}
                     onEdit={() => setEditingChoreId(chore.id)}
                     onSelect={() => setSelectedChoreId(chore.id)}
                     selectedDay={selectedDay}
@@ -336,7 +341,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               action={
                 <button
                   className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
-                  onClick={() => setAssignmentModal({ mode: "add" })}
+                  onClick={() => setAssignmentModal({ mode: "add", dayOfWeek: selectedDay })}
                   type="button"
                 >
                   Add slot
@@ -379,7 +384,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                   <div>
                     <h2 className="text-2xl font-semibold">{selectedChore.title}</h2>
                     <p className="mt-1 text-sm text-[#657381]">
-                      {selectedChore.category} · {selectedChore.estimatedMinutes} min
+                      {getChoreCategoryLabel(selectedChore.category)} · {selectedChore.estimatedMinutes} min
                       {selectedChore.requiresAdultCheck ? " · adult check" : ""}
                     </p>
                   </div>
@@ -391,7 +396,13 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                       </h3>
                       <button
                         className="text-sm font-semibold text-[#1f6f8b]"
-                        onClick={() => setAssignmentModal({ mode: "add", choreId: selectedChore.id })}
+                        onClick={() =>
+                          setAssignmentModal({
+                            mode: "add",
+                            choreId: selectedChore.id,
+                            dayOfWeek: selectedDay,
+                          })
+                        }
                         type="button"
                       >
                         Assign
@@ -407,9 +418,22 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                         );
 
                         return (
-                          <div
-                            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                          <button
+                            className="w-full border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left hover:border-[#1f6f8b] hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#bcd8dc]"
                             key={child.id}
+                            onClick={() =>
+                              setAssignmentModal(
+                                dayAssignment
+                                  ? { mode: "edit", assignmentId: dayAssignment.id }
+                                  : {
+                                      mode: "add",
+                                      childId: child.id,
+                                      choreId: selectedChore.id,
+                                      dayOfWeek: selectedDay,
+                                    },
+                              )
+                            }
+                            type="button"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div>
@@ -431,7 +455,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                                 }
                               />
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -463,7 +487,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                     >
                       <span className="block font-semibold">{chore.title}</span>
                       <span className="mt-1 block text-xs text-[#657381]">
-                        {chore.category} · {chore.estimatedMinutes} min
+                        {getChoreCategoryLabel(chore.category)} · {chore.estimatedMinutes} min
                       </span>
                     </button>
                   ))}
@@ -526,6 +550,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           chores={state.weeklyChores}
           defaultChildId={assignmentModal.mode === "add" ? assignmentModal.childId : undefined}
           defaultChoreId={assignmentModal.mode === "add" ? assignmentModal.choreId : undefined}
+          defaultDayOfWeek={assignmentModal.mode === "add" ? assignmentModal.dayOfWeek : undefined}
           onCancel={() => setAssignmentModal(null)}
           onSave={upsertAssignment}
         />
@@ -580,7 +605,7 @@ function ChoreTile({
           <div>
             <h3 className="text-lg font-semibold">{chore.title}</h3>
             <p className="mt-1 text-sm text-[#657381]">
-              {chore.category} · {chore.estimatedMinutes} min
+              {getChoreCategoryLabel(chore.category)} · {chore.estimatedMinutes} min
             </p>
           </div>
           <StatusPill
@@ -693,7 +718,9 @@ function ChoreEditor({
   onSave: (chore: WeeklyChore) => void;
 }) {
   const [title, setTitle] = useState(chore?.title ?? "");
-  const [category, setCategory] = useState(chore?.category ?? "yard");
+  const [category, setCategory] = useState<ChoreCategoryId>(
+    normalizeChoreCategory(chore?.category),
+  );
   const [estimatedMinutes, setEstimatedMinutes] = useState(String(chore?.estimatedMinutes ?? 10));
   const [requiresAdultCheck, setRequiresAdultCheck] = useState(Boolean(chore?.requiresAdultCheck));
   const [eligibleAssigneeIds, setEligibleAssigneeIds] = useState<string[]>(
@@ -733,14 +760,14 @@ function ChoreEditor({
           <span className="font-semibold">Category</span>
           <select
             className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setCategory(event.target.value)}
+            onChange={(event) => setCategory(event.target.value as ChoreCategoryId)}
             value={category}
           >
-            <option value="yard">Yard</option>
-            <option value="pets">Pets</option>
-            <option value="kitchen">Kitchen</option>
-            <option value="house-reset">House reset</option>
-            <option value="laundry">Laundry</option>
+            {choreCategories.map((categoryOption) => (
+              <option key={categoryOption.id} value={categoryOption.id}>
+                {categoryOption.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="grid gap-1 text-sm">
@@ -811,6 +838,9 @@ function RoutineChoreEditor({
   );
   const [startTime, setStartTime] = useState(routineChore?.schedule.startTime ?? "08:30");
   const [endTime, setEndTime] = useState(routineChore?.schedule.endTime ?? "08:40");
+  const [category, setCategory] = useState<ChoreCategoryId>(
+    normalizeChoreCategory(routineChore?.category),
+  );
   const [countsTowardWeeklyTarget, setCountsTowardWeeklyTarget] = useState(
     routineChore?.countsTowardWeeklyTarget ?? false,
   );
@@ -825,7 +855,7 @@ function RoutineChoreEditor({
     onSave({
       id: routineChore?.id ?? createId(`routine-${trimmedTitle}`),
       title: trimmedTitle,
-      category: "morning-routine",
+      category,
       defaultAssigneeIds,
       schedule: {
         daysOfWeek,
@@ -865,6 +895,20 @@ function RoutineChoreEditor({
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm">
+          <span className="font-semibold">Category</span>
+          <select
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+            onChange={(event) => setCategory(event.target.value as ChoreCategoryId)}
+            value={category}
+          >
+            {choreCategories.map((categoryOption) => (
+              <option key={categoryOption.id} value={categoryOption.id}>
+                {categoryOption.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="grid gap-1 text-sm">
           <span className="font-semibold">Start</span>
           <input
@@ -938,6 +982,7 @@ function AssignmentEditor({
   chores,
   defaultChildId,
   defaultChoreId,
+  defaultDayOfWeek,
   onCancel,
   onSave,
 }: {
@@ -946,6 +991,7 @@ function AssignmentEditor({
   chores: WeeklyChore[];
   defaultChildId?: string;
   defaultChoreId?: string;
+  defaultDayOfWeek?: DayOfWeek;
   onCancel: () => void;
   onSave: (assignment: WeeklyChoreAssignmentTemplate) => void;
 }) {
@@ -953,7 +999,9 @@ function AssignmentEditor({
     assignment?.childId ?? defaultChildId ?? childMembers[0]?.id ?? "",
   );
   const [choreId, setChoreId] = useState(assignment?.choreId ?? defaultChoreId ?? chores[0]?.id ?? "");
-  const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>(assignment?.dayOfWeek ?? "MO");
+  const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>(
+    assignment?.dayOfWeek ?? defaultDayOfWeek ?? "MO",
+  );
   const [startTime, setStartTime] = useState(assignment?.startTime ?? "16:00");
   const [endTime, setEndTime] = useState(assignment?.endTime ?? "16:15");
 
