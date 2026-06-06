@@ -71,7 +71,9 @@ type DashboardRoutineItem = {
   title: string;
   startTime: string;
   endTime: string;
-  source: "configured" | "local";
+  source: "configured" | "local" | "remote";
+  remoteActionItemId?: string;
+  completionKey?: string;
 };
 
 type DashboardResponsibilityItem = {
@@ -97,12 +99,15 @@ type DashboardResponsibilityItem = {
 
 type RemoteTemporaryRoutineMetadata = {
   kind?: string;
+  category?: ResponsibilityCategory;
+  routineTemplateId?: string;
+  routineTemplateName?: string;
+  stepId?: string;
   temporaryRoutineId?: string;
   occurrenceId?: string;
   occurrenceLabel?: string;
   startsOn?: string;
   endsOn?: string;
-  category?: ResponsibilityCategory;
 };
 
 type RemoteHouseholdMemberRow = {
@@ -113,6 +118,7 @@ type RemoteHouseholdMemberRow = {
 type RemoteActionItemRow = {
   id: string;
   title: string;
+  days_of_week?: string[];
   start_time: string | null;
   end_time: string | null;
   metadata: RemoteTemporaryRoutineMetadata;
@@ -134,6 +140,11 @@ type RemoteTemporaryRoutineLoad = {
   completionMap: Record<string, boolean>;
   memberIdsByExternalKey: Record<string, string>;
   externalKeysByMemberId: Record<string, string>;
+};
+
+type RemoteRoutineLoad = {
+  completions: Record<string, boolean>;
+  routines: DashboardRoutineItem[];
 };
 
 type DashboardEvent = FixedEvent & {
@@ -218,9 +229,12 @@ export function ProfileDashboard({
   const { household, status: householdStatus } = useCurrentHousehold();
   const [remoteTemporaryRoutines, setRemoteTemporaryRoutines] = useState<LocalTemporaryRoutineItem[]>([]);
   const [remoteTemporaryCompletions, setRemoteTemporaryCompletions] = useState<Record<string, boolean>>({});
+  const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
+  const [remoteRoutineCompletions, setRemoteRoutineCompletions] = useState<Record<string, boolean>>({});
   const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
   const [remoteTemporaryRoutineError, setRemoteTemporaryRoutineError] = useState("");
   const [temporaryRoutineSyncVersion, setTemporaryRoutineSyncVersion] = useState(0);
+  const [routineSyncVersion, setRoutineSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
   const [responsibilityModal, setResponsibilityModal] = useState<
     | { mode: "add" }
@@ -246,6 +260,7 @@ export function ProfileDashboard({
 
   const selectedMember =
     members.find((member) => member.id === state.selectedMemberId) ?? members[0];
+  const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
   const choresById = useMemo(
     () => new Map(choreConfig.weeklyChores.map((chore) => [chore.id, chore])),
     [choreConfig.weeklyChores],
@@ -253,6 +268,7 @@ export function ProfileDashboard({
   const routineItems = getRoutineItems(
     choreConfig.routineChores,
     state.localRoutines,
+    isRemoteHouseholdReady ? remoteRoutineItems : [],
     selectedMember,
     displayedDay,
   );
@@ -286,7 +302,6 @@ export function ProfileDashboard({
   const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, displayedDay.date);
   const localTasks = visibleLocalItems.filter((item) => item.kind === "task");
   const localReminders = visibleLocalItems.filter((item) => item.kind === "reminder");
-  const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
   const temporaryRoutines = isRemoteHouseholdReady
     ? remoteTemporaryRoutines
     : state.localTemporaryRoutines;
@@ -295,11 +310,12 @@ export function ProfileDashboard({
       ...state,
       actionCompletions: {
         ...state.actionCompletions,
+        ...remoteRoutineCompletions,
         ...remoteTemporaryCompletions,
       },
       localTemporaryRoutines: temporaryRoutines,
     }),
-    [remoteTemporaryCompletions, state, temporaryRoutines],
+    [remoteRoutineCompletions, remoteTemporaryCompletions, state, temporaryRoutines],
   );
   const responsibilityItems = getResponsibilityItems(
     routineItems,
@@ -362,6 +378,43 @@ export function ProfileDashboard({
   }, [householdId, householdStatus, temporaryRoutineSyncVersion]);
 
   useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadRemoteRoutinesForHousehold() {
+      try {
+        const remoteState = await loadRemoteRoutines(currentHouseholdId, displayedDay.date, displayedDay.dayOfWeek);
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteRoutineItems(remoteState.routines);
+        setRemoteRoutineCompletions(remoteState.completions);
+        setRemoteTemporaryRoutineError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteTemporaryRoutineError(
+          error instanceof Error ? error.message : "Could not load household routines from Supabase.",
+        );
+      }
+    }
+
+    void loadRemoteRoutinesForHousehold();
+
+    return () => {
+      isActive = false;
+    };
+  }, [displayedDay.date, displayedDay.dayOfWeek, householdId, householdStatus, routineSyncVersion]);
+
+  useEffect(() => {
     const morningRoutineItems =
       groupedResponsibilityItems.find(([category]) => category === "morning-routine")?.[1] ?? [];
 
@@ -399,8 +452,39 @@ export function ProfileDashboard({
     }));
   }
 
-  function toggleRoutine(routine: DashboardRoutineItem) {
+  async function toggleRoutine(routine: DashboardRoutineItem) {
     const key = getRoutineKey(displayedDay.date, selectedMember.id, routine.id);
+
+    if (isRemoteHouseholdReady && routine.remoteActionItemId && routine.completionKey) {
+      const isComplete = Boolean(dashboardStateForView.actionCompletions[routine.completionKey]);
+
+      setRemoteRoutineCompletions((current) => ({
+        ...current,
+        [routine.completionKey!]: !isComplete,
+      }));
+
+      try {
+        await saveRemoteActionItemCompletion({
+          actionItemId: routine.remoteActionItemId,
+          completed: !isComplete,
+          date: displayedDay.date,
+          householdId: household!.householdId,
+          memberId: remoteMemberIdsByExternalKey[selectedMember.id],
+        });
+        setRoutineSyncVersion((current) => current + 1);
+        setRemoteTemporaryRoutineError("");
+      } catch (error) {
+        setRemoteRoutineCompletions((current) => ({
+          ...current,
+          [routine.completionKey!]: isComplete,
+        }));
+        setRemoteTemporaryRoutineError(
+          error instanceof Error ? error.message : "Could not save routine completion.",
+        );
+      }
+
+      return;
+    }
 
     setState((current) => ({
       ...current,
@@ -485,7 +569,7 @@ export function ProfileDashboard({
       }));
 
       try {
-        await saveRemoteTemporaryRoutineCompletion({
+        await saveRemoteActionItemCompletion({
           actionItemId: item.remoteActionItemId,
           completed: !isComplete,
           date: displayedDay.date,
@@ -847,12 +931,14 @@ export function ProfileDashboard({
                                   meta={formatTimeRange(item.startTime, item.endTime)}
                                   onChange={() =>
                                     item.source === "routine"
-                                      ? toggleRoutine({
+                                      ? void toggleRoutine({
                                           id: item.id,
                                           title: item.title,
                                           startTime: item.startTime,
                                           endTime: item.endTime,
-                                          source: "configured",
+                                          source: item.remoteActionItemId ? "remote" : "configured",
+                                          remoteActionItemId: item.remoteActionItemId,
+                                          completionKey: item.completionKey,
                                         })
                                       : void toggleResponsibility(item)
                                   }
@@ -1230,6 +1316,10 @@ function isResponsibilityComplete(
   }
 
   if (item.source === "routine") {
+    if (item.completionKey) {
+      return Boolean(state.actionCompletions[item.completionKey]);
+    }
+
     return Boolean(state.routineCompletions[getRoutineKey(date, memberId, item.id)]);
   }
 
@@ -1243,6 +1333,7 @@ function isResponsibilityComplete(
 function getRoutineItems(
   routines: RoutineChore[],
   localRoutines: LocalRoutineItem[],
+  remoteRoutines: DashboardRoutineItem[],
   member: HouseholdMember,
   today: TodayContext,
 ): DashboardRoutineItem[] {
@@ -1275,7 +1366,9 @@ function getRoutineItems(
       source: "local" as const,
     }));
 
-  return [...configuredItems, ...localItems].sort((first, second) =>
+  const remoteItems = remoteRoutines.filter((routine) => routine.id.startsWith(`${member.id}:`));
+
+  return [...remoteItems, ...configuredItems, ...localItems].sort((first, second) =>
     compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
   );
 }
@@ -1315,6 +1408,8 @@ function getResponsibilityItems(
     endTime: routine.endTime,
     category: "morning-routine" as const,
     source: "routine" as const,
+    completionKey: routine.completionKey,
+    remoteActionItemId: routine.remoteActionItemId,
   }));
   const configuredItems = assignments.map((assignment) => ({
     id: assignment.id,
@@ -1607,6 +1702,119 @@ function getTemporaryRoutineCompletionKey(
   return `${date}:${memberId}:temporary-routine:${routineId}:${occurrenceId}`;
 }
 
+async function loadRemoteRoutines(
+  householdId: string,
+  date: string,
+  dayOfWeek: DayOfWeek,
+): Promise<RemoteRoutineLoad> {
+  const supabase = createBrowserSupabaseClient();
+  const { data: members, error: membersError } = await supabase
+    .from("household_members")
+    .select("id, external_key")
+    .eq("household_id", householdId)
+    .returns<RemoteHouseholdMemberRow[]>();
+
+  if (membersError) {
+    throw membersError;
+  }
+
+  const externalKeysByMemberId = Object.fromEntries(
+    (members ?? []).map((member) => [member.id, member.external_key]),
+  );
+
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, title, days_of_week, start_time, end_time, metadata, created_at")
+    .eq("household_id", householdId)
+    .eq("item_kind", "routine")
+    .eq("status", "active")
+    .eq("metadata->>kind", "routine-template-step")
+    .returns<RemoteActionItemRow[]>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const scheduledItems = (actionItems ?? []).filter((item) =>
+    (item.days_of_week ?? []).includes(dayOfWeek),
+  );
+  const actionItemIds = scheduledItems.map((item) => item.id);
+
+  if (actionItemIds.length === 0) {
+    return {
+      completions: {},
+      routines: [],
+    };
+  }
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("household_assignments")
+    .select("assignable_id, household_member_id")
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .in("assignable_id", actionItemIds)
+    .returns<RemoteAssignmentRow[]>();
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const { data: completions, error: completionsError } = await supabase
+    .from("household_action_item_completions")
+    .select("action_item_id, occurrence_date")
+    .eq("household_id", householdId)
+    .eq("occurrence_date", date)
+    .in("action_item_id", actionItemIds)
+    .returns<RemoteActionCompletionRow[]>();
+
+  if (completionsError) {
+    throw completionsError;
+  }
+
+  const assignmentByActionItemId = new Map(
+    (assignments ?? [])
+      .filter((assignment) => assignment.household_member_id)
+      .map((assignment) => [assignment.assignable_id, assignment.household_member_id!]),
+  );
+  const completedActionItemIds = new Set((completions ?? []).map((completion) => completion.action_item_id));
+  const completionMap: Record<string, boolean> = {};
+  const routines = scheduledItems.flatMap((item) => {
+    const memberId = assignmentByActionItemId.get(item.id);
+    const memberExternalKey = memberId ? externalKeysByMemberId[memberId] : undefined;
+
+    if (!memberExternalKey) {
+      return [];
+    }
+
+    const completionKey = getRemoteRoutineCompletionKey(date, memberExternalKey, item.id);
+
+    if (completedActionItemIds.has(item.id)) {
+      completionMap[completionKey] = true;
+    }
+
+    return [
+      {
+        id: `${memberExternalKey}:${item.id}`,
+        title: item.title,
+        startTime: normalizeTimeForInput(item.start_time),
+        endTime: normalizeTimeForInput(item.end_time),
+        source: "remote" as const,
+        remoteActionItemId: item.id,
+        completionKey,
+      },
+    ];
+  });
+
+  return {
+    completions: completionMap,
+    routines,
+  };
+}
+
+function getRemoteRoutineCompletionKey(date: string, memberId: string, actionItemId: string) {
+  return `${date}:${memberId}:remote-routine:${actionItemId}`;
+}
+
 async function loadRemoteTemporaryRoutines(householdId: string): Promise<RemoteTemporaryRoutineLoad> {
   const supabase = createBrowserSupabaseClient();
   const { data: members, error: membersError } = await supabase
@@ -1877,7 +2085,7 @@ async function removeRemoteTemporaryRoutine({
   }
 }
 
-async function saveRemoteTemporaryRoutineCompletion({
+async function saveRemoteActionItemCompletion({
   actionItemId,
   completed,
   date,
@@ -1891,7 +2099,7 @@ async function saveRemoteTemporaryRoutineCompletion({
   memberId?: string;
 }) {
   if (!memberId) {
-    throw new Error("Create household members in setup before completing a temporary routine.");
+    throw new Error("Create household members in setup before completing a routine.");
   }
 
   const supabase = createBrowserSupabaseClient();

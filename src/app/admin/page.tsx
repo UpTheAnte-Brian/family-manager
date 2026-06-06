@@ -1,4 +1,5 @@
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
+import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
 import { plannerData } from "@/lib/planner/schedule";
 import Link from "next/link";
 
@@ -35,7 +36,8 @@ export default function AdminPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
+      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
+        <AdminRoutineTemplates members={plannerData.household.members} />
         <AdminCalendarSources members={plannerData.household.members} />
       </section>
     </main>
