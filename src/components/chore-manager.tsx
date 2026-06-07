@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   choreCategories,
@@ -10,6 +10,8 @@ import {
 } from "@/lib/chores/categories";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { useLocalStorageState } from "@/lib/storage/local";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { useCurrentHousehold } from "@/lib/supabase/household";
 import type {
   ChoreCompletion,
   DayOfWeek,
@@ -30,6 +32,62 @@ type AssignmentWithStatus = WeeklyChoreAssignmentTemplate & {
   chore?: WeeklyChore;
   isComplete: boolean;
   completion?: ChoreCompletion;
+};
+
+type RemoteChoreRow = {
+  id: string;
+  external_key: string | null;
+  title: string;
+  category_id: string;
+  metadata: {
+    eligibleAssigneeIds?: string[];
+    estimatedMinutes?: number;
+    requiresAdultCheck?: boolean;
+  };
+};
+
+type RemoteAssignmentTemplateRow = {
+  id: string;
+  chore_id: string;
+  day_of_week: DayOfWeek;
+  metadata: {
+    endTime?: string;
+    startTime?: string;
+  };
+};
+
+type RemoteAssignmentRow = {
+  assignable_id: string;
+  household_member_id: string | null;
+};
+
+type RemoteCompletionRow = {
+  id: string;
+  assignment_template_id: string | null;
+  chore_id: string;
+  occurrence_date: string;
+  completed_at: string;
+  completed_by_member_id: string | null;
+};
+
+type RemoteRoutineActionItemRow = {
+  id: string;
+  title: string;
+  days_of_week: DayOfWeek[];
+  start_time: string | null;
+  end_time: string | null;
+  metadata: {
+    category?: string;
+    countsTowardWeeklyTarget?: boolean;
+    stepId?: string;
+  };
+};
+
+type RemoteMemberRow = {
+  id: string;
+  external_key: string;
+  preferred_name: string;
+  role: string;
 };
 
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
@@ -95,9 +153,18 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     ],
   );
   const [state, setState] = useLocalStorageState(choreStorageKey, initialState);
+  const { household, status: householdStatus } = useCurrentHousehold();
+  const [remoteState, setRemoteState] = useState<ChoreStorageState | null>(null);
+  const [remoteMembers, setRemoteMembers] = useState<RemoteMemberRow[]>([]);
+  const [remoteStatusMessage, setRemoteStatusMessage] = useState("");
+  const [remoteErrorMessage, setRemoteErrorMessage] = useState("");
+  const [remoteSyncVersion, setRemoteSyncVersion] = useState(0);
+  const householdId = household?.householdId;
+  const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(householdId);
+  const effectiveState = isRemoteHouseholdReady && remoteState ? remoteState : state;
   const [selectedDate, setSelectedDate] = useState(() => formatDateKey(new Date()));
   const [selectedChoreId, setSelectedChoreId] = useState(
-    state.weeklyChores[0]?.id ?? initialState.weeklyChores[0]?.id ?? "",
+    effectiveState.weeklyChores[0]?.id ?? initialState.weeklyChores[0]?.id ?? "",
   );
   const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
@@ -107,9 +174,44 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     | null
   >(null);
 
+  useEffect(() => {
+    if (!isRemoteHouseholdReady || !householdId) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadRemoteChores() {
+      try {
+        setRemoteErrorMessage("");
+        const nextState = await loadRemoteChoreState(householdId!);
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteMembers(nextState.members);
+        setRemoteState(nextState.state);
+        setSelectedChoreId((current) => current || (nextState.state.weeklyChores[0]?.id ?? ""));
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteErrorMessage(error instanceof Error ? error.message : "Could not load Supabase chores.");
+      }
+    }
+
+    void loadRemoteChores();
+
+    return () => {
+      isActive = false;
+    };
+  }, [householdId, isRemoteHouseholdReady, remoteSyncVersion]);
+
   const choresById = useMemo(
-    () => new Map(state.weeklyChores.map((chore) => [chore.id, chore])),
-    [state.weeklyChores],
+    () => new Map(effectiveState.weeklyChores.map((chore) => [chore.id, chore])),
+    [effectiveState.weeklyChores],
   );
   const childById = useMemo(
     () => new Map(childMembers.map((child) => [child.id, child])),
@@ -118,9 +220,9 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const selectedDay = getDayOfWeekForDate(selectedDate);
   const assignments = useMemo<AssignmentWithStatus[]>(
     () =>
-      state.weeklyAssignmentTemplates
+      effectiveState.weeklyAssignmentTemplates
         .map((assignment) => {
-          const completion = state.completions.find(
+          const completion = effectiveState.completions.find(
             (candidate) =>
               candidate.assignmentTemplateId === assignment.id &&
               candidate.childId === assignment.childId &&
@@ -141,16 +243,16 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
             `${second.dayOfWeek}-${second.startTime}-${second.child?.preferredName ?? ""}`,
           ),
         ),
-    [childById, choresById, selectedDate, state.completions, state.weeklyAssignmentTemplates],
+    [childById, choresById, effectiveState.completions, effectiveState.weeklyAssignmentTemplates, selectedDate],
   );
   const selectedChore =
-    choresById.get(selectedChoreId) ?? state.weeklyChores[0] ?? initialState.weeklyChores[0];
+    choresById.get(selectedChoreId) ?? effectiveState.weeklyChores[0] ?? initialState.weeklyChores[0];
   const selectedChoreAssignments = assignments.filter(
     (assignment) => assignment.choreId === selectedChore?.id,
   );
   const todaysAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
-  const scheduledChoreIds = new Set(state.weeklyAssignmentTemplates.map((assignment) => assignment.choreId));
-  const backlogChores = state.weeklyChores.filter((chore) => !scheduledChoreIds.has(chore.id));
+  const scheduledChoreIds = new Set(effectiveState.weeklyAssignmentTemplates.map((assignment) => assignment.choreId));
+  const backlogChores = effectiveState.weeklyChores.filter((chore) => !scheduledChoreIds.has(chore.id));
   const childSummaries = childMembers.map((child) => {
     const childAssignments = assignments.filter((assignment) => assignment.childId === child.id);
     const todayChildAssignments = childAssignments.filter(
@@ -165,7 +267,32 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     };
   });
 
-  function toggleCompletion(assignment: WeeklyChoreAssignmentTemplate) {
+  async function toggleCompletion(assignment: WeeklyChoreAssignmentTemplate) {
+    if (isRemoteHouseholdReady && householdId) {
+      await runRemoteAction(async () => {
+        const existing = effectiveState.completions.find(
+          (completion) =>
+            completion.assignmentTemplateId === assignment.id &&
+            completion.childId === assignment.childId &&
+            completion.completedAt.startsWith(selectedDate),
+        );
+
+        if (existing) {
+          await deleteRemoteChoreCompletion(householdId, existing.id);
+          return "Completion cleared.";
+        }
+
+        await createRemoteChoreCompletion({
+          assignment,
+          householdId,
+          occurrenceDate: selectedDate,
+          remoteMemberId: getRemoteMemberId(remoteMembers, assignment.childId),
+        });
+        return "Completion saved to Supabase.";
+      });
+      return;
+    }
+
     setState((current) => {
       const existing = current.completions.find(
         (completion) =>
@@ -198,7 +325,17 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     });
   }
 
-  function upsertChore(chore: WeeklyChore) {
+  async function upsertChore(chore: WeeklyChore) {
+    if (isRemoteHouseholdReady && householdId) {
+      await runRemoteAction(async () => {
+        const savedChore = await saveRemoteChore(householdId, chore);
+        setSelectedChoreId(savedChore.id);
+        setEditingChoreId(null);
+        return "Chore saved to Supabase.";
+      });
+      return;
+    }
+
     setState((current) => {
       const exists = current.weeklyChores.some((candidate) => candidate.id === chore.id);
 
@@ -213,7 +350,20 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     setEditingChoreId(null);
   }
 
-  function upsertRoutineChore(routineChore: RoutineChore) {
+  async function upsertRoutineChore(routineChore: RoutineChore) {
+    if (isRemoteHouseholdReady && householdId) {
+      await runRemoteAction(async () => {
+        await saveRemoteRoutineStep({
+          householdId,
+          remoteMembers,
+          routineChore,
+        });
+        setEditingRoutineId(null);
+        return "Routine step saved to Supabase.";
+      });
+      return;
+    }
+
     setState((current) => {
       const exists = current.routineChores.some((candidate) => candidate.id === routineChore.id);
 
@@ -229,7 +379,21 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     setEditingRoutineId(null);
   }
 
-  function upsertAssignment(assignment: WeeklyChoreAssignmentTemplate) {
+  async function upsertAssignment(assignment: WeeklyChoreAssignmentTemplate) {
+    if (isRemoteHouseholdReady && householdId) {
+      await runRemoteAction(async () => {
+        await saveRemoteChoreAssignment({
+          assignment,
+          householdId,
+          remoteMemberId: getRemoteMemberId(remoteMembers, assignment.childId),
+        });
+        setSelectedChoreId(assignment.choreId);
+        setAssignmentModal(null);
+        return "Assignment saved to Supabase.";
+      });
+      return;
+    }
+
     setState((current) => {
       const exists = current.weeklyAssignmentTemplates.some(
         (candidate) => candidate.id === assignment.id,
@@ -246,6 +410,19 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     });
     setSelectedChoreId(assignment.choreId);
     setAssignmentModal(null);
+  }
+
+  async function runRemoteAction(action: () => Promise<string>) {
+    setRemoteErrorMessage("");
+    setRemoteStatusMessage("");
+
+    try {
+      const message = await action();
+      setRemoteStatusMessage(message);
+      setRemoteSyncVersion((current) => current + 1);
+    } catch (error) {
+      setRemoteErrorMessage(error instanceof Error ? error.message : "Could not save chore data.");
+    }
   }
 
   return (
@@ -288,6 +465,16 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
+        {remoteErrorMessage ? (
+          <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+            {remoteErrorMessage}
+          </p>
+        ) : null}
+        {remoteStatusMessage ? (
+          <p className="border border-[#b7d7ce] bg-[#f0faf7] px-3 py-2 text-sm text-[#2f6f73]">
+            {remoteStatusMessage}
+          </p>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-3">
           {childSummaries.map((summary) => (
             <section className="border border-[#cbd5df] bg-white p-4 shadow-sm" key={summary.child.id}>
@@ -321,7 +508,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               title="Chore Tiles"
             >
               <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {state.weeklyChores.map((chore) => (
+                {effectiveState.weeklyChores.map((chore) => (
                   <ChoreTile
                     assignments={assignments.filter((assignment) => assignment.choreId === chore.id)}
                     childMembers={childMembers}
@@ -356,7 +543,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                       assignment={assignment}
                       key={assignment.id}
                       onEdit={() => setAssignmentModal({ mode: "edit", assignmentId: assignment.id })}
-                      onToggle={() => toggleCompletion(assignment)}
+          onToggle={() => void toggleCompletion(assignment)}
                     />
                   ))}
                 </div>
@@ -510,7 +697,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               title="Morning Routine"
             >
               <ul className="grid gap-2">
-                {state.routineChores.map((chore) => (
+                {effectiveState.routineChores.map((chore) => (
                   <RoutineChoreRow
                     chore={chore}
                     childMembers={childMembers}
@@ -519,6 +706,15 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                   />
                 ))}
               </ul>
+              {isRemoteHouseholdReady ? (
+                <p className="mt-3 border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+                  Reusable defaults live in{" "}
+                  <Link className="font-semibold text-[#1f6f8b] underline" href="/admin">
+                    Admin setup
+                  </Link>
+                  . This panel shows the routine steps currently saved for the household.
+                </p>
+              ) : null}
             </Panel>
           </aside>
         </div>
@@ -529,11 +725,11 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           chore={
             editingChoreId === "new"
               ? undefined
-              : state.weeklyChores.find((chore) => chore.id === editingChoreId)
+              : effectiveState.weeklyChores.find((chore) => chore.id === editingChoreId)
           }
           childMembers={childMembers}
           onCancel={() => setEditingChoreId(null)}
-          onSave={upsertChore}
+          onSave={(chore) => void upsertChore(chore)}
         />
       ) : null}
 
@@ -541,18 +737,18 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
         <AssignmentEditor
           assignment={
             assignmentModal.mode === "edit"
-              ? state.weeklyAssignmentTemplates.find(
+              ? effectiveState.weeklyAssignmentTemplates.find(
                   (assignment) => assignment.id === assignmentModal.assignmentId,
                 )
               : undefined
           }
           childMembers={childMembers}
-          chores={state.weeklyChores}
+          chores={effectiveState.weeklyChores}
           defaultChildId={assignmentModal.mode === "add" ? assignmentModal.childId : undefined}
           defaultChoreId={assignmentModal.mode === "add" ? assignmentModal.choreId : undefined}
           defaultDayOfWeek={assignmentModal.mode === "add" ? assignmentModal.dayOfWeek : undefined}
           onCancel={() => setAssignmentModal(null)}
-          onSave={upsertAssignment}
+          onSave={(assignment) => void upsertAssignment(assignment)}
         />
       ) : null}
 
@@ -560,11 +756,11 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
         <RoutineChoreEditor
           childMembers={childMembers}
           onCancel={() => setEditingRoutineId(null)}
-          onSave={upsertRoutineChore}
+          onSave={(routineChore) => void upsertRoutineChore(routineChore)}
           routineChore={
             editingRoutineId === "new"
               ? undefined
-              : state.routineChores.find((chore) => chore.id === editingRoutineId)
+              : effectiveState.routineChores.find((chore) => chore.id === editingRoutineId)
           }
         />
       ) : null}
@@ -1131,7 +1327,7 @@ function EditorShell({
           <div>
             <h2 className="text-xl font-semibold">{title}</h2>
             <p className="mt-1 text-sm text-[#4c5965]">
-              Changes are saved in this browser for now.
+              Changes sync through Supabase when this device is signed in to a household; otherwise they are saved in this browser.
             </p>
           </div>
           <button
@@ -1218,6 +1414,442 @@ function StatusPill({ isComplete, label }: { isComplete: boolean; label: string 
 
 function EmptyState({ text }: { text: string }) {
   return <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] p-4 text-sm text-[#657381]">{text}</p>;
+}
+
+async function loadRemoteChoreState(householdId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { data: members, error: membersError } = await supabase
+    .from("household_members")
+    .select("id, external_key, preferred_name, role")
+    .eq("household_id", householdId)
+    .returns<RemoteMemberRow[]>();
+
+  if (membersError) {
+    throw membersError;
+  }
+
+  const memberExternalKeyById = new Map((members ?? []).map((member) => [member.id, member.external_key]));
+  const { data: remoteChores, error: choresError } = await supabase
+    .from("chores")
+    .select("id, external_key, title, category_id, metadata")
+    .eq("household_id", householdId)
+    .eq("chore_kind", "weekly")
+    .eq("status", "active")
+    .returns<RemoteChoreRow[]>();
+
+  if (choresError) {
+    throw choresError;
+  }
+
+  const weeklyChores = (remoteChores ?? []).map(mapRemoteChore);
+  const choreIds = weeklyChores.map((chore) => chore.id);
+  const { data: templates, error: templatesError } =
+    choreIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("chore_assignment_templates")
+          .select("id, chore_id, day_of_week, metadata")
+          .eq("household_id", householdId)
+          .eq("status", "active")
+          .in("chore_id", choreIds)
+          .returns<RemoteAssignmentTemplateRow[]>();
+
+  if (templatesError) {
+    throw templatesError;
+  }
+
+  const templateIds = (templates ?? []).map((template) => template.id);
+  const { data: templateAssignments, error: templateAssignmentsError } =
+    templateIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_assignments")
+          .select("assignable_id, household_member_id")
+          .eq("household_id", householdId)
+          .eq("assignable_type", "chore_assignment_template")
+          .in("assignable_id", templateIds)
+          .returns<RemoteAssignmentRow[]>();
+
+  if (templateAssignmentsError) {
+    throw templateAssignmentsError;
+  }
+
+  const templateAssignmentByTemplateId = new Map(
+    (templateAssignments ?? []).map((assignment) => [assignment.assignable_id, assignment.household_member_id]),
+  );
+  const weeklyAssignmentTemplates = (templates ?? [])
+    .map((template) => {
+      const childId = templateAssignmentByTemplateId.get(template.id);
+      const externalChildId = childId ? memberExternalKeyById.get(childId) : undefined;
+
+      if (!externalChildId) {
+        return null;
+      }
+
+      return {
+        id: template.id,
+        childId: externalChildId,
+        choreId: template.chore_id,
+        dayOfWeek: template.day_of_week,
+        startTime: template.metadata.startTime ?? "16:00",
+        endTime: template.metadata.endTime ?? "16:15",
+      };
+    })
+    .filter((template): template is WeeklyChoreAssignmentTemplate => Boolean(template));
+
+  const { data: completions, error: completionsError } =
+    templateIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("chore_completions")
+          .select("id, assignment_template_id, chore_id, occurrence_date, completed_at, completed_by_member_id")
+          .eq("household_id", householdId)
+          .in("assignment_template_id", templateIds)
+          .returns<RemoteCompletionRow[]>();
+
+  if (completionsError) {
+    throw completionsError;
+  }
+
+  const choreCompletions: ChoreCompletion[] = (completions ?? []).flatMap((completion) => {
+      const childId = completion.completed_by_member_id
+        ? memberExternalKeyById.get(completion.completed_by_member_id)
+        : undefined;
+
+      if (!childId || !completion.assignment_template_id) {
+        return [];
+      }
+
+      return [{
+        id: completion.id,
+        assignmentTemplateId: completion.assignment_template_id,
+        childId,
+        choreId: completion.chore_id,
+        completedAt: completion.completed_at,
+        completedBy: childId,
+      }];
+    });
+
+  const routineChores = await loadRemoteRoutineChores(householdId, memberExternalKeyById);
+
+  return {
+    members: members ?? [],
+    state: {
+      routineChores,
+      weeklyChores: mergeChoreSeeds(weeklyChores, warehouseSeedChores, []),
+      weeklyAssignmentTemplates,
+      completions: choreCompletions,
+    },
+  };
+}
+
+async function loadRemoteRoutineChores(
+  householdId: string,
+  memberExternalKeyById: Map<string, string>,
+) {
+  const supabase = createBrowserSupabaseClient();
+  const { data: routineItems, error: routineItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, title, days_of_week, start_time, end_time, metadata")
+    .eq("household_id", householdId)
+    .eq("item_kind", "routine")
+    .eq("status", "active")
+    .returns<RemoteRoutineActionItemRow[]>();
+
+  if (routineItemsError) {
+    throw routineItemsError;
+  }
+
+  const actionItemIds = (routineItems ?? []).map((item) => item.id);
+  const { data: assignments, error: assignmentsError } =
+    actionItemIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_assignments")
+          .select("assignable_id, household_member_id")
+          .eq("household_id", householdId)
+          .eq("assignable_type", "action_item")
+          .in("assignable_id", actionItemIds)
+          .returns<RemoteAssignmentRow[]>();
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const assignmentsByItemId = new Map<string, string[]>();
+  for (const assignment of assignments ?? []) {
+    if (!assignment.household_member_id) {
+      continue;
+    }
+
+    const externalKey = memberExternalKeyById.get(assignment.household_member_id);
+
+    if (!externalKey) {
+      continue;
+    }
+
+    assignmentsByItemId.set(assignment.assignable_id, [
+      ...(assignmentsByItemId.get(assignment.assignable_id) ?? []),
+      externalKey,
+    ]);
+  }
+
+  const grouped = new Map<string, RoutineChore>();
+  for (const item of routineItems ?? []) {
+    const startTime = normalizeRemoteTime(item.start_time);
+    const endTime = normalizeRemoteTime(item.end_time);
+    const groupKey = [
+      item.metadata.stepId ?? item.title,
+      item.title,
+      startTime,
+      endTime,
+      item.days_of_week.join(","),
+    ].join("|");
+    const existing = grouped.get(groupKey);
+    const assigneeIds = assignmentsByItemId.get(item.id) ?? [];
+
+    grouped.set(groupKey, {
+      id: existing?.id ?? item.id,
+      title: item.title,
+      category: normalizeChoreCategory(item.metadata.category),
+      defaultAssigneeIds: [...new Set([...(existing?.defaultAssigneeIds ?? []), ...assigneeIds])],
+      schedule: {
+        daysOfWeek: item.days_of_week,
+        startTime,
+        endTime,
+      },
+      countsTowardWeeklyTarget: item.metadata.countsTowardWeeklyTarget ?? false,
+    });
+  }
+
+  return [...grouped.values()].sort((first, second) =>
+    compareStrings(`${first.schedule.startTime}-${first.title}`, `${second.schedule.startTime}-${second.title}`),
+  );
+}
+
+function mapRemoteChore(chore: RemoteChoreRow): WeeklyChore {
+  return {
+    id: chore.id,
+    title: chore.title,
+    category: normalizeChoreCategory(chore.category_id),
+    estimatedMinutes: chore.metadata.estimatedMinutes ?? 10,
+    eligibleAssigneeIds: chore.metadata.eligibleAssigneeIds ?? [],
+    requiresAdultCheck: chore.metadata.requiresAdultCheck,
+  };
+}
+
+async function saveRemoteChore(householdId: string, chore: WeeklyChore) {
+  const supabase = createBrowserSupabaseClient();
+  const row = {
+    household_id: householdId,
+    external_key: isUuid(chore.id) ? null : chore.id,
+    title: chore.title,
+    chore_kind: "weekly",
+    status: "active",
+    category_id: chore.category,
+    metadata: {
+      estimatedMinutes: chore.estimatedMinutes,
+      eligibleAssigneeIds: chore.eligibleAssigneeIds,
+      requiresAdultCheck: chore.requiresAdultCheck ?? false,
+    },
+  };
+
+  const query = isUuid(chore.id)
+    ? supabase.from("chores").update(row).eq("household_id", householdId).eq("id", chore.id)
+    : supabase.from("chores").insert(row);
+  const { data, error } = await query.select("id, external_key, title, category_id, metadata").single<RemoteChoreRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapRemoteChore(data);
+}
+
+async function saveRemoteChoreAssignment({
+  assignment,
+  householdId,
+  remoteMemberId,
+}: {
+  assignment: WeeklyChoreAssignmentTemplate;
+  householdId: string;
+  remoteMemberId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const row = {
+    household_id: householdId,
+    chore_id: assignment.choreId,
+    day_of_week: assignment.dayOfWeek,
+    status: "active",
+    metadata: {
+      startTime: assignment.startTime,
+      endTime: assignment.endTime,
+    },
+  };
+  const query = isUuid(assignment.id)
+    ? supabase
+        .from("chore_assignment_templates")
+        .update(row)
+        .eq("household_id", householdId)
+        .eq("id", assignment.id)
+    : supabase.from("chore_assignment_templates").insert(row);
+  const { data: template, error: templateError } = await query.select("id").single<{ id: string }>();
+
+  if (templateError) {
+    throw templateError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "chore_assignment_template")
+    .eq("assignable_id", template.id);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const { error: assignmentError } = await supabase.from("household_assignments").insert({
+    household_id: householdId,
+    assignable_type: "chore_assignment_template",
+    assignable_id: template.id,
+    assignee_type: "member",
+    household_member_id: remoteMemberId,
+  });
+
+  if (assignmentError) {
+    throw assignmentError;
+  }
+}
+
+async function createRemoteChoreCompletion({
+  assignment,
+  householdId,
+  occurrenceDate,
+  remoteMemberId,
+}: {
+  assignment: WeeklyChoreAssignmentTemplate;
+  householdId: string;
+  occurrenceDate: string;
+  remoteMemberId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase.from("chore_completions").insert({
+    household_id: householdId,
+    chore_id: assignment.choreId,
+    assignment_template_id: assignment.id,
+    occurrence_date: occurrenceDate,
+    completed_by_member_id: remoteMemberId,
+    completed_at: `${occurrenceDate}T${assignment.endTime}:00`,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function deleteRemoteChoreCompletion(householdId: string, completionId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase
+    .from("chore_completions")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("id", completionId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function saveRemoteRoutineStep({
+  householdId,
+  remoteMembers,
+  routineChore,
+}: {
+  householdId: string;
+  remoteMembers: RemoteMemberRow[];
+  routineChore: RoutineChore;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const row = {
+    household_id: householdId,
+    item_kind: "routine",
+    title: routineChore.title,
+    source: "manual",
+    days_of_week: routineChore.schedule.daysOfWeek,
+    start_time: routineChore.schedule.startTime,
+    end_time: routineChore.schedule.endTime,
+    metadata: {
+      category: routineChore.category,
+      countsTowardWeeklyTarget: routineChore.countsTowardWeeklyTarget,
+      kind: "routine-template-step",
+      stepId: isUuid(routineChore.id) ? routineChore.id : routineChore.id,
+    },
+  };
+  const query = isUuid(routineChore.id)
+    ? supabase
+        .from("household_action_items")
+        .update(row)
+        .eq("household_id", householdId)
+        .eq("id", routineChore.id)
+    : supabase.from("household_action_items").insert(row);
+  const { data: item, error: itemError } = await query.select("id").single<{ id: string }>();
+
+  if (itemError) {
+    throw itemError;
+  }
+
+  const remoteMemberIdByExternalKey = new Map(remoteMembers.map((member) => [member.external_key, member.id]));
+  const assignmentRows = routineChore.defaultAssigneeIds
+    .map((memberId) => remoteMemberIdByExternalKey.get(memberId))
+    .filter((memberId): memberId is string => Boolean(memberId))
+    .map((memberId) => ({
+      household_id: householdId,
+      assignable_type: "action_item",
+      assignable_id: item.id,
+      assignee_type: "member",
+      household_member_id: memberId,
+    }));
+
+  const { error: deleteError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .eq("assignable_id", item.id);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (assignmentRows.length === 0) {
+    return;
+  }
+
+  const { error: assignmentError } = await supabase.from("household_assignments").insert(assignmentRows);
+
+  if (assignmentError) {
+    throw assignmentError;
+  }
+}
+
+function getRemoteMemberId(remoteMembers: RemoteMemberRow[], externalKey: string) {
+  const member = remoteMembers.find((candidate) => candidate.external_key === externalKey);
+
+  if (!member) {
+    throw new Error("Open Setup and save household members before assigning chores.");
+  }
+
+  return member.id;
+}
+
+function normalizeRemoteTime(value: string | null) {
+  return value?.slice(0, 5) ?? "08:30";
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function mergeChoreSeeds(

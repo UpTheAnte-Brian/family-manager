@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import { starterMorningRoutineTemplate } from "@/lib/routines/defaults";
 import type { DayOfWeek, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -57,19 +58,14 @@ type RoutineStepDraft = {
 
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 const weekdayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR"];
-const defaultRoutineSteps: RoutineStepDraft[] = [
-  { id: "make-bed", title: "Make bed", startTime: "08:30", endTime: "08:40" },
-  { id: "brush-teeth", title: "Brush teeth", startTime: "08:40", endTime: "08:45" },
-  { id: "dirty-clothes", title: "Put dirty clothes in hamper", startTime: "08:45", endTime: "08:50" },
-  { id: "breakfast-dishes", title: "Clear breakfast dishes", startTime: "08:50", endTime: "09:00" },
-];
+const defaultRoutineSteps: RoutineStepDraft[] = starterMorningRoutineTemplate.steps;
 
 export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
   const { household, status: householdStatus } = useCurrentHousehold();
   const childMembers = useMemo(() => members.filter((member) => member.role === "child"), [members]);
   const [remoteMembers, setRemoteMembers] = useState<RemoteHouseholdMemberRow[]>([]);
   const [templates, setTemplates] = useState<RoutineTemplateSummary[]>([]);
-  const [templateName, setTemplateName] = useState("Morning routine");
+  const [templateName, setTemplateName] = useState(starterMorningRoutineTemplate.name);
   const [selectedMemberIds, setSelectedMemberIds] = useState(() => childMembers.map((member) => member.id));
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(weekdayOptions);
   const [steps, setSteps] = useState<RoutineStepDraft[]>(defaultRoutineSteps);
