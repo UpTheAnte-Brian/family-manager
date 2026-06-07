@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import Link from "next/link";
 import type { DayOfWeek, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -409,7 +410,10 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
         </>
       ) : (
         <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-4 text-sm text-[#4c5965]">
-          Sign in and create a household in Setup before adding routine templates.
+          Sign in and create a household before adding routine templates.{" "}
+          <Link className="font-semibold text-[#1f6f8b] underline" href="/setup">
+            Go to login
+          </Link>
         </p>
       )}
     </section>

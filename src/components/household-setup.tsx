@@ -36,6 +36,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
   useEffect(() => {
     let isActive = true;
+    const authRedirectResult = getAuthRedirectResult();
 
     async function loadSession() {
       try {
@@ -48,10 +49,25 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
         setSession(data.session);
         setEmail(data.session?.user.email ?? "");
+        if (authRedirectResult) {
+          setPassword("");
+          setStatus(authRedirectResult.status);
+          setMessage(
+            authRedirectResult.status === "error"
+              ? authRedirectResult.message
+              : data.session
+                ? "Email confirmed. You are signed in. Create a household next."
+                : "Email confirmed. Sign in to continue.",
+          );
+          clearAuthRedirectFromUrl();
+        }
 
-        const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
           setSession(nextSession);
           setEmail(nextSession?.user.email ?? "");
+          if (event === "SIGNED_IN") {
+            setPassword("");
+          }
         });
 
         return listener.subscription;
@@ -81,16 +97,20 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: getAuthRedirectTo(),
+        },
       });
 
       if (error) {
         throw error;
       }
 
+      setPassword("");
       setSession(data.session);
 
       if (!data.session) {
-        return "Check your email to confirm the account, then return here and sign in.";
+        return `Account created. Check ${email} for the confirmation email, then return here and sign in.`;
       }
 
       return "Account created. Create a household to start using Supabase data.";
@@ -109,6 +129,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
         throw error;
       }
 
+      setPassword("");
       setSession(data.session);
       return "Signed in. Create or select a household to start using Supabase data.";
     });
@@ -166,6 +187,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       }
 
       setSession(null);
+      setPassword("");
       return "Signed out.";
     });
   }
@@ -309,6 +331,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
                     </button>
                   )}
                 </div>
+                {message ? <SetupStatusMessage message={message} status={status} /> : null}
               </div>
             </section>
 
@@ -433,18 +456,6 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
                 Create household
               </button>
             </section>
-
-            {message ? (
-              <p
-                className={`border px-3 py-3 text-sm ${
-                  status === "error"
-                    ? "border-[#d7a7a7] bg-[#fff7f7] text-[#8a2f2f]"
-                    : "border-[#cbd5df] bg-white text-[#2f6f73]"
-                }`}
-              >
-                {message}
-              </p>
-            ) : null}
           </>
         )}
       </section>
@@ -497,5 +508,70 @@ function createMemberExternalKey(value: string) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "")
       .slice(0, 80) || crypto.randomUUID()
+  );
+}
+
+function SetupStatusMessage({ message, status }: { message: string; status: SetupStatus }) {
+  return (
+    <p
+      className={`border px-3 py-3 text-sm ${
+        status === "error"
+          ? "border-[#d7a7a7] bg-[#fff7f7] text-[#8a2f2f]"
+          : "border-[#cbd5df] bg-white text-[#2f6f73]"
+      }`}
+    >
+      {message}
+    </p>
+  );
+}
+
+function getAuthRedirectTo() {
+  return `${window.location.origin}/setup`;
+}
+
+function getAuthRedirectResult(): { message: string; status: "error" | "success" } | null {
+  const params = getAuthRedirectParams();
+  const errorDescription = params.get("error_description");
+  const error = params.get("error");
+
+  if (errorDescription || error) {
+    return {
+      message:
+        errorDescription ??
+        `Supabase could not finish the email confirmation${error ? `: ${error}` : "."}`,
+      status: "error",
+    };
+  }
+
+  if (params.has("access_token") || params.has("refresh_token") || params.has("type")) {
+    return {
+      message: "Email confirmed.",
+      status: "success",
+    };
+  }
+
+  return null;
+}
+
+function getAuthRedirectParams() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  hashParams.forEach((value, key) => {
+    params.set(key, value);
+  });
+
+  return params;
+}
+
+function clearAuthRedirectFromUrl() {
+  if (typeof window.history?.replaceState !== "function") {
+    return;
+  }
+
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.origin}${window.location.pathname}`,
   );
 }
