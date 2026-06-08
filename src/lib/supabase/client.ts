@@ -21,9 +21,21 @@ export function createBrowserSupabaseClient() {
   const config = getBrowserSupabaseConfig();
 
   if (typeof window === "undefined") {
-    return createClient(config.supabaseUrl, config.supabaseAnonKey);
+    return createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        persistSession: true,
+      },
+    });
   }
 
-  browserClient ??= createClient(config.supabaseUrl, config.supabaseAnonKey);
+  browserClient ??= createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      persistSession: true,
+    },
+  });
   return browserClient;
 }

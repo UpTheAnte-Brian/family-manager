@@ -53,12 +53,19 @@ type HouseholdRow = {
   timezone: string;
 };
 
+type CreatedHouseholdRow = {
+  id?: string;
+  name?: string;
+  timezone?: string;
+};
+
 const emptyMemberDraft = createBlankMemberDraft("parent");
 
 export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberRow[]>([]);
@@ -68,12 +75,15 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
   const [message, setMessage] = useState("");
   const [activeStep, setActiveStep] = useState<SetupStepId | null>(null);
   const [isConfigured, setIsConfigured] = useState(true);
+  const [openStepOverride, setOpenStepOverride] = useState<number | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
   const hasAccount = Boolean(session);
   const hasHousehold = Boolean(selectedHousehold);
   const hasMembers = householdMembers.length > 0;
   const setupProgress = [hasAccount, hasHousehold, hasMembers].filter(Boolean).length;
+  const recommendedOpenStep = getRecommendedOpenStep(authReady, hasAccount, hasHousehold, hasMembers);
+  const openStep = openStepOverride ?? recommendedOpenStep;
   const adminMembers = useMemo(() => {
     if (householdMembers.length === 0) {
       return plannerMembers;
@@ -97,6 +107,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
         setSession(data.session);
         setEmail(data.session?.user.email ?? "");
+        setAuthReady(true);
 
         if (authRedirectResult) {
           setPassword("");
@@ -118,6 +129,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
           if (event === "SIGNED_IN") {
             setPassword("");
+            setOpenStepOverride(null);
             setRefreshVersion((current) => current + 1);
           }
         });
@@ -126,6 +138,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       } catch (error) {
         if (isActive) {
           setIsConfigured(false);
+          setAuthReady(true);
           setStatus("error");
           setMessage(error instanceof Error ? error.message : "Supabase is not configured.");
         }
@@ -206,6 +219,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
       setPassword("");
       setSession(data.session);
+      setOpenStepOverride(null);
 
       if (!data.session) {
         return `If this is a new account, check ${email} for the confirmation email. If this email is already confirmed, use Sign in.`;
@@ -230,6 +244,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
       setPassword("");
       setSession(data.session);
+      setOpenStepOverride(null);
       setRefreshVersion((current) => current + 1);
       return "Signed in.";
     }, "account");
@@ -246,6 +261,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
       setSession(null);
       setPassword("");
+      setOpenStepOverride(null);
       return "Signed out.";
     }, "account");
   }
@@ -263,8 +279,17 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
         throw new Error("Supabase did not return the created household.");
       }
 
+      setHouseholds((current) => upsertHouseholdSummary(current, {
+        id: householdId,
+        name: household.name ?? householdName.trim(),
+        role: "owner",
+        timezone: household.timezone ?? "America/Chicago",
+      }));
       setHouseholdName("");
       setSelectedHouseholdId(householdId);
+      setHouseholdMembers([]);
+      setMemberDrafts([emptyMemberDraft]);
+      setOpenStepOverride(3);
       await saveMemberDrafts(householdId);
       setRefreshVersion((current) => current + 1);
       return `Created ${household?.name ?? "household"}.`;
@@ -402,12 +427,23 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
           </div>
         ) : (
           <>
-            {message && !activeStep ? <SetupStatusMessage message={message} status={status} /> : null}
+            {!authReady ? (
+              <div className="border border-[#cbd5df] bg-white p-4 shadow-sm">
+                <h2 className="text-xl font-semibold">Checking account session</h2>
+                <p className="mt-2 text-sm leading-6 text-[#4c5965]">
+                  Restoring your Supabase login before showing setup steps.
+                </p>
+              </div>
+            ) : null}
+            {authReady && message && !activeStep ? <SetupStatusMessage message={message} status={status} /> : null}
 
-            <WorkflowStep
+            {authReady ? (
+              <>
+                <WorkflowStep
               complete={hasAccount}
-              defaultOpen={!hasAccount}
               index={1}
+              isOpen={openStep === 1}
+              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 1 : 0)}
               summary={session?.user.email ?? "Create or sign in to the household owner account."}
               title="Profile"
             >
@@ -475,9 +511,10 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
             <WorkflowStep
               complete={hasHousehold}
-              defaultOpen={hasAccount && !hasHousehold}
               disabled={!hasAccount}
               index={2}
+              isOpen={openStep === 2}
+              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 2 : 0)}
               summary={selectedHousehold ? selectedHousehold.name : "Create or select a household."}
               title="Household"
             >
@@ -530,9 +567,10 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
             <WorkflowStep
               complete={hasMembers}
-              defaultOpen={hasHousehold && !hasMembers}
               disabled={!hasHousehold}
               index={3}
+              isOpen={openStep === 3}
+              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 3 : 0)}
               summary={
                 hasMembers
                   ? `${householdMembers.length} member${householdMembers.length === 1 ? "" : "s"} saved`
@@ -556,9 +594,10 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
             <WorkflowStep
               complete={false}
-              defaultOpen={hasMembers}
               disabled={!hasMembers}
               index={4}
+              isOpen={openStep === 4}
+              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 4 : 0)}
               summary="Create reusable routines and apply them to household members."
               title="Routine templates"
             >
@@ -567,14 +606,17 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
             <WorkflowStep
               complete={false}
-              defaultOpen={hasMembers}
               disabled={!hasMembers}
               index={5}
+              isOpen={openStep === 5}
+              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 5 : 0)}
               summary="Connect SportsEngine, school, family, or manual calendar sources."
               title="Calendar imports"
             >
               <AdminCalendarSources members={adminMembers} />
             </WorkflowStep>
+              </>
+            ) : null}
           </>
         )}
       </section>
@@ -610,7 +652,7 @@ async function createHouseholdForCurrentUser(accessToken: string, householdName:
       throw new Error(getSupabaseErrorMessage(responseBody, response.status));
     }
 
-    return responseBody as { id?: string; name?: string } | null;
+    return responseBody as CreatedHouseholdRow | null;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("Creating the household timed out before Supabase responded. Try again.");
@@ -665,29 +707,68 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   }
 }
 
+function upsertHouseholdSummary(households: HouseholdSummary[], household: HouseholdSummary) {
+  const existingHousehold = households.find((current) => current.id === household.id);
+
+  if (!existingHousehold) {
+    return [...households, household].sort((first, second) => first.name.localeCompare(second.name));
+  }
+
+  return households.map((current) => (current.id === household.id ? household : current));
+}
+
+function getRecommendedOpenStep(
+  authReady: boolean,
+  hasAccount: boolean,
+  hasHousehold: boolean,
+  hasMembers: boolean,
+) {
+  if (!authReady) {
+    return 0;
+  }
+
+  if (!hasAccount) {
+    return 1;
+  }
+
+  if (!hasHousehold) {
+    return 2;
+  }
+
+  if (!hasMembers) {
+    return 3;
+  }
+
+  return 0;
+}
+
 function WorkflowStep({
   children,
   complete,
-  defaultOpen,
   disabled = false,
   index,
+  isOpen,
+  onOpenChange,
   summary,
   title,
 }: Readonly<{
   children: React.ReactNode;
   complete: boolean;
-  defaultOpen: boolean;
   disabled?: boolean;
   index: number;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   summary: string;
   title: string;
 }>) {
   return (
-    <details
-      className={`border border-[#cbd5df] bg-white shadow-sm ${disabled ? "opacity-60" : ""}`}
-      open={defaultOpen && !disabled}
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4">
+    <section className={`border border-[#cbd5df] bg-white shadow-sm ${disabled ? "opacity-60" : ""}`}>
+      <button
+        className="flex w-full cursor-pointer items-center justify-between gap-4 px-4 py-4 text-left"
+        disabled={disabled}
+        onClick={() => onOpenChange(!isOpen)}
+        type="button"
+      >
         <div className="flex min-w-0 items-center gap-3">
           <span
             className={`grid h-8 w-8 shrink-0 place-items-center border text-sm font-semibold ${
@@ -703,10 +784,12 @@ function WorkflowStep({
             <p className="mt-1 text-sm text-[#657381]">{disabled ? "Complete the previous step first." : summary}</p>
           </div>
         </div>
-        <span className="text-sm font-semibold text-[#1f6f8b]">{complete ? "Done" : "Open"}</span>
-      </summary>
-      {!disabled ? <div className="border-t border-[#d7e0e7] px-4 py-4">{children}</div> : null}
-    </details>
+        <span className="text-sm font-semibold text-[#1f6f8b]">
+          {isOpen && !disabled ? "Close" : complete ? "Done" : "Open"}
+        </span>
+      </button>
+      {isOpen && !disabled ? <div className="border-t border-[#d7e0e7] px-4 py-4">{children}</div> : null}
+    </section>
   );
 }
 
