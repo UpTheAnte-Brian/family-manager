@@ -814,7 +814,7 @@ function MemberDraftEditor({
     <div className="grid gap-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm leading-6 text-[#4c5965]">
-          These names become the durable member records used by dashboards, routines, chores, and calendar assignments.
+          These names and birthdays become the durable member records used by dashboards, routines, chores, and calendar assignments.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -846,7 +846,7 @@ function MemberDraftEditor({
       <ol className="grid gap-2">
         {drafts.map((member) => (
           <li
-            className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_120px_150px_auto]"
+            className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_auto]"
             key={member.tempId}
           >
             <label className="grid gap-1 text-sm">
@@ -863,6 +863,16 @@ function MemberDraftEditor({
                 className="border border-[#d7e0e7] bg-white px-3 py-2"
                 onChange={(event) => onUpdateMember(member.tempId, { displayName: event.target.value })}
                 value={member.displayName}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Birthday</span>
+              <input
+                className="border border-[#d7e0e7] bg-white px-3 py-2"
+                onChange={(event) => onUpdateMember(member.tempId, { birthDate: event.target.value })}
+                required
+                type="date"
+                value={member.birthDate}
               />
             </label>
             <label className="grid gap-1 text-sm">
@@ -1042,11 +1052,12 @@ function getValidMemberDrafts(members: MemberDraft[]) {
     .map((member) => ({
       ...member,
       displayName: member.displayName.trim(),
+      birthDate: member.birthDate.trim(),
       externalKey: member.externalKey.trim() || createMemberExternalKey(member.preferredName),
       preferredName: member.preferredName.trim(),
       relationship: member.relationship.trim(),
     }))
-    .filter((member) => member.preferredName && member.externalKey);
+    .filter((member) => member.preferredName && member.externalKey && member.birthDate);
 }
 
 function createMemberExternalKey(value: string) {

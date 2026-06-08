@@ -19,7 +19,8 @@
         "preferredName": "Brian",
         "displayName": "Me",
         "role": "parent",
-        "relationship": "dad"
+        "relationship": "dad",
+        "birthDate": "1985-06-10"
       },
       {
         "id": "angela",
@@ -27,6 +28,7 @@
         "displayName": "Mom",
         "role": "parent",
         "relationship": "mom",
+        "birthDate": "1986-04-24",
         "workFromHome": true,
         "focusWindows": [
           {

@@ -18,6 +18,7 @@ import {
   type CalendarTeamAssignment,
 } from "@/lib/calendar/team-tags";
 import type { AppliedCalendarEvent, CalendarSource } from "@/lib/calendar/types";
+import { getBirthdayCountdown, getBirthdayEventsForDate } from "@/lib/planner/birthdays";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -295,7 +296,8 @@ export function ProfileDashboard({
       event.assignedMemberIds ??
       getConfiguredEventAssignedMemberIds(event, calendarSources),
   }));
-  const effectiveEvents = [...configuredEvents, ...importedEvents];
+  const birthdayEvents = getBirthdayEventsForDate(members, displayedDay.date);
+  const effectiveEvents = [...configuredEvents, ...importedEvents, ...birthdayEvents];
   const events = getRelevantEvents(effectiveEvents, selectedMember);
   const otherEvents = getOtherEvents(effectiveEvents, events, selectedMember);
   const dayTypeLabel = getEffectiveDayTypeLabel(displayedDay.dayTypeLabel, effectiveEvents);
@@ -1025,6 +1027,8 @@ export function ProfileDashboard({
                 <Fact label="Schedule blocks" value={String(displayedDay.baseline.blocks.length)} />
               </dl>
             </section>
+
+            <BirthdayCountdownPanel member={selectedMember} referenceDate={displayedDay.date} />
 
             <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
               <h2 className="text-lg font-semibold">Operating Mode</h2>
@@ -2528,6 +2532,29 @@ function formatClockTime(time: string) {
   return `${hour}:${String(minuteValue).padStart(2, "0")} ${period}`;
 }
 
+function formatOrdinal(value: number) {
+  const remainder = value % 100;
+
+  if (remainder >= 11 && remainder <= 13) {
+    return `${value}th`;
+  }
+
+  switch (value % 10) {
+    case 1:
+      return `${value}st`;
+    case 2:
+      return `${value}nd`;
+    case 3:
+      return `${value}rd`;
+    default:
+      return `${value}th`;
+  }
+}
+
+function formatPlural(value: number, singular: string) {
+  return value === 1 ? singular : `${singular}s`;
+}
+
 function isClockTime(value: string) {
   return /^\d{2}:\d{2}$/.test(value);
 }
@@ -2538,6 +2565,35 @@ function Fact({ label, value }: { label: string; value: string }) {
       <dt className="font-semibold text-[#17202a]">{label}</dt>
       <dd className="mt-1 text-[#4c5965]">{value}</dd>
     </div>
+  );
+}
+
+function BirthdayCountdownPanel({
+  member,
+  referenceDate,
+}: {
+  member?: HouseholdMember;
+  referenceDate: string;
+}) {
+  const countdown = member ? getBirthdayCountdown(member, referenceDate) : null;
+
+  return (
+    <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
+      <h2 className="text-lg font-semibold">Birthday Countdown</h2>
+      {member && countdown ? (
+        <p className="mt-3 text-sm leading-6 text-[#4c5965]">
+          <span className="font-semibold text-[#17202a]">{member.preferredName}</span>
+          {countdown.daysUntilBirthday === 0
+            ? ` is ${countdown.age} years old today. Happy birthday!`
+            : ` is ${countdown.age} years old, ${countdown.daysUntilBirthday} ${formatPlural(
+                countdown.daysUntilBirthday,
+                "day",
+              )} until your ${formatOrdinal(countdown.nextAge)}!`}
+        </p>
+      ) : (
+        <EmptyState text="Add a birthday in household setup to show the countdown." />
+      )}
+    </section>
   );
 }
 

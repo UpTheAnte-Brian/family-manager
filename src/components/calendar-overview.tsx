@@ -18,6 +18,7 @@ import {
   type CalendarTeamAssignment,
 } from "@/lib/calendar/team-tags";
 import type { AppliedCalendarEvent, CalendarSource } from "@/lib/calendar/types";
+import { getBirthdayEventsForRange } from "@/lib/planner/birthdays";
 import type { FixedEvent, HouseholdMember } from "@/lib/planner/types";
 import { useLocalStorageState } from "@/lib/storage/local";
 
@@ -103,6 +104,10 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
     () => getConfiguredEventsAfterAppliedSourceReplacements(configuredEvents, calendarSources),
     [calendarSources, configuredEvents],
   );
+  const birthdayEvents = useMemo(
+    () => getBirthdayEventsForRange(members, getCalendarWindowStartsOn(season.startsOn), season.endsOn),
+    [members, season.endsOn, season.startsOn],
+  );
   const rows = useMemo(
     () =>
       [
@@ -136,6 +141,26 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
             }),
           };
         }),
+        ...birthdayEvents.map((event): CalendarEventRow => ({
+          id: event.id,
+          assignmentKey: getConfiguredEventAssignmentKey(event),
+          date: event.date,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          title: event.title,
+          category: event.category,
+          location: event.locationNote,
+          sourceLabel: "Birthdays",
+          sourceType: "configured",
+          teamKey: "",
+          assignedMemberIds: getEventAssignedMemberIds({
+            assignmentKey: getConfiguredEventAssignmentKey(event),
+            assignmentOverrides,
+            fallbackMemberIds: event.assignedMemberIds ?? [],
+            teamAssignments,
+            teamKey: "",
+          }),
+        })),
         ...appliedEvents.map((event): CalendarEventRow => {
           const appliedEventKey = getAppliedEventKey(event);
           const teamKey = getCalendarEventTeamKey(event);
@@ -170,7 +195,15 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
           `${second.date} ${second.startTime} ${second.title}`,
         ),
       ),
-    [appliedEvents, assignmentOverrides, calendarSources, displayConfiguredEvents, sourceLabels, teamAssignments],
+    [
+      appliedEvents,
+      assignmentOverrides,
+      birthdayEvents,
+      calendarSources,
+      displayConfiguredEvents,
+      sourceLabels,
+      teamAssignments,
+    ],
   );
   const filteredRows = rows.filter((event) => {
     const matchesMonth = event.date.startsWith(selectedMonth);
