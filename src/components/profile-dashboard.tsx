@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
@@ -192,6 +193,7 @@ export function ProfileDashboard({
   season,
   today,
 }: ProfileDashboardProps) {
+  const router = useRouter();
   const defaultMemberId = members[0]?.id ?? "";
   const defaultQuickAddAssignee = members[0]?.id ?? "";
   const initialState = useMemo<DashboardState>(
@@ -270,6 +272,7 @@ export function ProfileDashboard({
     choreConfig.routineChores,
     state.localRoutines,
     isRemoteHouseholdReady ? remoteRoutineItems : [],
+    isRemoteHouseholdReady,
     selectedMember,
     displayedDay,
   );
@@ -340,6 +343,12 @@ export function ProfileDashboard({
   const isTodaySelected = displayedDay.date === today.date;
   const groupedResponsibilityItems = groupResponsibilitiesByCategory(responsibilityItems);
   const householdId = household?.householdId;
+
+  useEffect(() => {
+    if (householdStatus === "signed-out" || householdStatus === "unconfigured") {
+      router.replace("/admin");
+    }
+  }, [householdStatus, router]);
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready") {
@@ -783,6 +792,14 @@ export function ProfileDashboard({
           : item,
       ),
     }));
+  }
+
+  if (householdStatus === "loading") {
+    return <DashboardSetupGate title="Checking household setup" />;
+  }
+
+  if (householdStatus === "signed-out" || householdStatus === "unconfigured") {
+    return <DashboardSetupGate title="Household setup required" />;
   }
 
   return (
@@ -1338,6 +1355,7 @@ function getRoutineItems(
   routines: RoutineChore[],
   localRoutines: LocalRoutineItem[],
   remoteRoutines: DashboardRoutineItem[],
+  remoteRoutinesAreAuthoritative: boolean,
   member: HouseholdMember,
   today: TodayContext,
 ): DashboardRoutineItem[] {
@@ -1371,8 +1389,9 @@ function getRoutineItems(
     }));
 
   const remoteItems = remoteRoutines.filter((routine) => routine.id.startsWith(`${member.id}:`));
+  const baseRoutineItems = remoteRoutinesAreAuthoritative ? remoteItems : configuredItems;
 
-  return [...remoteItems, ...configuredItems, ...localItems].sort((first, second) =>
+  return [...baseRoutineItems, ...localItems].sort((first, second) =>
     compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
   );
 }
@@ -2565,6 +2584,23 @@ function Fact({ label, value }: { label: string; value: string }) {
       <dt className="font-semibold text-[#17202a]">{label}</dt>
       <dd className="mt-1 text-[#4c5965]">{value}</dd>
     </div>
+  );
+}
+
+function DashboardSetupGate({ title }: { title: string }) {
+  return (
+    <main className="min-h-screen bg-[#eef2f6] px-5 py-10 text-[#17202a] sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2c7a7b]">Setup</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-normal">{title}</h1>
+        <p className="mt-3 text-sm leading-6 text-[#4c5965]">
+          Sign in and select a household before using the dashboard.
+        </p>
+        <Link className="mt-5 inline-flex border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white" href="/admin">
+          Go to setup
+        </Link>
+      </section>
+    </main>
   );
 }
 

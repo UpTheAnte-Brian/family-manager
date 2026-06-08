@@ -61,7 +61,7 @@ export function useCurrentHousehold() {
 
       if (!membership) {
         setHousehold(null);
-        setStatus("signed-out");
+        setStatus("unconfigured");
         return;
       }
 
