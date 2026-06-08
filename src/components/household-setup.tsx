@@ -9,6 +9,7 @@ import type { HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 type SetupStatus = "idle" | "loading" | "success" | "error";
+type SetupStepId = "account" | "household" | "members";
 
 type HouseholdSetupProps = {
   plannerMembers: HouseholdMember[];
@@ -65,6 +66,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
   const [memberDrafts, setMemberDrafts] = useState<MemberDraft[]>([emptyMemberDraft]);
   const [status, setStatus] = useState<SetupStatus>("idle");
   const [message, setMessage] = useState("");
+  const [activeStep, setActiveStep] = useState<SetupStepId | null>(null);
   const [isConfigured, setIsConfigured] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
@@ -99,6 +101,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
         if (authRedirectResult) {
           setPassword("");
           setStatus(authRedirectResult.status);
+          setActiveStep("account");
           setMessage(
             authRedirectResult.status === "error"
               ? authRedirectResult.message
@@ -210,7 +213,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
       setRefreshVersion((current) => current + 1);
       return "Account created.";
-    });
+    }, "account");
   }
 
   async function signIn() {
@@ -229,7 +232,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       setSession(data.session);
       setRefreshVersion((current) => current + 1);
       return "Signed in.";
-    });
+    }, "account");
   }
 
   async function signOut() {
@@ -244,7 +247,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       setSession(null);
       setPassword("");
       return "Signed out.";
-    });
+    }, "account");
   }
 
   async function createHousehold() {
@@ -271,7 +274,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       await saveMemberDrafts(householdId);
       setRefreshVersion((current) => current + 1);
       return `Created ${household?.name ?? "household"}.`;
-    });
+    }, "household");
   }
 
   async function saveMembers() {
@@ -283,7 +286,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       await saveMemberDrafts(selectedHouseholdId);
       setRefreshVersion((current) => current + 1);
       return "Family members saved.";
-    });
+    }, "members");
   }
 
   async function saveMemberDrafts(householdId: string) {
@@ -315,7 +318,8 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
     }
   }
 
-  async function runSetupAction(action: () => Promise<string>) {
+  async function runSetupAction(action: () => Promise<string>, step: SetupStepId) {
+    setActiveStep(step);
     setStatus("loading");
     setMessage("");
 
@@ -404,7 +408,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
           </div>
         ) : (
           <>
-            {message ? <SetupStatusMessage message={message} status={status} /> : null}
+            {message && !activeStep ? <SetupStatusMessage message={message} status={status} /> : null}
 
             <WorkflowStep
               complete={hasAccount}
@@ -470,6 +474,9 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
                   </div>
                 </div>
               )}
+              {activeStep === "account" && message ? (
+                <SetupStatusMessage message={message} status={status} />
+              ) : null}
             </WorkflowStep>
 
             <WorkflowStep
@@ -519,8 +526,11 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
                   onClick={createHousehold}
                   type="button"
                 >
-                  Create household
+                  {status === "loading" && activeStep === "household" ? "Creating..." : "Create household"}
                 </button>
+                {activeStep === "household" && message ? (
+                  <SetupStatusMessage message={message} status={status} />
+                ) : null}
               </div>
             </WorkflowStep>
 
@@ -545,6 +555,9 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
                 onUpdateMember={updateMember}
                 status={status}
               />
+              {activeStep === "members" && message ? (
+                <SetupStatusMessage message={message} status={status} />
+              ) : null}
             </WorkflowStep>
 
             <WorkflowStep
