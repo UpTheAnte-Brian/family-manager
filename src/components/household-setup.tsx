@@ -6,7 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
 import type { HouseholdMember } from "@/lib/planner/types";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
 
 type SetupStatus = "idle" | "loading" | "success" | "error";
 type SetupStepId = "account" | "household" | "members";
@@ -208,7 +208,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       setSession(data.session);
 
       if (!data.session) {
-        return `Account created. Check ${email} for the confirmation email, then return here and sign in.`;
+        return `If this is a new account, check ${email} for the confirmation email. If this email is already confirmed, use Sign in.`;
       }
 
       setRefreshVersion((current) => current + 1);
@@ -252,17 +252,11 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
 
   async function createHousehold() {
     await runSetupAction(async () => {
-      const supabase = createBrowserSupabaseClient();
-      const { data, error } = await supabase.rpc("create_household_for_current_user", {
-        household_name: householdName,
-        household_timezone: "America/Chicago",
-      });
-
-      if (error) {
-        throw error;
+      if (!session?.access_token) {
+        throw new Error("Sign in again before creating a household.");
       }
 
-      const household = data as { id?: string; name?: string } | null;
+      const household = await createHouseholdForCurrentUser(session.access_token, householdName);
       const householdId = household?.id;
 
       if (!householdId) {
@@ -324,7 +318,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
     setMessage("");
 
     try {
-      const nextMessage = await action();
+      const nextMessage = await withTimeout(action(), 20000);
       setStatus("success");
       setMessage(nextMessage);
     } catch (error) {
@@ -586,6 +580,89 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       </section>
     </main>
   );
+}
+
+async function createHouseholdForCurrentUser(accessToken: string, householdName: string) {
+  const { supabaseAnonKey, supabaseUrl } = getBrowserSupabaseConfig();
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/create_household_for_current_user`, {
+      body: JSON.stringify({
+        household_name: householdName,
+        household_timezone: "America/Chicago",
+      }),
+      headers: {
+        accept: "application/json",
+        apikey: supabaseAnonKey,
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    const responseBody = responseText ? parseJsonResponse(responseText) : null;
+
+    if (!response.ok) {
+      throw new Error(getSupabaseErrorMessage(responseBody, response.status));
+    }
+
+    return responseBody as { id?: string; name?: string } | null;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Creating the household timed out before Supabase responded. Try again.");
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function parseJsonResponse(responseText: string): unknown {
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return responseText;
+  }
+}
+
+function getSupabaseErrorMessage(responseBody: unknown, status: number) {
+  if (responseBody && typeof responseBody === "object" && "message" in responseBody) {
+    const message = (responseBody as { message?: unknown }).message;
+
+    if (typeof message === "string" && message) {
+      return message;
+    }
+  }
+
+  if (typeof responseBody === "string" && responseBody) {
+    return responseBody;
+  }
+
+  return `Supabase returned HTTP ${status} while creating the household.`;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  let timeoutId: number | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          reject(new Error("Setup request timed out before it finished. Try again."));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 }
 
 function WorkflowStep({
