@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { getAllowedCalendarFetchUrl, POST } from "./route";
+import { compactIcsCalendarForImport, getAllowedCalendarFetchUrl, POST } from "./route";
 
 const originalFetch = globalThis.fetch;
 
@@ -184,6 +184,42 @@ describe("Calendar preview route", () => {
     assert.equal(response.status, 200);
     assert.equal(body.eventCount, 21);
     assert.equal(body.events.length, 21);
+  });
+
+  it("compacts old one-off calendar events before parsing", () => {
+    const calendarText = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "UID:old-event",
+      "DTSTART:20240101T140000Z",
+      "DTEND:20240101T150000Z",
+      "SUMMARY:Old appointment",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:current-event",
+      "DTSTART:20260603T140000Z",
+      "DTEND:20260603T150000Z",
+      "SUMMARY:Current appointment",
+      "END:VEVENT",
+      "BEGIN:VEVENT",
+      "UID:recurring-event",
+      "DTSTART:20240101T140000Z",
+      "DTEND:20240101T150000Z",
+      "RRULE:FREQ=YEARLY",
+      "SUMMARY:Recurring appointment",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+
+    const compacted = compactIcsCalendarForImport(calendarText, {
+      startsOn: "2026-05-01",
+      endsOn: "2026-08-31",
+    });
+
+    assert.doesNotMatch(compacted, /Old appointment/);
+    assert.match(compacted, /Current appointment/);
+    assert.match(compacted, /Recurring appointment/);
   });
 
   it("includes the month before the configured season starts", async () => {

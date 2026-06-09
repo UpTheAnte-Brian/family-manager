@@ -9,7 +9,7 @@ type PreviewRequest = {
 
 type AddressResolver = (hostname: string) => Promise<string[]>;
 
-const maxCalendarBytes = 512 * 1024;
+const maxCalendarBytes = 5 * 1024 * 1024;
 const maxRedirects = 2;
 const previewExpansionLimit = 1000;
 
@@ -60,13 +60,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const startsOn = getCalendarImportStartsOn(plannerData.season.startsOn);
+  const calendarImportText = compactIcsCalendarForImport(calendarText, {
+    startsOn,
+    endsOn: plannerData.season.endsOn,
+  });
   let events;
 
   try {
     const { parseIcsEvents } = await import("@/lib/calendar/ics");
-    events = parseIcsEvents(calendarText, {
+    events = parseIcsEvents(calendarImportText, {
       sourceId,
-      startsOn: getCalendarImportStartsOn(plannerData.season.startsOn),
+      startsOn,
       endsOn: plannerData.season.endsOn,
       maxExpandedEvents: previewExpansionLimit,
     });
@@ -91,6 +96,92 @@ function getCalendarImportStartsOn(seasonStartsOn: string) {
   const startsOn = new Date(year, month - 2, 1);
 
   return `${startsOn.getFullYear()}-${String(startsOn.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+export function compactIcsCalendarForImport(
+  calendarText: string,
+  window: { startsOn: string; endsOn: string },
+) {
+  const lines = unfoldIcsLines(calendarText);
+  const outputLines: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (line.toUpperCase() !== "BEGIN:VEVENT") {
+      outputLines.push(line);
+      continue;
+    }
+
+    const eventLines = [line];
+
+    while (index + 1 < lines.length) {
+      index += 1;
+      eventLines.push(lines[index]);
+
+      if (lines[index].toUpperCase() === "END:VEVENT") {
+        break;
+      }
+    }
+
+    if (shouldKeepEventForImport(eventLines, window)) {
+      outputLines.push(...eventLines);
+    }
+  }
+
+  return outputLines.join("\r\n");
+}
+
+function unfoldIcsLines(calendarText: string) {
+  const rawLines = calendarText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const lines: string[] = [];
+
+  for (const rawLine of rawLines) {
+    if (/^[ \t]/.test(rawLine) && lines.length > 0) {
+      lines[lines.length - 1] += rawLine.slice(1);
+      continue;
+    }
+
+    lines.push(rawLine);
+  }
+
+  return lines;
+}
+
+function shouldKeepEventForImport(
+  eventLines: string[],
+  window: { startsOn: string; endsOn: string },
+) {
+  if (eventLines.some((line) => /^RRULE[:;]/i.test(line) || /^RDATE[:;]/i.test(line))) {
+    return true;
+  }
+
+  const startDate = getIcsPropertyDate(eventLines, "DTSTART");
+
+  if (!startDate) {
+    return true;
+  }
+
+  const endDate = getIcsPropertyDate(eventLines, "DTEND") ?? startDate;
+
+  return startDate <= window.endsOn && endDate >= window.startsOn;
+}
+
+function getIcsPropertyDate(eventLines: string[], propertyName: string) {
+  const line = eventLines.find((candidate) => {
+    const upperCandidate = candidate.toUpperCase();
+
+    return upperCandidate.startsWith(`${propertyName}:`) || upperCandidate.startsWith(`${propertyName};`);
+  });
+
+  if (!line) {
+    return null;
+  }
+
+  const value = line.split(":").slice(1).join(":");
+  const match = /^(\d{4})(\d{2})(\d{2})/.exec(value);
+
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
 async function readPreviewRequest(request: Request): Promise<PreviewRequest | null> {
@@ -171,7 +262,9 @@ async function readBoundedResponseText(response: Response, maxBytes: number) {
 
     if (bytesRead > maxBytes) {
       await reader.cancel();
-      throw new Error("Calendar response is too large.");
+      throw new Error(
+        "Calendar response is too large. Use a smaller dedicated shared calendar, or remove old history from this calendar feed.",
+      );
     }
 
     chunks.push(decoder.decode(value, { stream: true }));
