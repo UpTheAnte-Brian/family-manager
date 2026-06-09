@@ -31,6 +31,17 @@ const defaultFormState: CalendarFormState = {
   notes: "",
 };
 const previewDisplayLimit = 20;
+const calendarSourceGuides: Record<CalendarSourceKind, string> = {
+  "apple-calendar":
+    "Use an iCloud Public Calendar link from Calendar sharing. Exported .ics files are one-time snapshots and will not stay updated.",
+  "ics-url":
+    "Use any public subscription feed, including a Google Calendar Secret address in iCal format or a webcal:// link.",
+  "manual-upload": "Manual app events are created from the dashboard, not added here.",
+  "school-calendar":
+    "Use the school's public iCal, ICS, or webcal subscription link so schedule changes can be re-applied later.",
+  sportsengine:
+    "Use the Subscribe to iCal link from the team or tournament page. webcal:// links are accepted here.",
+};
 
 export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
   const {
@@ -369,6 +380,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
               placeholder="https://... or webcal://..."
               value={form.url}
             />
+            <span className="text-xs leading-5 text-[#657381]">{calendarSourceGuides[form.kind]}</span>
           </label>
 
           <fieldset className="grid gap-2 text-sm">
