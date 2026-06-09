@@ -58,6 +58,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
   } = useCalendarFeed();
   const [form, setForm] = useState(defaultFormState);
   const [previewBySource, setPreviewBySource] = useState<Record<string, CalendarPreviewResult>>({});
+  const [applyingSourceId, setApplyingSourceId] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,7 +138,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
     });
   }
 
-  function applyPreview(source: CalendarSource) {
+  async function applyPreview(source: CalendarSource) {
     const preview = previewBySource[source.id];
 
     if (!preview) {
@@ -158,19 +159,38 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       lastSyncMessage: `Applied ${nextEvents.length} event${nextEvents.length === 1 ? "" : "s"} to the ${usesSupabase ? "Supabase" : "local"} dashboard feed.`,
     };
 
-    setAppliedEvents((current) => [
-      ...current.filter((event) => event.sourceId !== source.id),
-      ...nextEvents,
-    ]);
-    setSources((current) =>
-      current.map((candidate) =>
-        candidate.id === source.id ? nextSource : candidate,
-      ),
-    );
-    void runCalendarAction(async () => {
+    setApplyingSourceId(source.id);
+
+    try {
       await applySourceEvents(nextSource, nextEvents);
-      await saveSource(nextSource);
-    });
+      setAppliedEvents((current) => [
+        ...current.filter((event) => event.sourceId !== source.id),
+        ...nextEvents,
+      ]);
+      setSources((current) =>
+        current.map((candidate) =>
+          candidate.id === source.id ? nextSource : candidate,
+        ),
+      );
+    } catch (error) {
+      const lastSyncedAt = new Date().toISOString();
+      const lastSyncMessage = error instanceof Error ? error.message : "Calendar apply failed.";
+      const errorSource = {
+        ...source,
+        lastSyncedAt,
+        lastSyncStatus: "error" as const,
+        lastSyncMessage,
+      };
+
+      setSources((current) =>
+        current.map((candidate) =>
+          candidate.id === source.id ? errorSource : candidate,
+        ),
+      );
+      void saveCalendarSource(errorSource);
+    } finally {
+      setApplyingSourceId(null);
+    }
   }
 
   function toggleSourceMember(sourceId: string, memberId: string) {
@@ -482,11 +502,13 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                     </button>
                     <button
                       className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      disabled={!previewBySource[source.id]}
-                      onClick={() => applyPreview(source)}
+                      disabled={!previewBySource[source.id] || applyingSourceId === source.id}
+                      onClick={() => {
+                        void applyPreview(source);
+                      }}
                       type="button"
                     >
-                      Apply
+                      {applyingSourceId === source.id ? "Applying..." : "Apply"}
                     </button>
                     <button
                       className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#33414f]"

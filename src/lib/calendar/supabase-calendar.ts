@@ -52,6 +52,14 @@ type CalendarEventRow = {
   } | null;
 };
 
+type RemoteCalendarFeedCache = {
+  appliedEvents: AppliedCalendarEvent[];
+  errorMessage: string;
+  householdId?: string;
+  sources: CalendarSource[];
+  status: CalendarFeedStatus;
+};
+
 export type ManualCalendarEventInput = {
   title: string;
   date: string;
@@ -64,6 +72,12 @@ export type ManualCalendarEventInput = {
 
 const emptyCalendarSources: CalendarSource[] = [];
 const emptyAppliedEvents: AppliedCalendarEvent[] = [];
+let remoteCalendarFeedCache: RemoteCalendarFeedCache = {
+  appliedEvents: emptyAppliedEvents,
+  errorMessage: "",
+  sources: emptyCalendarSources,
+  status: "loading",
+};
 const manualCalendarSource: CalendarSource = {
   id: "manual-household",
   label: "Manual household events",
@@ -85,15 +99,83 @@ export function useCalendarFeed() {
     emptyAppliedEvents,
   );
   const { household, status: householdStatus } = useCurrentHousehold();
-  const [remoteSources, setRemoteSources] = useState<CalendarSource[]>([]);
-  const [remoteAppliedEvents, setRemoteAppliedEvents] = useState<AppliedCalendarEvent[]>([]);
-  const [status, setStatus] = useState<CalendarFeedStatus>("loading");
-  const [errorMessage, setErrorMessage] = useState("");
+  const cachedRemoteFeed =
+    household?.householdId && remoteCalendarFeedCache.householdId === household.householdId
+      ? remoteCalendarFeedCache
+      : null;
+  const [remoteSources, setRemoteSources] = useState<CalendarSource[]>(
+    cachedRemoteFeed?.sources ?? emptyCalendarSources,
+  );
+  const [remoteAppliedEvents, setRemoteAppliedEvents] = useState<AppliedCalendarEvent[]>(
+    cachedRemoteFeed?.appliedEvents ?? emptyAppliedEvents,
+  );
+  const [status, setStatus] = useState<CalendarFeedStatus>(cachedRemoteFeed?.status ?? "loading");
+  const [errorMessage, setErrorMessage] = useState(cachedRemoteFeed?.errorMessage ?? "");
 
   const householdId = household?.householdId;
   const usesSupabase = Boolean(householdId);
-  const sources = usesSupabase ? remoteSources : localSources;
-  const appliedEvents = usesSupabase ? remoteAppliedEvents : localAppliedEvents;
+  const shouldUseRemoteFeed = usesSupabase || householdStatus === "loading";
+  const sources = shouldUseRemoteFeed ? remoteSources : localSources;
+  const appliedEvents = shouldUseRemoteFeed ? remoteAppliedEvents : localAppliedEvents;
+
+  const cacheRemoteFeed = useCallback(
+    (nextValue: {
+      appliedEvents?: AppliedCalendarEvent[];
+      errorMessage?: string;
+      sources?: CalendarSource[];
+      status?: CalendarFeedStatus;
+    }) => {
+      if (!householdId) {
+        return;
+      }
+
+      const previous =
+        remoteCalendarFeedCache.householdId === householdId
+          ? remoteCalendarFeedCache
+          : {
+              appliedEvents: emptyAppliedEvents,
+              errorMessage: "",
+              sources: emptyCalendarSources,
+              status: "loading" as const,
+            };
+
+      remoteCalendarFeedCache = {
+        appliedEvents: nextValue.appliedEvents ?? previous.appliedEvents,
+        errorMessage: nextValue.errorMessage ?? previous.errorMessage,
+        householdId,
+        sources: nextValue.sources ?? previous.sources,
+        status: nextValue.status ?? previous.status,
+      };
+    },
+    [householdId],
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!householdId) {
+        setRemoteSources(emptyCalendarSources);
+        setRemoteAppliedEvents(emptyAppliedEvents);
+        return;
+      }
+
+      if (remoteCalendarFeedCache.householdId === householdId) {
+        setRemoteSources(remoteCalendarFeedCache.sources);
+        setRemoteAppliedEvents(remoteCalendarFeedCache.appliedEvents);
+        setStatus(remoteCalendarFeedCache.status);
+        setErrorMessage(remoteCalendarFeedCache.errorMessage);
+        return;
+      }
+
+      setRemoteSources(emptyCalendarSources);
+      setRemoteAppliedEvents(emptyAppliedEvents);
+      setStatus("loading");
+      setErrorMessage("");
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [householdId]);
 
   const refresh = useCallback(async () => {
     if (!householdId) {
@@ -103,8 +185,12 @@ export function useCalendarFeed() {
     }
 
     try {
-      setStatus("loading");
+      setStatus(remoteAppliedEvents.length > 0 || remoteSources.length > 0 ? "supabase" : "loading");
       setErrorMessage("");
+      cacheRemoteFeed({
+        errorMessage: "",
+        status: remoteAppliedEvents.length > 0 || remoteSources.length > 0 ? "supabase" : "loading",
+      });
 
       const supabase = createBrowserSupabaseClient();
       const { data: sourceRows, error: sourceError } = await supabase
@@ -134,14 +220,34 @@ export function useCalendarFeed() {
         throw eventError;
       }
 
-      setRemoteSources((sourceRows ?? []).map(mapSourceRow));
-      setRemoteAppliedEvents((eventRows ?? []).map(mapEventRow));
+      const nextSources = (sourceRows ?? []).map(mapSourceRow);
+      const nextAppliedEvents = (eventRows ?? []).map(mapEventRow);
+
+      setRemoteSources(nextSources);
+      setRemoteAppliedEvents(nextAppliedEvents);
       setStatus("supabase");
+      cacheRemoteFeed({
+        appliedEvents: nextAppliedEvents,
+        errorMessage: "",
+        sources: nextSources,
+        status: "supabase",
+      });
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Could not load calendar data.");
+      const nextErrorMessage = error instanceof Error ? error.message : "Could not load calendar data.";
+      setErrorMessage(nextErrorMessage);
+      cacheRemoteFeed({
+        errorMessage: nextErrorMessage,
+        status: "error",
+      });
     }
-  }, [householdId, householdStatus]);
+  }, [
+    cacheRemoteFeed,
+    householdId,
+    householdStatus,
+    remoteAppliedEvents.length,
+    remoteSources.length,
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -160,9 +266,13 @@ export function useCalendarFeed() {
         return;
       }
 
-      setRemoteSources((current) => resolveStoredValue(nextValue, current));
+      setRemoteSources((current) => {
+        const resolvedSources = resolveStoredValue(nextValue, current);
+        cacheRemoteFeed({ sources: resolvedSources });
+        return resolvedSources;
+      });
     },
-    [setLocalSources, usesSupabase],
+    [cacheRemoteFeed, setLocalSources, usesSupabase],
   );
 
   const setAppliedEvents = useCallback(
@@ -172,9 +282,13 @@ export function useCalendarFeed() {
         return;
       }
 
-      setRemoteAppliedEvents((current) => resolveStoredValue(nextValue, current));
+      setRemoteAppliedEvents((current) => {
+        const resolvedAppliedEvents = resolveStoredValue(nextValue, current);
+        cacheRemoteFeed({ appliedEvents: resolvedAppliedEvents });
+        return resolvedAppliedEvents;
+      });
     },
-    [setLocalAppliedEvents, usesSupabase],
+    [cacheRemoteFeed, setLocalAppliedEvents, usesSupabase],
   );
 
   const saveSource = useCallback(
@@ -225,6 +339,10 @@ export function useCalendarFeed() {
 
       setRemoteSources((current) => current.filter((source) => source.id !== sourceId));
       setRemoteAppliedEvents((current) => current.filter((event) => event.sourceId !== sourceId));
+      cacheRemoteFeed({
+        appliedEvents: remoteAppliedEvents.filter((event) => event.sourceId !== sourceId),
+        sources: remoteSources.filter((source) => source.id !== sourceId),
+      });
 
       const supabase = createBrowserSupabaseClient();
       const { data: sourceRow, error: sourceError } = await supabase
@@ -260,7 +378,7 @@ export function useCalendarFeed() {
         throw error;
       }
     },
-    [householdId, setLocalAppliedEvents, setLocalSources],
+    [cacheRemoteFeed, householdId, remoteAppliedEvents, remoteSources, setLocalAppliedEvents, setLocalSources],
   );
 
   const applySourceEvents = useCallback(
@@ -307,12 +425,16 @@ export function useCalendarFeed() {
         }
       }
 
-      setRemoteAppliedEvents((current) => [
-        ...current.filter((event) => event.sourceId !== source.id),
-        ...nextEvents,
-      ]);
+      setRemoteAppliedEvents((current) => {
+        const nextAppliedEvents = [
+          ...current.filter((event) => event.sourceId !== source.id),
+          ...nextEvents,
+        ];
+        cacheRemoteFeed({ appliedEvents: nextAppliedEvents });
+        return nextAppliedEvents;
+      });
     },
-    [householdId, saveSource, setLocalAppliedEvents],
+    [cacheRemoteFeed, householdId, saveSource, setLocalAppliedEvents],
   );
 
   const saveManualEvent = useCallback(
@@ -364,14 +486,20 @@ export function useCalendarFeed() {
         throw error;
       }
 
-      setRemoteSources((current) =>
-        current.some((source) => source.id === manualCalendarSource.id)
+      setRemoteSources((current) => {
+        const nextSources = current.some((source) => source.id === manualCalendarSource.id)
           ? current
-          : [...current, manualCalendarSource],
-      );
-      setRemoteAppliedEvents((current) => [...current, event]);
+          : [...current, manualCalendarSource];
+        cacheRemoteFeed({ sources: nextSources });
+        return nextSources;
+      });
+      setRemoteAppliedEvents((current) => {
+        const nextAppliedEvents = [...current, event];
+        cacheRemoteFeed({ appliedEvents: nextAppliedEvents });
+        return nextAppliedEvents;
+      });
     },
-    [householdId, saveSource, setLocalAppliedEvents, setLocalSources],
+    [cacheRemoteFeed, householdId, saveSource, setLocalAppliedEvents, setLocalSources],
   );
 
   return useMemo(

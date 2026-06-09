@@ -16,6 +16,12 @@ type HouseholdRow = {
   timezone: string;
 };
 
+type HouseholdSnapshot = {
+  errorMessage: string;
+  household: CurrentHousehold | null;
+  status: HouseholdStatus;
+};
+
 export type CurrentHousehold = {
   householdId: string;
   householdName: string;
@@ -23,15 +29,33 @@ export type CurrentHousehold = {
   role: string;
 };
 
+let currentHouseholdSnapshot: HouseholdSnapshot = {
+  errorMessage: "",
+  household: null,
+  status: "loading",
+};
+
 export function useCurrentHousehold() {
-  const [household, setHousehold] = useState<CurrentHousehold | null>(null);
-  const [status, setStatus] = useState<HouseholdStatus>("loading");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [household, setHousehold] = useState<CurrentHousehold | null>(
+    currentHouseholdSnapshot.household,
+  );
+  const [status, setStatus] = useState<HouseholdStatus>(currentHouseholdSnapshot.status);
+  const [errorMessage, setErrorMessage] = useState(currentHouseholdSnapshot.errorMessage);
+
+  const updateSnapshot = useCallback((snapshot: HouseholdSnapshot) => {
+    currentHouseholdSnapshot = snapshot;
+    setHousehold(snapshot.household);
+    setStatus(snapshot.status);
+    setErrorMessage(snapshot.errorMessage);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
-      setStatus("loading");
-      setErrorMessage("");
+      updateSnapshot({
+        ...currentHouseholdSnapshot,
+        errorMessage: "",
+        status: currentHouseholdSnapshot.household ? "ready" : "loading",
+      });
 
       const supabase = createBrowserSupabaseClient();
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -41,8 +65,11 @@ export function useCurrentHousehold() {
       }
 
       if (!sessionData.session) {
-        setHousehold(null);
-        setStatus("signed-out");
+        updateSnapshot({
+          errorMessage: "",
+          household: null,
+          status: "signed-out",
+        });
         return;
       }
 
@@ -60,8 +87,11 @@ export function useCurrentHousehold() {
       const membership = memberships?.[0];
 
       if (!membership) {
-        setHousehold(null);
-        setStatus("unconfigured");
+        updateSnapshot({
+          errorMessage: "",
+          household: null,
+          status: "unconfigured",
+        });
         return;
       }
 
@@ -75,26 +105,33 @@ export function useCurrentHousehold() {
         throw householdError;
       }
 
-      setHousehold({
-        householdId: householdRow.id,
-        householdName: householdRow.name,
-        timezone: householdRow.timezone,
-        role: membership.role,
+      updateSnapshot({
+        errorMessage: "",
+        household: {
+          householdId: householdRow.id,
+          householdName: householdRow.name,
+          timezone: householdRow.timezone,
+          role: membership.role,
+        },
+        status: "ready",
       });
-      setStatus("ready");
     } catch (error) {
-      setHousehold(null);
-
       if (error instanceof Error && error.message.includes("NEXT_PUBLIC_SUPABASE")) {
-        setStatus("unconfigured");
-        setErrorMessage(error.message);
+        updateSnapshot({
+          errorMessage: error.message,
+          household: null,
+          status: "unconfigured",
+        });
         return;
       }
 
-      setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Could not load household.");
+      updateSnapshot({
+        errorMessage: error instanceof Error ? error.message : "Could not load household.",
+        household: null,
+        status: "error",
+      });
     }
-  }, []);
+  }, [updateSnapshot]);
 
   useEffect(() => {
     let isActive = true;
