@@ -20,6 +20,7 @@ type RemoteHouseholdMemberRow = {
 };
 
 type RoutineTemplateMetadata = {
+  assignedRemoteMemberId?: string;
   kind?: string;
   routineTemplateId?: string;
   routineTemplateName?: string;
@@ -45,8 +46,11 @@ type RoutineTemplateSummary = {
   id: string;
   name: string;
   stepCount: number;
+  assignedMemberIds: string[];
   assignedMemberNames: string[];
   actionItemIds: string[];
+  daysOfWeek: DayOfWeek[];
+  steps: RoutineStepDraft[];
 };
 
 type RoutineStepDraft = {
@@ -69,11 +73,15 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
   const [selectedMemberIds, setSelectedMemberIds] = useState(() => childMembers.map((member) => member.id));
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(weekdayOptions);
   const [steps, setSteps] = useState<RoutineStepDraft[]>(defaultRoutineSteps);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const householdId = household?.householdId;
+  const editingTemplate = editingTemplateId
+    ? templates.find((template) => template.id === editingTemplateId)
+    : undefined;
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready") {
@@ -161,14 +169,31 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
     setStatusMessage("");
 
     try {
-      await createRoutineTemplate({
-        daysOfWeek: selectedDays,
-        householdId,
-        memberIds: selectedMemberIds.map((memberId) => remoteMemberIdByExternalKey.get(memberId)!),
-        steps: cleanSteps,
-        templateName: cleanName,
-      });
-      setStatusMessage("Routine template saved.");
+      const remoteMemberIds = selectedMemberIds.map((memberId) => remoteMemberIdByExternalKey.get(memberId)!);
+
+      if (editingTemplate) {
+        await updateRoutineTemplate({
+          actionItemIds: editingTemplate.actionItemIds,
+          daysOfWeek: selectedDays,
+          householdId,
+          memberIds: remoteMemberIds,
+          steps: cleanSteps,
+          templateId: editingTemplate.id,
+          templateName: cleanName,
+        });
+        setStatusMessage(`Updated ${cleanName}.`);
+      } else {
+        await createRoutineTemplate({
+          daysOfWeek: selectedDays,
+          householdId,
+          memberIds: remoteMemberIds,
+          steps: cleanSteps,
+          templateName: cleanName,
+        });
+        setStatusMessage("Routine template saved.");
+      }
+
+      resetRoutineTemplateForm();
       setRefreshVersion((current) => current + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not save routine template.");
@@ -190,11 +215,32 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
         actionItemIds: template.actionItemIds,
         householdId,
       });
+      if (editingTemplateId === template.id) {
+        resetRoutineTemplateForm();
+      }
       setStatusMessage(`Deleted ${template.name}.`);
       setRefreshVersion((current) => current + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not delete routine template.");
     }
+  }
+
+  function editTemplate(template: RoutineTemplateSummary) {
+    setEditingTemplateId(template.id);
+    setTemplateName(template.name);
+    setSelectedMemberIds(template.assignedMemberIds);
+    setSelectedDays(template.daysOfWeek.length > 0 ? template.daysOfWeek : weekdayOptions);
+    setSteps(template.steps.length > 0 ? template.steps.map((step) => ({ ...step })) : defaultRoutineSteps);
+    setErrorMessage("");
+    setStatusMessage(`Editing ${template.name}.`);
+  }
+
+  function resetRoutineTemplateForm() {
+    setEditingTemplateId(null);
+    setTemplateName(starterMorningRoutineTemplate.name);
+    setSelectedMemberIds(childMembers.map((member) => member.id));
+    setSelectedDays(weekdayOptions);
+    setSteps(defaultRoutineSteps.map((step) => ({ ...step })));
   }
 
   function toggleMember(memberId: string) {
@@ -259,6 +305,28 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
       {householdStatus === "ready" && householdId ? (
         <>
           <form className="grid gap-4 border border-[#d7e0e7] bg-[#f8fafc] p-3" onSubmit={saveRoutineTemplate}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">
+                  {editingTemplate ? `Edit ${editingTemplate.name}` : "Create routine template"}
+                </h3>
+                <p className="mt-1 text-xs text-[#657381]">
+                  {editingTemplate
+                    ? "Changes update this saved template and the assigned routine steps."
+                    : "Build a reusable routine, then apply it to one or more kids."}
+                </p>
+              </div>
+              {editingTemplate ? (
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965]"
+                  onClick={resetRoutineTemplateForm}
+                  type="button"
+                >
+                  New template
+                </button>
+              ) : null}
+            </div>
+
             <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
               <label className="grid gap-1 text-sm">
                 <span className="font-semibold">Template name</span>
@@ -370,7 +438,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                 disabled={isSaving}
                 type="submit"
               >
-                {isSaving ? "Saving..." : "Save routine template"}
+                {isSaving ? "Saving..." : editingTemplate ? "Update routine template" : "Save routine template"}
               </button>
             </div>
           </form>
@@ -378,7 +446,14 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
           {templates.length > 0 ? (
             <ol className="grid gap-2 md:grid-cols-2">
               {templates.map((template) => (
-                <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3" key={template.id}>
+                <li
+                  className={`grid gap-2 border px-3 py-3 ${
+                    editingTemplateId === template.id
+                      ? "border-[#1f6f8b] bg-white"
+                      : "border-[#d7e0e7] bg-[#f8fafc]"
+                  }`}
+                  key={template.id}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold">{template.name}</p>
@@ -387,13 +462,22 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                         {template.assignedMemberNames.join(", ") || "No children"}
                       </p>
                     </div>
-                    <button
-                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-xs font-semibold text-[#4c5965]"
-                      onClick={() => void removeTemplate(template)}
-                      type="button"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="border border-[#1f6f8b] bg-white px-3 py-2 text-xs font-semibold text-[#1f6f8b]"
+                        onClick={() => editTemplate(template)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="border border-[#d7e0e7] bg-white px-3 py-2 text-xs font-semibold text-[#4c5965]"
+                        onClick={() => void removeTemplate(template)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -458,6 +542,7 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
   }
 
   const memberNameById = new Map((members ?? []).map((member) => [member.id, member.preferred_name]));
+  const memberExternalKeyById = new Map((members ?? []).map((member) => [member.id, member.external_key]));
   const assignmentsByActionItemId = new Map<string, string[]>();
 
   for (const assignment of assignments ?? []) {
@@ -476,8 +561,9 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
     {
       actionItemIds: Set<string>;
       assignedMemberIds: Set<string>;
+      daysOfWeek: Set<DayOfWeek>;
       name: string;
-      stepIds: Set<string>;
+      stepsById: Map<string, RoutineStepDraft>;
     }
   >();
 
@@ -493,12 +579,26 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
       {
         actionItemIds: new Set<string>(),
         assignedMemberIds: new Set<string>(),
+        daysOfWeek: new Set<DayOfWeek>(),
         name: item.metadata.routineTemplateName ?? "Routine template",
-        stepIds: new Set<string>(),
+        stepsById: new Map<string, RoutineStepDraft>(),
       };
 
     group.actionItemIds.add(item.id);
-    group.stepIds.add(item.metadata.stepId ?? item.title);
+
+    for (const day of normalizeDaysOfWeek(item.days_of_week)) {
+      group.daysOfWeek.add(day);
+    }
+
+    const stepId = item.metadata.stepId ?? `${item.title}-${item.start_time ?? ""}-${item.end_time ?? ""}`;
+    if (!group.stepsById.has(stepId)) {
+      group.stepsById.set(stepId, {
+        id: stepId,
+        title: item.title,
+        startTime: normalizeTimeForInput(item.start_time),
+        endTime: normalizeTimeForInput(item.end_time),
+      });
+    }
 
     for (const memberId of assignmentsByActionItemId.get(item.id) ?? []) {
       group.assignedMemberIds.add(memberId);
@@ -513,12 +613,18 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
       .map(([id, group]) => ({
         id,
         name: group.name,
-        stepCount: group.stepIds.size,
+        stepCount: group.stepsById.size,
+        assignedMemberIds: [...group.assignedMemberIds]
+          .map((memberId) => memberExternalKeyById.get(memberId))
+          .filter((externalKey): externalKey is string => Boolean(externalKey))
+          .sort(compareStrings),
         assignedMemberNames: [...group.assignedMemberIds]
           .map((memberId) => memberNameById.get(memberId))
           .filter((name): name is string => Boolean(name))
           .sort(compareStrings),
         actionItemIds: [...group.actionItemIds],
+        daysOfWeek: [...group.daysOfWeek],
+        steps: [...group.stepsById.values()].sort(compareRoutineSteps),
       }))
       .sort((first, second) => compareStrings(first.name, second.name)),
   };
@@ -529,16 +635,17 @@ async function createRoutineTemplate({
   householdId,
   memberIds,
   steps,
+  templateId = crypto.randomUUID(),
   templateName,
 }: {
   daysOfWeek: DayOfWeek[];
   householdId: string;
   memberIds: string[];
   steps: RoutineStepDraft[];
+  templateId?: string;
   templateName: string;
 }) {
   const supabase = createBrowserSupabaseClient();
-  const templateId = crypto.randomUUID();
   const rows = memberIds.flatMap((memberId) =>
     steps.map((step) => ({
       household_id: householdId,
@@ -590,6 +697,34 @@ async function createRoutineTemplate({
       );
     throw assignmentsError;
   }
+}
+
+async function updateRoutineTemplate({
+  actionItemIds,
+  daysOfWeek,
+  householdId,
+  memberIds,
+  steps,
+  templateId,
+  templateName,
+}: {
+  actionItemIds: string[];
+  daysOfWeek: DayOfWeek[];
+  householdId: string;
+  memberIds: string[];
+  steps: RoutineStepDraft[];
+  templateId: string;
+  templateName: string;
+}) {
+  await deleteRoutineTemplate({ actionItemIds, householdId });
+  await createRoutineTemplate({
+    daysOfWeek,
+    householdId,
+    memberIds,
+    steps,
+    templateId,
+    templateName,
+  });
 }
 
 async function deleteRoutineTemplate({
@@ -646,4 +781,22 @@ function compareStrings(first: string, second: string) {
   }
 
   return 0;
+}
+
+function compareRoutineSteps(first: RoutineStepDraft, second: RoutineStepDraft) {
+  const startComparison = compareStrings(first.startTime, second.startTime);
+
+  if (startComparison !== 0) {
+    return startComparison;
+  }
+
+  return compareStrings(first.title, second.title);
+}
+
+function normalizeDaysOfWeek(daysOfWeek: string[] | null | undefined): DayOfWeek[] {
+  return dayOptions.filter((day) => daysOfWeek?.includes(day));
+}
+
+function normalizeTimeForInput(value: string | null) {
+  return value?.slice(0, 5) ?? "";
 }
