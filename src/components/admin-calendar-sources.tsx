@@ -54,6 +54,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
     setSources,
     sources,
     status,
+    timeZone,
     usesSupabase,
   } = useCalendarFeed();
   const [form, setForm] = useState(defaultFormState);
@@ -268,6 +269,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
         },
         body: JSON.stringify({
           sourceId: source.id,
+          timeZone,
           url: source.url,
         }),
       });

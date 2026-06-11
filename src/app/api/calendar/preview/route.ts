@@ -4,6 +4,7 @@ import { plannerData } from "@/lib/planner/schedule";
 
 type PreviewRequest = {
   sourceId?: string;
+  timeZone?: string;
   url?: string;
 };
 
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
   }
 
   const sourceId = body.sourceId?.trim() || "calendar-preview";
+  const timeZone = body.timeZone?.trim() || plannerData.timezone;
   const url = body.url?.trim();
   const fetchUrl = await getAllowedCalendarFetchUrl(url);
 
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
       sourceId,
       startsOn,
       endsOn: plannerData.season.endsOn,
+      timeZone,
       maxExpandedEvents: previewExpansionLimit,
     });
   } catch (error) {

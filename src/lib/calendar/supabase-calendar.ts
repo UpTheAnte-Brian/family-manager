@@ -5,7 +5,7 @@ import {
   appliedCalendarEventsStorageKey,
   calendarSourcesStorageKey,
 } from "@/lib/calendar/storage";
-import { toCalendarEventIsoRange } from "@/lib/calendar/date-time";
+import { formatDateTimePartsInTimeZone, toCalendarEventIsoRange } from "@/lib/calendar/date-time";
 import type {
   AppliedCalendarEvent,
   CalendarSource,
@@ -118,6 +118,7 @@ export function useCalendarFeed() {
   const shouldUseRemoteFeed = usesSupabase || householdStatus === "loading";
   const sources = shouldUseRemoteFeed ? remoteSources : localSources;
   const appliedEvents = shouldUseRemoteFeed ? remoteAppliedEvents : localAppliedEvents;
+  const householdTimeZone = household?.timezone ?? "America/Chicago";
 
   const cacheRemoteFeed = useCallback(
     (nextValue: {
@@ -222,7 +223,9 @@ export function useCalendarFeed() {
       }
 
       const nextSources = (sourceRows ?? []).map(mapSourceRow);
-      const nextAppliedEvents = (eventRows ?? []).map(mapEventRow);
+      const nextAppliedEvents = (eventRows ?? []).map((row) =>
+        mapEventRow(row, householdTimeZone),
+      );
 
       setRemoteSources(nextSources);
       setRemoteAppliedEvents(nextAppliedEvents);
@@ -246,6 +249,7 @@ export function useCalendarFeed() {
     cacheRemoteFeed,
     householdId,
     householdStatus,
+    householdTimeZone,
     remoteAppliedEvents.length,
     remoteSources.length,
   ]);
@@ -418,7 +422,9 @@ export function useCalendarFeed() {
 
       if (nextEvents.length > 0) {
         const { error: insertError } = await supabase.from("calendar_events").insert(
-          nextEvents.map((event) => mapEventToInsert(householdId, sourceRow.id, event)),
+          nextEvents.map((event) =>
+            mapEventToInsert(householdId, sourceRow.id, event, householdTimeZone),
+          ),
         );
 
         if (insertError) {
@@ -435,7 +441,7 @@ export function useCalendarFeed() {
         return nextAppliedEvents;
       });
     },
-    [cacheRemoteFeed, householdId, saveSource, setLocalAppliedEvents],
+    [cacheRemoteFeed, householdId, householdTimeZone, saveSource, setLocalAppliedEvents],
   );
 
   const saveManualEvent = useCallback(
@@ -481,7 +487,7 @@ export function useCalendarFeed() {
 
       const { error } = await supabase
         .from("calendar_events")
-        .insert(mapEventToInsert(householdId, sourceRow.id, event));
+        .insert(mapEventToInsert(householdId, sourceRow.id, event, householdTimeZone));
 
       if (error) {
         throw error;
@@ -500,7 +506,7 @@ export function useCalendarFeed() {
         return nextAppliedEvents;
       });
     },
-    [cacheRemoteFeed, householdId, saveSource, setLocalAppliedEvents, setLocalSources],
+    [cacheRemoteFeed, householdId, householdTimeZone, saveSource, setLocalAppliedEvents, setLocalSources],
   );
 
   return useMemo(
@@ -516,6 +522,7 @@ export function useCalendarFeed() {
       setSources,
       sources,
       status,
+      timeZone: householdTimeZone,
       usesSupabase,
     }),
     [
@@ -530,6 +537,7 @@ export function useCalendarFeed() {
       setSources,
       sources,
       status,
+      householdTimeZone,
       usesSupabase,
     ],
   );
@@ -563,9 +571,9 @@ function mapSourceRow(row: CalendarSourceRow): CalendarSource {
   };
 }
 
-function mapEventRow(row: CalendarEventRow): AppliedCalendarEvent {
-  const dateParts = formatDateTimeParts(row.starts_at);
-  const endParts = formatDateTimeParts(row.ends_at);
+function mapEventRow(row: CalendarEventRow, timeZone: string): AppliedCalendarEvent {
+  const dateParts = formatDateTimePartsInTimeZone(row.starts_at, timeZone);
+  const endParts = formatDateTimePartsInTimeZone(row.ends_at, timeZone);
   const metadata = row.metadata;
 
   return {
@@ -589,8 +597,9 @@ function mapEventToInsert(
   householdId: string,
   sourceRowId: string,
   event: AppliedCalendarEvent,
+  timeZone: string,
 ) {
-  const range = toCalendarEventIsoRange(event.date, event.startTime, event.endTime);
+  const range = toCalendarEventIsoRange(event.date, event.startTime, event.endTime, timeZone);
 
   return {
     household_id: householdId,
@@ -612,15 +621,6 @@ function mapEventToInsert(
       teamLabel: event.teamLabel,
       endDayOffset: range.endDayOffset,
     },
-  };
-}
-
-function formatDateTimeParts(value: string) {
-  const date = new Date(value);
-
-  return {
-    date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
-    time: `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
   };
 }
 

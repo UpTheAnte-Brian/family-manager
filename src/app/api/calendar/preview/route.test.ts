@@ -110,6 +110,9 @@ describe("Calendar preview route", () => {
     assert.equal(response.status, 200);
     assert.equal(body.eventCount, 1);
     assert.equal(body.events[0].title, "Soccer practice");
+    assert.equal(body.events[0].date, "2026-06-03");
+    assert.equal(body.events[0].startTime, "09:00");
+    assert.equal(body.events[0].endTime, "10:00");
   });
 
   it("previews a SportsEngine-style calendar URL", async () => {
@@ -140,6 +143,7 @@ describe("Calendar preview route", () => {
       new Request("http://localhost/api/calendar/preview", {
         body: JSON.stringify({
           sourceId: "sports-calendar",
+          timeZone: "America/Chicago",
           url: "https://ical.sportsengine.com/v3/calendar/ical?uuid=test",
         }),
         method: "POST",
@@ -151,6 +155,8 @@ describe("Calendar preview route", () => {
     assert.equal(body.eventCount, 1);
     assert.equal(body.events[0].title, "FURY U8@Orono");
     assert.equal(body.events[0].category, "sports");
+    assert.equal(body.events[0].startTime, "18:45");
+    assert.equal(body.events[0].endTime, "19:45");
   });
 
   it("returns every event in the planner window instead of only the first preview rows", async () => {

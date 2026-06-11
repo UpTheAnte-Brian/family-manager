@@ -1,4 +1,5 @@
 import ical from "node-ical";
+import { formatDateTimePartsInTimeZone } from "./date-time";
 import type { ImportedCalendarEvent } from "./types";
 import { getSportsEngineTeamId, inferSportsTeamLabel } from "./team-tags";
 
@@ -6,14 +7,21 @@ export type ParseIcsOptions = {
   sourceId: string;
   startsOn: string;
   endsOn: string;
+  timeZone?: string;
   limit?: number;
   maxExpandedEvents?: number;
+};
+
+type IcsDate = Date & {
+  dateOnly?: true;
+  tz?: string;
 };
 
 export function parseIcsEvents(calendarText: string, options: ParseIcsOptions) {
   const startsOn = parseDateOnly(options.startsOn);
   const endsOn = endOfDay(parseDateOnly(options.endsOn));
   const maxExpandedEvents = options.maxExpandedEvents ?? Number.POSITIVE_INFINITY;
+  const timeZone = options.timeZone ?? "America/Chicago";
   const calendar = ical.sync.parseICS(calendarText);
   const events: ImportedCalendarEvent[] = [];
 
@@ -25,7 +33,7 @@ export function parseIcsEvents(calendarText: string, options: ParseIcsOptions) {
     }
 
     for (const expandedEvent of expandEvent(event, startsOn, endsOn, remaining)) {
-      const importedEvent = toImportedEvent(expandedEvent, options.sourceId);
+      const importedEvent = toImportedEvent(expandedEvent, options.sourceId, timeZone);
 
       if (importedEvent) {
         events.push(importedEvent);
@@ -43,6 +51,10 @@ function isCalendarEvent(entry: ical.CalendarComponent | undefined): entry is ic
 }
 
 function expandEvent(event: ical.VEvent, startsOn: Date, endsOn: Date, maxEvents: number): ical.VEvent[] {
+  if (!event.start) {
+    return [];
+  }
+
   const durationMs = event.end && event.start ? event.end.getTime() - event.start.getTime() : 0;
 
   if (maxEvents <= 0) {
@@ -64,11 +76,17 @@ function expandEvent(event: ical.VEvent, startsOn: Date, endsOn: Date, maxEvents
       break;
     }
 
+    const recurrenceStart = copyIcsDateMetadata(start, event.start);
+    const recurrenceEnd = copyIcsDateMetadata(
+      new Date(start.getTime() + durationMs),
+      event.end ?? event.start,
+    );
+
     events.push({
       ...event,
-      start,
-      end: new Date(start.getTime() + durationMs),
-      recurrenceid: start,
+      start: recurrenceStart,
+      end: recurrenceEnd,
+      recurrenceid: recurrenceStart,
     });
 
     cursor = start;
@@ -78,7 +96,11 @@ function expandEvent(event: ical.VEvent, startsOn: Date, endsOn: Date, maxEvents
   return events;
 }
 
-function toImportedEvent(event: ical.VEvent, sourceId: string): ImportedCalendarEvent | null {
+function toImportedEvent(
+  event: ical.VEvent,
+  sourceId: string,
+  timeZone: string,
+): ImportedCalendarEvent | null {
   if (!event.start || !event.summary) {
     return null;
   }
@@ -86,6 +108,12 @@ function toImportedEvent(event: ical.VEvent, sourceId: string): ImportedCalendar
   const start = event.start;
   const end = event.end ?? event.start;
   const allDay = isAllDay(event);
+  const startParts = allDay
+    ? { date: formatDate(start), time: "00:00" }
+    : formatTimedParts(start, timeZone);
+  const endParts = allDay
+    ? { date: formatDate(end), time: "23:59" }
+    : formatTimedParts(end, timeZone);
   const title = String(event.summary).trim();
   const teamId = getSportsEngineTeamId(event.description);
   const teamLabel = inferSportsTeamLabel({
@@ -101,9 +129,9 @@ function toImportedEvent(event: ical.VEvent, sourceId: string): ImportedCalendar
     ...(teamId ? { teamId } : {}),
     ...(teamLabel ? { teamLabel } : {}),
     title,
-    date: formatDate(start),
-    startTime: allDay ? "00:00" : formatTime(start),
-    endTime: allDay ? "23:59" : formatTime(end),
+    date: startParts.date,
+    startTime: startParts.time,
+    endTime: endParts.time,
     ...(event.location ? { location: String(event.location) } : {}),
     category: inferCategory(title, sourceId),
   };
@@ -175,4 +203,34 @@ function formatDate(date: Date) {
 
 function formatTime(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatTimedParts(date: Date, timeZone: string) {
+  if (getIcsTimeZone(date)) {
+    return formatDateTimePartsInTimeZone(date, timeZone);
+  }
+
+  return {
+    date: formatDate(date),
+    time: formatTime(date),
+  };
+}
+
+function getIcsTimeZone(date: Date) {
+  return (date as IcsDate).tz;
+}
+
+function copyIcsDateMetadata(date: Date, source: Date) {
+  const nextDate = date as IcsDate;
+  const sourceDate = source as IcsDate;
+
+  if (sourceDate.tz) {
+    nextDate.tz = sourceDate.tz;
+  }
+
+  if (sourceDate.dateOnly) {
+    nextDate.dateOnly = sourceDate.dateOnly;
+  }
+
+  return nextDate;
 }
