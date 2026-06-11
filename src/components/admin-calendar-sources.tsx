@@ -174,7 +174,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       );
     } catch (error) {
       const lastSyncedAt = new Date().toISOString();
-      const lastSyncMessage = error instanceof Error ? error.message : "Calendar apply failed.";
+      const lastSyncMessage = getErrorMessage(error, "Calendar apply failed.");
       const errorSource = {
         ...source,
         lastSyncedAt,
@@ -352,7 +352,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
           lastSyncStatus: source.lastSyncStatus ?? "error",
           lastSyncMessage:
             source.lastSyncMessage ??
-            (error instanceof Error ? error.message : "Calendar persistence failed."),
+            getErrorMessage(error, "Calendar persistence failed."),
         })),
       );
     }
@@ -574,6 +574,23 @@ function getPreviewMessage(preview: CalendarPreviewResult) {
   }
 
   return `Found ${preview.eventCount} ${eventLabel}. Apply will import ${preview.eventCount}.`;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+
+  return fallback;
 }
 
 async function readCalendarPreviewResponse(

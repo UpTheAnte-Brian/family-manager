@@ -5,6 +5,7 @@ import {
   appliedCalendarEventsStorageKey,
   calendarSourcesStorageKey,
 } from "@/lib/calendar/storage";
+import { toCalendarEventIsoRange } from "@/lib/calendar/date-time";
 import type {
   AppliedCalendarEvent,
   CalendarSource,
@@ -589,14 +590,16 @@ function mapEventToInsert(
   sourceRowId: string,
   event: AppliedCalendarEvent,
 ) {
+  const range = toCalendarEventIsoRange(event.date, event.startTime, event.endTime);
+
   return {
     household_id: householdId,
     calendar_source_id: sourceRowId,
     source_event_uid: event.sourceUid ?? getFallbackEventUid(event),
     title: event.title,
     category: event.category,
-    starts_at: toIsoDateTime(event.date, event.startTime),
-    ends_at: toIsoDateTime(event.date, event.endTime),
+    starts_at: range.startsAt,
+    ends_at: range.endsAt,
     all_day: event.startTime === "00:00" && event.endTime === "23:59",
     location: event.location ?? null,
     status: "active",
@@ -607,12 +610,9 @@ function mapEventToInsert(
       sourceLabel: event.sourceLabel,
       teamId: event.teamId,
       teamLabel: event.teamLabel,
+      endDayOffset: range.endDayOffset,
     },
   };
-}
-
-function toIsoDateTime(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 function formatDateTimeParts(value: string) {
