@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { compactIcsCalendarForImport, getAllowedCalendarFetchUrl, POST } from "./route";
+import { compactIcsCalendarForImport, getAllowedCalendarFetchUrl } from "@/lib/calendar/preview";
+import { POST } from "./route";
 
 const originalFetch = globalThis.fetch;
 

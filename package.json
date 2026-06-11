@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "import:calendar": "node scripts/import-ics-to-planner.mjs",
     "import:sports": "node scripts/import-ics-to-planner.mjs --source sportsengine-calendar --replace-source --env SPORTSENGINE_CALENDAR_URL",

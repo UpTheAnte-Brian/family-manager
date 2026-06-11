@@ -301,8 +301,8 @@ export function ProfileDashboard({
   }));
   const birthdayEvents = getBirthdayEventsForDate(members, displayedDay.date);
   const effectiveEvents = [...configuredEvents, ...importedEvents, ...birthdayEvents];
-  const events = getRelevantEvents(effectiveEvents, selectedMember);
-  const otherEvents = getOtherEvents(effectiveEvents, events, selectedMember);
+  const scheduleEvents = getRelevantEvents(importedEvents, selectedMember);
+  const otherScheduleEvents = getOtherEvents(importedEvents, scheduleEvents, selectedMember);
   const dayTypeLabel = getEffectiveDayTypeLabel(displayedDay.dayTypeLabel, effectiveEvents);
   const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, displayedDay.date);
   const localTasks = visibleLocalItems.filter((item) => item.kind === "task");
@@ -334,7 +334,7 @@ export function ProfileDashboard({
   );
   const reminderItems = getReminderItems(
     selectedMember,
-    events,
+    scheduleEvents,
     responsibilityItems.length,
     localReminders,
     displayedDay,
@@ -836,7 +836,7 @@ export function ProfileDashboard({
               <div className="min-w-[150px]">
                 <h2 className="text-lg font-semibold">{formatDateLabel(displayedDay.date)}</h2>
                 <p className="text-xs text-[#4c5965]">
-                  {displayedDay.dayTypeLabel} · {events.length} event{events.length === 1 ? "" : "s"}
+                  {displayedDay.dayTypeLabel} · {scheduleEvents.length} event{scheduleEvents.length === 1 ? "" : "s"}
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2 sm:w-[340px]">
@@ -998,26 +998,26 @@ export function ProfileDashboard({
 
           <div className="space-y-5">
             <Panel title="Day Schedule">
-              {events.length > 0 ? (
+              {scheduleEvents.length > 0 ? (
                 <ol className="grid gap-2">
-                  {events.map((event) => (
+                  {scheduleEvents.map((event) => (
                     <EventRow event={event} key={event.id} />
                   ))}
                 </ol>
               ) : (
-                <EmptyState text="No fixed calendar events are attached to this profile on this date." />
+                <EmptyState text="No imported or manual calendar events are attached to this profile on this date." />
               )}
             </Panel>
 
             <Panel title={isTodaySelected ? "Other Events Today" : "Other Events"}>
-              {otherEvents.length > 0 ? (
+              {otherScheduleEvents.length > 0 ? (
                 <ol className="grid gap-2">
-                  {otherEvents.map((event) => (
+                  {otherScheduleEvents.map((event) => (
                     <OtherEventRow event={event} key={event.id} members={members} />
                   ))}
                 </ol>
               ) : (
-                <EmptyState text="No other household events are scheduled for this date." />
+                <EmptyState text="No other imported or manual household events are scheduled for this date." />
               )}
             </Panel>
 
@@ -1039,8 +1039,7 @@ export function ProfileDashboard({
                 <Fact label="Date" value={`${displayedDay.date} (${displayedDay.dayOfWeek})`} />
                 <Fact label="Day type" value={dayTypeLabel} />
                 <Fact label="Baseline" value={displayedDay.baseline.label} />
-                <Fact label="Events" value={String(effectiveEvents.length)} />
-                <Fact label="Imports on day" value={String(importedEvents.length)} />
+                <Fact label="Day schedule" value={String(scheduleEvents.length)} />
                 <Fact label="Schedule blocks" value={String(displayedDay.baseline.blocks.length)} />
               </dl>
             </section>
@@ -1576,7 +1575,7 @@ function getReminderItems(
         id: "default-child-sports",
         title: sportsToday
           ? "Sports gear may be needed today."
-          : "No sports gear is flagged from configured calendars.",
+          : "No sports gear is flagged from imported or manual calendar events.",
       },
       {
         id: "default-child-responsibility",
@@ -1598,8 +1597,8 @@ function getReminderItems(
       id: "default-parent-events",
       title:
         events.length > 0
-          ? "Configured calendars have fixed events for today."
-          : "No fixed calendar events are connected for today yet.",
+          ? "Imported or manual calendar events are scheduled for today."
+          : "No imported or manual calendar events are scheduled for today yet.",
     },
     {
       id: "default-parent-roadmap",
