@@ -60,7 +60,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
 
 Supabase data access requires an authenticated Supabase session and a matching `household_users` row. Without that session, the app keeps working from browser `localStorage`.
 
-After deployment, open `/setup` to create or sign in to an owner account and create a household. A separate family can create its own household without seeing yours.
+After deployment, open `/setup` to create or sign in to an owner account and create a household. The same account can belong to multiple households. `/setup` now lets household owners and parents invite additional adult accounts and switch the active household when one account belongs to more than one family context.
 
 The normalized Supabase schema includes durable tables for:
 

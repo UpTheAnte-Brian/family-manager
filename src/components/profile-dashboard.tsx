@@ -229,7 +229,7 @@ export function ProfileDashboard({
     calendarTeamAssignmentsStorageKey,
     [],
   );
-  const { household, status: householdStatus } = useCurrentHousehold();
+  const { household, households, selectHousehold, status: householdStatus } = useCurrentHousehold();
   const [remoteTemporaryRoutines, setRemoteTemporaryRoutines] = useState<LocalTemporaryRoutineItem[]>([]);
   const [remoteTemporaryCompletions, setRemoteTemporaryCompletions] = useState<Record<string, boolean>>({});
   const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
@@ -817,6 +817,20 @@ export function ProfileDashboard({
               <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
                 Chores
               </Link>
+              <label className="text-sm">
+                <span className="sr-only">Household</span>
+                <select
+                  className="min-w-[190px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
+                  onChange={(event) => selectHousehold(event.target.value)}
+                  value={household?.householdId ?? ""}
+                >
+                  {households.map((accessibleHousehold) => (
+                    <option key={accessibleHousehold.householdId} value={accessibleHousehold.householdId}>
+                      {accessibleHousehold.householdName}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="text-sm">
                 <span className="sr-only">Person</span>
                 <select

@@ -7,19 +7,14 @@ import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
 import type { HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
+import { useCurrentHousehold } from "@/lib/supabase/household";
+import { writeStoredHouseholdSelection } from "@/lib/supabase/household-selection";
 
 type SetupStatus = "idle" | "loading" | "success" | "error";
-type SetupStepId = "account" | "household" | "members";
+type SetupStepId = "account" | "household" | "members" | "access";
 
 type HouseholdSetupProps = {
   plannerMembers: HouseholdMember[];
-};
-
-type HouseholdSummary = {
-  id: string;
-  name: string;
-  role: string;
-  timezone: string;
 };
 
 type HouseholdMemberRow = {
@@ -42,15 +37,25 @@ type MemberDraft = {
   tempId: string;
 };
 
-type MembershipRow = {
-  household_id: string;
-  role: string;
+type HouseholdAccessRole = "owner" | "parent" | "caregiver" | "viewer";
+
+type InvitationRole = Exclude<HouseholdAccessRole, "owner">;
+
+type HouseholdAccessEntryRow = {
+  accepted_at: string | null;
+  auth_user_id: string | null;
+  created_at: string;
+  email: string;
+  entry_id: string;
+  entry_type: "invitation" | "member";
+  invited_by_email: string | null;
+  role: HouseholdAccessRole;
+  status: string;
 };
 
-type HouseholdRow = {
+type InvitationRow = {
   id: string;
-  name: string;
-  timezone: string;
+  invited_email: string;
 };
 
 type CreatedHouseholdRow = {
@@ -66,10 +71,11 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
   const [password, setPassword] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [households, setHouseholds] = useState<HouseholdSummary[]>([]);
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberRow[]>([]);
+  const [householdAccessEntries, setHouseholdAccessEntries] = useState<HouseholdAccessEntryRow[]>([]);
   const [householdName, setHouseholdName] = useState("");
+  const [invitationEmail, setInvitationEmail] = useState("");
+  const [invitationRole, setInvitationRole] = useState<InvitationRole>("parent");
   const [memberDrafts, setMemberDrafts] = useState<MemberDraft[]>([emptyMemberDraft]);
   const [status, setStatus] = useState<SetupStatus>("idle");
   const [message, setMessage] = useState("");
@@ -77,13 +83,24 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
   const [isConfigured, setIsConfigured] = useState(true);
   const [openStepOverride, setOpenStepOverride] = useState<number | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
+  const {
+    household: selectedHousehold,
+    households,
+    refresh: refreshCurrentHousehold,
+    selectHousehold,
+  } = useCurrentHousehold();
+  const selectedHouseholdId = selectedHousehold?.householdId ?? "";
+  const isHouseholdAdmin = selectedHousehold
+    ? selectedHousehold.role === "owner" || selectedHousehold.role === "parent"
+    : false;
   const hasAccount = Boolean(session);
   const hasHousehold = Boolean(selectedHousehold);
   const hasMembers = householdMembers.length > 0;
   const setupProgress = [hasAccount, hasHousehold, hasMembers].filter(Boolean).length;
   const recommendedOpenStep = getRecommendedOpenStep(authReady, hasAccount, hasHousehold, hasMembers);
   const openStep = openStepOverride ?? recommendedOpenStep;
+  const activeAccessEntries = householdAccessEntries.filter((entry) => entry.entry_type === "member");
+  const pendingInvitationEntries = householdAccessEntries.filter((entry) => entry.entry_type === "invitation");
   const adminMembers = useMemo(() => {
     if (householdMembers.length === 0) {
       return plannerMembers;
@@ -117,7 +134,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
             authRedirectResult.status === "error"
               ? authRedirectResult.message
               : data.session
-                ? "Email confirmed. You are signed in."
+                ? "Email confirmed. You are signed in. Matching household invitations will be claimed automatically."
                 : "Email confirmed. Sign in to continue.",
           );
           clearAuthRedirectFromUrl();
@@ -167,23 +184,32 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
           return;
         }
 
-        setHouseholds([]);
-        setSelectedHouseholdId("");
         setHouseholdMembers([]);
+        setHouseholdAccessEntries([]);
+        setMemberDrafts([emptyMemberDraft]);
+        return;
+      }
+
+      if (!selectedHouseholdId) {
+        if (!isActive) {
+          return;
+        }
+
+        setHouseholdMembers([]);
+        setHouseholdAccessEntries([]);
         setMemberDrafts([emptyMemberDraft]);
         return;
       }
 
       try {
-        const nextState = await loadHouseholdWorkflowState(selectedHouseholdId);
+        const nextState = await loadHouseholdWorkflowState(selectedHouseholdId, isHouseholdAdmin);
 
         if (!isActive) {
           return;
         }
 
-        setHouseholds(nextState.households);
-        setSelectedHouseholdId(nextState.selectedHouseholdId);
         setHouseholdMembers(nextState.members);
+        setHouseholdAccessEntries(nextState.accessEntries);
         setMemberDrafts(nextState.members.length > 0 ? nextState.members.map(mapRemoteMemberToDraft) : [emptyMemberDraft]);
       } catch (error) {
         if (!isActive) {
@@ -200,7 +226,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
     return () => {
       isActive = false;
     };
-  }, [refreshVersion, selectedHouseholdId, session]);
+  }, [isHouseholdAdmin, refreshVersion, selectedHouseholdId, session]);
 
   async function signUp() {
     await runSetupAction(async () => {
@@ -279,17 +305,16 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
         throw new Error("Supabase did not return the created household.");
       }
 
-      setHouseholds((current) => upsertHouseholdSummary(current, {
-        id: householdId,
-        name: household.name ?? householdName.trim(),
-        role: "owner",
-        timezone: household.timezone ?? "America/Chicago",
-      }));
+      if (session?.user.id) {
+        writeStoredHouseholdSelection(session.user.id, householdId);
+      }
+
       setHouseholdName("");
-      setSelectedHouseholdId(householdId);
       setHouseholdMembers([]);
+      setHouseholdAccessEntries([]);
       setMemberDrafts([emptyMemberDraft]);
       setOpenStepOverride(3);
+      await refreshCurrentHousehold();
       await saveMemberDrafts(householdId);
       setRefreshVersion((current) => current + 1);
       return `Created ${household?.name ?? "household"}.`;
@@ -306,6 +331,28 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       setRefreshVersion((current) => current + 1);
       return "Family members saved.";
     }, "members");
+  }
+
+  async function inviteHouseholdAccess() {
+    if (!selectedHouseholdId) {
+      return;
+    }
+
+    await runSetupAction(async () => {
+      const invitation = await inviteUserToHousehold(selectedHouseholdId, invitationEmail, invitationRole);
+      setInvitationEmail("");
+      setInvitationRole("parent");
+      setRefreshVersion((current) => current + 1);
+      return `Invitation saved for ${invitation.invited_email}.`;
+    }, "access");
+  }
+
+  async function revokeHouseholdAccessInvitation(invitationId: string) {
+    await runSetupAction(async () => {
+      await revokeHouseholdInvitation(invitationId);
+      setRefreshVersion((current) => current + 1);
+      return "Invitation revoked.";
+    }, "access");
   }
 
   async function saveMemberDrafts(householdId: string) {
@@ -440,181 +487,226 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
             {authReady ? (
               <>
                 <WorkflowStep
-              complete={hasAccount}
-              index={1}
-              isOpen={openStep === 1}
-              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 1 : 0)}
-              summary={session?.user.email ?? "Create or sign in to the household owner account."}
-              title="Profile"
-            >
-              {session ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{session.user.email}</p>
-                    <p className="mt-1 text-sm text-[#657381]">Signed in and ready for household setup.</p>
-                  </div>
-                  <button
-                    className="border border-[#d7e0e7] bg-white px-4 py-2 text-sm font-semibold text-[#33414f]"
-                    disabled={status === "loading"}
-                    onClick={signOut}
-                    type="button"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-semibold">Email</span>
-                    <input
-                      autoComplete="email"
-                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                      onChange={(event) => setEmail(event.target.value)}
-                      type="email"
-                      value={email}
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-semibold">Password</span>
-                    <input
-                      autoComplete="new-password"
-                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                      onChange={(event) => setPassword(event.target.value)}
-                      type="password"
-                      value={password}
-                    />
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      disabled={status === "loading" || !email || password.length < 6}
-                      onClick={signUp}
-                      type="button"
-                    >
-                      Create account
-                    </button>
-                    <button
-                      className="border border-[#1f6f8b] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:opacity-50"
-                      disabled={status === "loading" || !email || !password}
-                      onClick={signIn}
-                      type="button"
-                    >
-                      Sign in
-                    </button>
-                  </div>
-                </div>
-              )}
-              {activeStep === "account" && message ? (
-                <SetupStatusMessage message={message} status={status} />
-              ) : null}
-            </WorkflowStep>
-
-            <WorkflowStep
-              complete={hasHousehold}
-              disabled={!hasAccount}
-              index={2}
-              isOpen={openStep === 2}
-              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 2 : 0)}
-              summary={selectedHousehold ? selectedHousehold.name : "Create or select a household."}
-              title="Household"
-            >
-              {households.length > 0 ? (
-                <div className="grid gap-2">
-                  {households.map((household) => (
-                    <button
-                      className={`border px-3 py-3 text-left ${
-                        household.id === selectedHouseholdId
-                          ? "border-[#1f6f8b] bg-[#e8f4f3]"
-                          : "border-[#d7e0e7] bg-[#f8fafc]"
-                      }`}
-                      key={household.id}
-                      onClick={() => setSelectedHouseholdId(household.id)}
-                      type="button"
-                    >
-                      <span className="block font-semibold">{household.name}</span>
-                      <span className="mt-1 block text-xs text-[#657381]">
-                        {household.role} · {household.timezone}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3">
-                <h3 className="font-semibold">{households.length > 0 ? "Create another household" : "Create household"}</h3>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-semibold">Household name</span>
-                  <input
-                    className="border border-[#d7e0e7] bg-white px-3 py-2"
-                    onChange={(event) => setHouseholdName(event.target.value)}
-                    placeholder="Johnson Family"
-                    value={householdName}
-                  />
-                </label>
-                <button
-                  className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={status === "loading" || !session || !householdName.trim()}
-                  onClick={createHousehold}
-                  type="button"
+                  complete={hasAccount}
+                  index={1}
+                  isOpen={openStep === 1}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 1 : 0)}
+                  summary={session?.user.email ?? "Create or sign in to the household owner account."}
+                  title="Profile"
                 >
-                  {status === "loading" && activeStep === "household" ? "Creating..." : "Create household"}
-                </button>
-                {activeStep === "household" && message ? (
-                  <SetupStatusMessage message={message} status={status} />
-                ) : null}
-              </div>
-            </WorkflowStep>
+                  {session ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{session.user.email}</p>
+                        <p className="mt-1 text-sm text-[#657381]">Signed in and ready for household setup.</p>
+                      </div>
+                      <button
+                        className="border border-[#d7e0e7] bg-white px-4 py-2 text-sm font-semibold text-[#33414f]"
+                        disabled={status === "loading"}
+                        onClick={signOut}
+                        type="button"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Email</span>
+                        <input
+                          autoComplete="email"
+                          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                          onChange={(event) => setEmail(event.target.value)}
+                          type="email"
+                          value={email}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Password</span>
+                        <input
+                          autoComplete="new-password"
+                          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                          onChange={(event) => setPassword(event.target.value)}
+                          type="password"
+                          value={password}
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          disabled={status === "loading" || !email || password.length < 6}
+                          onClick={signUp}
+                          type="button"
+                        >
+                          Create account
+                        </button>
+                        <button
+                          className="border border-[#1f6f8b] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:opacity-50"
+                          disabled={status === "loading" || !email || !password}
+                          onClick={signIn}
+                          type="button"
+                        >
+                          Sign in
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {activeStep === "account" && message ? (
+                    <SetupStatusMessage message={message} status={status} />
+                  ) : null}
+                </WorkflowStep>
 
-            <WorkflowStep
-              complete={hasMembers}
-              disabled={!hasHousehold}
-              index={3}
-              isOpen={openStep === 3}
-              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 3 : 0)}
-              summary={
-                hasMembers
-                  ? `${householdMembers.length} member${householdMembers.length === 1 ? "" : "s"} saved`
-                  : "Add the people who should appear on dashboards and assignments."
-              }
-              title="Family members"
-            >
-              <MemberDraftEditor
-                drafts={memberDrafts}
-                onAddMember={addMember}
-                onLoadPlannerMembers={loadPlannerMembers}
-                onRemoveMember={removeMember}
-                onSave={saveMembers}
-                onUpdateMember={updateMember}
-                status={status}
-              />
-              {activeStep === "members" && message ? (
-                <SetupStatusMessage message={message} status={status} />
-              ) : null}
-            </WorkflowStep>
+                <WorkflowStep
+                  complete={hasHousehold}
+                  disabled={!hasAccount}
+                  index={2}
+                  isOpen={openStep === 2}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 2 : 0)}
+                  summary={selectedHousehold ? selectedHousehold.householdName : "Create or select a household."}
+                  title="Household"
+                >
+                  {households.length > 0 ? (
+                    <div className="grid gap-2">
+                      {households.map((household) => (
+                        <button
+                          className={`border px-3 py-3 text-left ${
+                            household.householdId === selectedHouseholdId
+                              ? "border-[#1f6f8b] bg-[#e8f4f3]"
+                              : "border-[#d7e0e7] bg-[#f8fafc]"
+                          }`}
+                          key={household.householdId}
+                          onClick={() => selectHousehold(household.householdId)}
+                          type="button"
+                        >
+                          <span className="block font-semibold">{household.householdName}</span>
+                          <span className="mt-1 block text-xs text-[#657381]">
+                            {household.role} · {household.timezone}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
 
-            <WorkflowStep
-              complete={false}
-              disabled={!hasMembers}
-              index={4}
-              isOpen={openStep === 4}
-              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 4 : 0)}
-              summary="Create reusable routines and apply them to household members."
-              title="Routine templates"
-            >
-              <AdminRoutineTemplates members={adminMembers} />
-            </WorkflowStep>
+                  <div className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3">
+                    <h3 className="font-semibold">
+                      {households.length > 0 ? "Create another household" : "Create household"}
+                    </h3>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-semibold">Household name</span>
+                      <input
+                        className="border border-[#d7e0e7] bg-white px-3 py-2"
+                        onChange={(event) => setHouseholdName(event.target.value)}
+                        placeholder="Johnson Family"
+                        value={householdName}
+                      />
+                    </label>
+                    <button
+                      className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      disabled={status === "loading" || !session || !householdName.trim()}
+                      onClick={createHousehold}
+                      type="button"
+                    >
+                      {status === "loading" && activeStep === "household" ? "Creating..." : "Create household"}
+                    </button>
+                    {activeStep === "household" && message ? (
+                      <SetupStatusMessage message={message} status={status} />
+                    ) : null}
+                  </div>
+                </WorkflowStep>
 
-            <WorkflowStep
-              complete={false}
-              disabled={!hasMembers}
-              index={5}
-              isOpen={openStep === 5}
-              onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 5 : 0)}
-              summary="Connect SportsEngine, school, family, or manual calendar sources."
-              title="Calendar imports"
-            >
-              <AdminCalendarSources members={adminMembers} />
-            </WorkflowStep>
+                <WorkflowStep
+                  complete={hasMembers}
+                  disabled={!hasHousehold || !isHouseholdAdmin}
+                  index={3}
+                  isOpen={openStep === 3}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 3 : 0)}
+                  summary={
+                    !hasHousehold
+                      ? "Select a household before editing people."
+                      : !isHouseholdAdmin
+                        ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage setup.`
+                        : hasMembers
+                          ? `${householdMembers.length} member${householdMembers.length === 1 ? "" : "s"} saved`
+                          : "Add the people who should appear on dashboards and assignments."
+                  }
+                  title="Family members"
+                >
+                  <MemberDraftEditor
+                    drafts={memberDrafts}
+                    onAddMember={addMember}
+                    onLoadPlannerMembers={loadPlannerMembers}
+                    onRemoveMember={removeMember}
+                    onSave={saveMembers}
+                    onUpdateMember={updateMember}
+                    status={status}
+                  />
+                  {activeStep === "members" && message ? (
+                    <SetupStatusMessage message={message} status={status} />
+                  ) : null}
+                </WorkflowStep>
+
+                <WorkflowStep
+                  complete={pendingInvitationEntries.length === 0 && activeAccessEntries.length > 0}
+                  disabled={!hasHousehold || !isHouseholdAdmin}
+                  index={4}
+                  isOpen={openStep === 4}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 4 : 0)}
+                  summary={
+                    !hasHousehold
+                      ? "Select a household before managing access."
+                      : !isHouseholdAdmin
+                        ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage access.`
+                        : `${activeAccessEntries.length} account${activeAccessEntries.length === 1 ? "" : "s"} active · ${pendingInvitationEntries.length} pending invitation${pendingInvitationEntries.length === 1 ? "" : "s"}`
+                  }
+                  title="Household access"
+                >
+                  <HouseholdAccessEditor
+                    activeEntries={activeAccessEntries}
+                    invitationEmail={invitationEmail}
+                    invitationRole={invitationRole}
+                    pendingEntries={pendingInvitationEntries}
+                    status={status}
+                    onInvitationEmailChange={setInvitationEmail}
+                    onInvitationRoleChange={setInvitationRole}
+                    onInvite={inviteHouseholdAccess}
+                    onRevokeInvitation={revokeHouseholdAccessInvitation}
+                  />
+                  {activeStep === "access" && message ? (
+                    <SetupStatusMessage message={message} status={status} />
+                  ) : null}
+                </WorkflowStep>
+
+                <WorkflowStep
+                  complete={false}
+                  disabled={!hasMembers || !isHouseholdAdmin}
+                  index={5}
+                  isOpen={openStep === 5}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 5 : 0)}
+                  summary={
+                    !isHouseholdAdmin
+                      ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage routines.`
+                      : "Create reusable routines and apply them to household members."
+                  }
+                  title="Routine templates"
+                >
+                  <AdminRoutineTemplates members={adminMembers} />
+                </WorkflowStep>
+
+                <WorkflowStep
+                  complete={false}
+                  disabled={!hasMembers || !isHouseholdAdmin}
+                  index={6}
+                  isOpen={openStep === 6}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 6 : 0)}
+                  summary={
+                    !isHouseholdAdmin
+                      ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage calendar imports.`
+                      : "Connect SportsEngine, school, family, or manual calendar sources."
+                  }
+                  title="Calendar imports"
+                >
+                  <AdminCalendarSources members={adminMembers} />
+                </WorkflowStep>
               </>
             ) : null}
           </>
@@ -707,16 +799,6 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   }
 }
 
-function upsertHouseholdSummary(households: HouseholdSummary[], household: HouseholdSummary) {
-  const existingHousehold = households.find((current) => current.id === household.id);
-
-  if (!existingHousehold) {
-    return [...households, household].sort((first, second) => first.name.localeCompare(second.name));
-  }
-
-  return households.map((current) => (current.id === household.id ? household : current));
-}
-
 function getRecommendedOpenStep(
   authReady: boolean,
   hasAccount: boolean,
@@ -781,7 +863,7 @@ function WorkflowStep({
           </span>
           <div className="min-w-0">
             <h2 className="text-xl font-semibold">{title}</h2>
-            <p className="mt-1 text-sm text-[#657381]">{disabled ? "Complete the previous step first." : summary}</p>
+            <p className="mt-1 text-sm text-[#657381]">{summary}</p>
           </div>
         </div>
         <span className="text-sm font-semibold text-[#1f6f8b]">
@@ -917,69 +999,206 @@ function MemberDraftEditor({
   );
 }
 
-async function loadHouseholdWorkflowState(selectedHouseholdId: string) {
+function HouseholdAccessEditor({
+  activeEntries,
+  invitationEmail,
+  invitationRole,
+  pendingEntries,
+  status,
+  onInvitationEmailChange,
+  onInvitationRoleChange,
+  onInvite,
+  onRevokeInvitation,
+}: Readonly<{
+  activeEntries: HouseholdAccessEntryRow[];
+  invitationEmail: string;
+  invitationRole: InvitationRole;
+  pendingEntries: HouseholdAccessEntryRow[];
+  status: SetupStatus;
+  onInvitationEmailChange: (value: string) => void;
+  onInvitationRoleChange: (value: InvitationRole) => void;
+  onInvite: () => void;
+  onRevokeInvitation: (invitationId: string) => void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <p className="text-sm leading-6 text-[#4c5965]">
+        Household access controls which adult accounts can open this household. Family members stay
+        separate from access so children and profile records do not need login emails.
+      </p>
+      <div className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3 md:grid-cols-[1fr_180px_auto]">
+        <label className="grid gap-1 text-sm">
+          <span className="font-semibold">Invite email</span>
+          <input
+            autoComplete="email"
+            className="border border-[#d7e0e7] bg-white px-3 py-2"
+            onChange={(event) => onInvitationEmailChange(event.target.value)}
+            placeholder="name@example.com"
+            type="email"
+            value={invitationEmail}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="font-semibold">Access role</span>
+          <select
+            className="border border-[#d7e0e7] bg-white px-3 py-2"
+            onChange={(event) => onInvitationRoleChange(event.target.value as InvitationRole)}
+            value={invitationRole}
+          >
+            <option value="parent">Parent</option>
+            <option value="caregiver">Caregiver</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </label>
+        <button
+          className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          disabled={status === "loading" || !invitationEmail.trim()}
+          onClick={onInvite}
+          type="button"
+        >
+          Invite account
+        </button>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="grid gap-2">
+          <h3 className="text-lg font-semibold">Active access</h3>
+          {activeEntries.length > 0 ? (
+            <ul className="grid gap-2">
+              {activeEntries.map((entry) => (
+                <li
+                  className="flex items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                  key={entry.entry_id}
+                >
+                  <div>
+                    <p className="font-semibold">{entry.email}</p>
+                    <p className="mt-1 text-xs text-[#657381]">
+                      {formatHouseholdAccessRole(entry.role)} · Active
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptySetupState text="No accounts have access yet beyond the current household owner." />
+          )}
+        </section>
+        <section className="grid gap-2">
+          <h3 className="text-lg font-semibold">Pending invitations</h3>
+          {pendingEntries.length > 0 ? (
+            <ul className="grid gap-2">
+              {pendingEntries.map((entry) => (
+                <li
+                  className="flex items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                  key={entry.entry_id}
+                >
+                  <div>
+                    <p className="font-semibold">{entry.email}</p>
+                    <p className="mt-1 text-xs text-[#657381]">
+                      {formatHouseholdAccessRole(entry.role)}
+                      {entry.invited_by_email ? ` · invited by ${entry.invited_by_email}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
+                    disabled={status === "loading"}
+                    onClick={() => onRevokeInvitation(entry.entry_id)}
+                    type="button"
+                  >
+                    Revoke
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptySetupState text="No pending invitations." />
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function EmptySetupState({ text }: { text: string }) {
+  return <p className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#657381]">{text}</p>;
+}
+
+async function loadHouseholdWorkflowState(selectedHouseholdId: string, includeAccessEntries: boolean) {
   const supabase = createBrowserSupabaseClient();
-  const { data: memberships, error: membershipError } = await supabase
-    .from("household_users")
-    .select("household_id, role")
-    .order("created_at", { ascending: true })
-    .returns<MembershipRow[]>();
-
-  if (membershipError) {
-    throw membershipError;
-  }
-
-  const householdIds = [...new Set((memberships ?? []).map((membership) => membership.household_id))];
-
-  if (householdIds.length === 0) {
-    return {
-      households: [],
-      members: [],
-      selectedHouseholdId: "",
-    };
-  }
-
-  const { data: householdRows, error: householdError } = await supabase
-    .from("households")
-    .select("id, name, timezone")
-    .in("id", householdIds)
-    .returns<HouseholdRow[]>();
-
-  if (householdError) {
-    throw householdError;
-  }
-
-  const roleByHouseholdId = new Map((memberships ?? []).map((membership) => [membership.household_id, membership.role]));
-  const households = (householdRows ?? [])
-    .map((household) => ({
-      id: household.id,
-      name: household.name,
-      role: roleByHouseholdId.get(household.id) ?? "member",
-      timezone: household.timezone,
-    }))
-    .sort((first, second) => first.name.localeCompare(second.name));
-  const nextSelectedHouseholdId =
-    households.find((household) => household.id === selectedHouseholdId)?.id ?? households[0]?.id ?? "";
-
-  const { data: members, error: membersError } = nextSelectedHouseholdId
-    ? await supabase
-        .from("household_members")
-        .select("id, external_key, preferred_name, display_name, role, relationship, birth_date")
-        .eq("household_id", nextSelectedHouseholdId)
-        .order("role", { ascending: false })
-        .order("preferred_name", { ascending: true })
-        .returns<HouseholdMemberRow[]>()
-    : { data: [], error: null };
+  const { data: members, error: membersError } = await supabase
+    .from("household_members")
+    .select("id, external_key, preferred_name, display_name, role, relationship, birth_date")
+    .eq("household_id", selectedHouseholdId)
+    .order("role", { ascending: false })
+    .order("preferred_name", { ascending: true })
+    .returns<HouseholdMemberRow[]>();
 
   if (membersError) {
     throw membersError;
   }
 
+  const accessEntries = includeAccessEntries
+    ? await loadHouseholdAccessState(selectedHouseholdId)
+    : [];
+
   return {
-    households,
+    accessEntries,
     members: members ?? [],
-    selectedHouseholdId: nextSelectedHouseholdId,
   };
+}
+
+async function loadHouseholdAccessState(selectedHouseholdId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("get_household_access_state", {
+      target_household_id: selectedHouseholdId,
+    })
+    .returns<HouseholdAccessEntryRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  const accessEntries = Array.isArray(data) ? data : [];
+
+  return accessEntries.sort((first: HouseholdAccessEntryRow, second: HouseholdAccessEntryRow) => {
+    if (first.entry_type !== second.entry_type) {
+      return first.entry_type.localeCompare(second.entry_type);
+    }
+
+    return first.email.localeCompare(second.email);
+  });
+}
+
+async function inviteUserToHousehold(
+  selectedHouseholdId: string,
+  invitationEmail: string,
+  invitationRole: InvitationRole,
+) {
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("invite_user_to_household", {
+      invite_role: invitationRole,
+      invited_email: invitationEmail,
+      target_household_id: selectedHouseholdId,
+    })
+    .single<InvitationRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function revokeHouseholdInvitation(invitationId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase.rpc("revoke_household_invitation", {
+    target_invitation_id: invitationId,
+  });
+
+  if (error) {
+    throw error;
+  }
 }
 
 function mapRemoteMemberToPlannerMember(member: HouseholdMemberRow): HouseholdMember {
@@ -1045,6 +1264,21 @@ function mapPlannerMemberToDraft(member: HouseholdMember): MemberDraft {
     role: member.role,
     tempId: member.id,
   };
+}
+
+function formatHouseholdAccessRole(role: string) {
+  switch (role) {
+    case "owner":
+      return "Owner";
+    case "parent":
+      return "Parent";
+    case "caregiver":
+      return "Caregiver";
+    case "viewer":
+      return "Viewer";
+    default:
+      return role;
+  }
 }
 
 function getValidMemberDrafts(members: MemberDraft[]) {
