@@ -73,7 +73,7 @@ begin
   into invitation
   from public.household_invitations
   where household_id = target_household_id
-    and lower(invited_email) = normalized_email
+    and lower(public.household_invitations.invited_email) = normalized_email
     and status in ('pending', 'revoked')
   order by created_at desc
   limit 1
