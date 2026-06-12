@@ -805,34 +805,45 @@ export function ProfileDashboard({
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
       <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-4 sm:px-8 lg:px-10">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
-                Admin setup
-              </Link>
-              <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
-                Calendar
-              </Link>
-              <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
-                Chores
-              </Link>
-              <label className="text-sm">
-                <span className="sr-only">Household</span>
-                <select
-                  className="min-w-[190px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
-                  onChange={(event) => selectHousehold(event.target.value)}
-                  value={household?.householdId ?? ""}
-                >
-                  {households.map((accessibleHousehold) => (
-                    <option key={accessibleHousehold.householdId} value={accessibleHousehold.householdId}>
-                      {accessibleHousehold.householdName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm">
-                <span className="sr-only">Person</span>
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:px-8 lg:px-10">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
+              Admin setup
+            </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
+              Calendar
+            </Link>
+            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
+              Chores
+            </Link>
+          </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-wrap items-end gap-3">
+              {households.length > 1 ? (
+                <label className="grid gap-1 text-sm">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                    Household
+                  </span>
+                  <select
+                    className="min-w-[200px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
+                    onChange={(event) => selectHousehold(event.target.value)}
+                    value={household?.householdId ?? ""}
+                  >
+                    {households.map((accessibleHousehold) => (
+                      <option key={accessibleHousehold.householdId} value={accessibleHousehold.householdId}>
+                        {accessibleHousehold.householdName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : household ? (
+                <div className="min-w-[200px] border border-[#d7e0e7] bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">Household</p>
+                  <p className="mt-1 text-sm font-semibold text-[#17202a]">{household.householdName}</p>
+                </div>
+              ) : null}
+              <label className="grid gap-1 text-sm">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">Person</span>
                 <select
                   className="min-w-[190px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
                   onChange={(event) => selectMember(event.target.value)}

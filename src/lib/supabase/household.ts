@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createBrowserSupabaseClient } from "./client";
+import { getSupabaseLikeErrorMessage } from "./error-message";
 import {
   clearStoredHouseholdSelection,
   readStoredHouseholdSelection,
@@ -192,7 +193,7 @@ export function useCurrentHousehold() {
 
       updateSnapshot({
         authUserId: currentHouseholdSnapshot.authUserId,
-        errorMessage: error instanceof Error ? error.message : "Could not load household.",
+        errorMessage: getSupabaseLikeErrorMessage(error, "Could not load household."),
         household: null,
         households: [],
         status: "error",

@@ -7,6 +7,7 @@ import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
 import type { HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
+import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
 import { useCurrentHousehold } from "@/lib/supabase/household";
 import { writeStoredHouseholdSelection } from "@/lib/supabase/household-selection";
 
@@ -157,7 +158,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
           setIsConfigured(false);
           setAuthReady(true);
           setStatus("error");
-          setMessage(error instanceof Error ? error.message : "Supabase is not configured.");
+          setMessage(getSupabaseLikeErrorMessage(error, "Supabase is not configured."));
         }
       }
     }
@@ -217,7 +218,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
         }
 
         setStatus("error");
-        setMessage(error instanceof Error ? error.message : "Could not load household setup.");
+        setMessage(getSupabaseLikeErrorMessage(error, "Could not load household setup."));
       }
     }
 
@@ -339,7 +340,13 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
     }
 
     await runSetupAction(async () => {
-      const invitation = await inviteUserToHousehold(selectedHouseholdId, invitationEmail, invitationRole);
+      const normalizedInvitationEmail = invitationEmail.trim().toLowerCase();
+
+      const invitation = await inviteUserToHousehold(
+        selectedHouseholdId,
+        normalizedInvitationEmail,
+        invitationRole,
+      );
       setInvitationEmail("");
       setInvitationRole("parent");
       setRefreshVersion((current) => current + 1);
@@ -395,7 +402,7 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
       setMessage(nextMessage);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Setup failed.");
+      setMessage(getSupabaseLikeErrorMessage(error, "Setup failed."));
     }
   }
 
@@ -1173,7 +1180,7 @@ async function inviteUserToHousehold(
   selectedHouseholdId: string,
   invitationEmail: string,
   invitationRole: InvitationRole,
-) {
+): Promise<InvitationRow> {
   const supabase = createBrowserSupabaseClient();
   const { data, error } = await supabase
     .rpc("invite_user_to_household", {
@@ -1181,13 +1188,24 @@ async function inviteUserToHousehold(
       invited_email: invitationEmail,
       target_household_id: selectedHouseholdId,
     })
-    .single<InvitationRow>();
+    .returns<InvitationRow | InvitationRow[]>();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  const invitation = Array.isArray(data) ? data[0] : data;
+
+  if (
+    !invitation ||
+    typeof invitation !== "object" ||
+    !("invited_email" in invitation) ||
+    typeof invitation.invited_email !== "string"
+  ) {
+    throw new Error("Supabase did not return the saved invitation.");
+  }
+
+  return invitation;
 }
 
 async function revokeHouseholdInvitation(invitationId: string) {
