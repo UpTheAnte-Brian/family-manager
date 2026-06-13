@@ -24,6 +24,9 @@ const plannerData = {
     weeklyAssignmentTemplates: [],
     completions: [],
   },
+  allowance: {
+    entries: [],
+  },
   calendarSources: [],
   dayTemplates: [
     {

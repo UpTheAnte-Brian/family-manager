@@ -20,10 +20,10 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 ## Current Prototype
 
 - Next.js app shell with TypeScript and Tailwind.
-- Household members, summer schedule blocks, generated summer workday events, routine chores, weekly chores, and chore assignments in `data/summer-2026-planner.json`.
+- Household members, summer schedule blocks, generated summer workday events, routine chores, weekly chores, chore payouts, and allowance ledger seeds in `data/summer-2026-planner.json`.
 - A manual profile dashboard that filters routines, events, and chores by selected family member.
 - Real-date Today Engine with explicit missing states when no baseline is configured for the current day.
-- Browser-local checklist completion tracking plus editable routine steps, recurring responsibilities, and same-day task/reminder quick-add.
+- Browser-local checklist completion tracking, chore allowance ledger tracking, plus editable routine steps, recurring responsibilities, and same-day task/reminder quick-add.
 - Admin setup route for shared calendar source URLs, ICS preview, and local apply-to-dashboard.
 - Browser-local ICS setup for Apple Calendar, SportsEngine, school, and other shared calendar feeds.
 - Supabase migration target for recurring routines, recurring responsibilities, dated tasks, dated reminders, and shared completion records.
@@ -68,7 +68,7 @@ The normalized Supabase schema includes durable tables for:
 - household members
 - calendar sources and calendar events
 - action items, assignments, and completions
-- chores, chore assignment templates, and chore completions
+- chores, chore assignment templates, chore completions, and allowance entries
 
 The next step is moving the UI surfaces from browser-local storage onto those tables.
 

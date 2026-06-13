@@ -61,9 +61,10 @@ The broader household console will also need durable records for households, rou
 Chores now live under `chores` in `data/summer-2026-planner.json`.
 
 - `routineChores` are daily checklists, currently the kids' weekday morning routine.
-- `weeklyChores` are the reusable chore bank.
+- `weeklyChores` are the reusable chore bank and can optionally carry an `allowanceAmount`.
 - `weeklyAssignmentTemplates` assigns weekly chore slots by child and weekday.
 - `completions` is intentionally empty for now; each completion should eventually record who completed the task and when.
+- `allowance.entries` is the earned allowance ledger. Paid chore completions should create one entry tied to that completion so undoing the chore also removes the credit.
 
 The current target is five weekly assigned chores per child. Morning routine chores do not count toward that weekly target.
 

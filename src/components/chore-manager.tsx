@@ -3,11 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  allowanceStorageKey,
+  createChoreAllowanceEntry,
+  formatCurrency,
+  normalizeCurrencyAmount,
+  removeAllowanceEntriesForCompletion,
+  type AllowanceStorageState,
+} from "@/lib/allowance/storage";
+import {
   choreCategories,
   getChoreCategoryLabel,
   normalizeChoreCategory,
   type ChoreCategoryId,
 } from "@/lib/chores/categories";
+import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -40,6 +49,7 @@ type RemoteChoreRow = {
   title: string;
   category_id: string;
   metadata: {
+    allowanceAmount?: number;
     eligibleAssigneeIds?: string[];
     estimatedMinutes?: number;
     requiresAdultCheck?: boolean;
@@ -137,10 +147,11 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     () => members.filter((member) => member.role === "child"),
     [members],
   );
+  const assignableMembers = useMemo(() => members, [members]);
   const initialState = useMemo<ChoreStorageState>(
     () => ({
       routineChores: chores.routineChores,
-      weeklyChores: mergeChoreSeeds(chores.weeklyChores, warehouseSeedChores, childMembers),
+      weeklyChores: mergeChoreSeeds(chores.weeklyChores, warehouseSeedChores, assignableMembers),
       weeklyAssignmentTemplates: chores.weeklyAssignmentTemplates,
       completions: chores.completions,
     }),
@@ -149,10 +160,14 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
       chores.routineChores,
       chores.weeklyAssignmentTemplates,
       chores.weeklyChores,
-      childMembers,
+      assignableMembers,
     ],
   );
   const [state, setState] = useLocalStorageState(choreStorageKey, initialState);
+  const [, setAllowanceState] = useLocalStorageState<AllowanceStorageState>(
+    allowanceStorageKey,
+    { entries: [] },
+  );
   const { household, status: householdStatus } = useCurrentHousehold();
   const [remoteState, setRemoteState] = useState<ChoreStorageState | null>(null);
   const [remoteMembers, setRemoteMembers] = useState<RemoteMemberRow[]>([]);
@@ -192,6 +207,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
 
         setRemoteMembers(nextState.members);
         setRemoteState(nextState.state);
+        setState(nextState.state);
         setSelectedChoreId((current) => current || (nextState.state.weeklyChores[0]?.id ?? ""));
       } catch (error) {
         if (!isActive) {
@@ -207,15 +223,15 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     return () => {
       isActive = false;
     };
-  }, [householdId, isRemoteHouseholdReady, remoteSyncVersion]);
+  }, [householdId, isRemoteHouseholdReady, remoteSyncVersion, setState]);
 
   const choresById = useMemo(
     () => new Map(effectiveState.weeklyChores.map((chore) => [chore.id, chore])),
     [effectiveState.weeklyChores],
   );
-  const childById = useMemo(
-    () => new Map(childMembers.map((child) => [child.id, child])),
-    [childMembers],
+  const memberById = useMemo(
+    () => new Map(assignableMembers.map((member) => [member.id, member])),
+    [assignableMembers],
   );
   const selectedDay = getDayOfWeekForDate(selectedDate);
   const assignments = useMemo<AssignmentWithStatus[]>(
@@ -231,7 +247,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
 
           return {
             ...assignment,
-            child: childById.get(assignment.childId),
+            child: memberById.get(assignment.childId),
             chore: choresById.get(assignment.choreId),
             completion,
             isComplete: Boolean(completion),
@@ -243,7 +259,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
             `${second.dayOfWeek}-${second.startTime}-${second.child?.preferredName ?? ""}`,
           ),
         ),
-    [childById, choresById, effectiveState.completions, effectiveState.weeklyAssignmentTemplates, selectedDate],
+    [memberById, choresById, effectiveState.completions, effectiveState.weeklyAssignmentTemplates, selectedDate],
   );
   const selectedChore =
     choresById.get(selectedChoreId) ?? effectiveState.weeklyChores[0] ?? initialState.weeklyChores[0];
@@ -253,7 +269,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const todaysAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
   const scheduledChoreIds = new Set(effectiveState.weeklyAssignmentTemplates.map((assignment) => assignment.choreId));
   const backlogChores = effectiveState.weeklyChores.filter((chore) => !scheduledChoreIds.has(chore.id));
-  const childSummaries = childMembers.map((child) => {
+  const childSummaries = assignableMembers.map((child) => {
     const childAssignments = assignments.filter((assignment) => assignment.childId === child.id);
     const todayChildAssignments = childAssignments.filter(
       (assignment) => assignment.dayOfWeek === selectedDay,
@@ -284,6 +300,8 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
 
         await createRemoteChoreCompletion({
           assignment,
+          chore: choresById.get(assignment.choreId),
+          earnsAllowance: memberById.get(assignment.childId)?.role === "child",
           householdId,
           occurrenceDate: selectedDate,
           remoteMemberId: getRemoteMemberId(remoteMembers, assignment.childId),
@@ -302,10 +320,31 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
       );
 
       if (existing) {
+        setAllowanceState((currentAllowance) => ({
+          entries: removeAllowanceEntriesForCompletion(currentAllowance.entries, existing.id),
+        }));
+
         return {
           ...current,
           completions: current.completions.filter((completion) => completion.id !== existing.id),
         };
+      }
+
+      const completionId = createId(`${assignment.id}-${selectedDate}`);
+      const completedAt = `${selectedDate}T${assignment.endTime}:00`;
+      const allowanceEntry = createChoreAllowanceEntry({
+        assignment,
+        childId: assignment.childId,
+        chore: choresById.get(assignment.choreId),
+        choreCompletionId: completionId,
+        id: createId(`${assignment.id}-${selectedDate}-allowance`),
+        occurredAt: completedAt,
+      });
+
+      if (allowanceEntry && memberById.get(assignment.childId)?.role === "child") {
+        setAllowanceState((currentAllowance) => ({
+          entries: [...currentAllowance.entries, allowanceEntry],
+        }));
       }
 
       return {
@@ -313,11 +352,11 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
         completions: [
           ...current.completions,
           {
-            id: createId(`${assignment.id}-${selectedDate}`),
+            id: completionId,
             assignmentTemplateId: assignment.id,
             childId: assignment.childId,
             choreId: assignment.choreId,
-            completedAt: `${selectedDate}T${assignment.endTime}:00`,
+            completedAt,
             completedBy: assignment.childId,
           },
         ],
@@ -511,7 +550,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                 {effectiveState.weeklyChores.map((chore) => (
                   <ChoreTile
                     assignments={assignments.filter((assignment) => assignment.choreId === chore.id)}
-                    childMembers={childMembers}
+                    childMembers={assignableMembers}
                     chore={chore}
                     isSelected={selectedChore?.id === chore.id}
                     key={chore.id}
@@ -572,6 +611,9 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                     <h2 className="text-2xl font-semibold">{selectedChore.title}</h2>
                     <p className="mt-1 text-sm text-[#657381]">
                       {getChoreCategoryLabel(selectedChore.category)} · {selectedChore.estimatedMinutes} min
+                      {selectedChore.allowanceAmount
+                        ? ` · ${formatCurrency(selectedChore.allowanceAmount)}`
+                        : ""}
                       {selectedChore.requiresAdultCheck ? " · adult check" : ""}
                     </p>
                   </div>
@@ -579,7 +621,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                   <section className="grid gap-2">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                        Kid status
+                        Member status
                       </h3>
                       <button
                         className="text-sm font-semibold text-[#1f6f8b]"
@@ -596,7 +638,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                       </button>
                     </div>
                     <div className="grid gap-2">
-                      {childMembers.map((child) => {
+                      {assignableMembers.map((child) => {
                         const childAssignments = selectedChoreAssignments.filter(
                           (assignment) => assignment.childId === child.id,
                         );
@@ -675,6 +717,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                       <span className="block font-semibold">{chore.title}</span>
                       <span className="mt-1 block text-xs text-[#657381]">
                         {getChoreCategoryLabel(chore.category)} · {chore.estimatedMinutes} min
+                        {chore.allowanceAmount ? ` · ${formatCurrency(chore.allowanceAmount)}` : ""}
                       </span>
                     </button>
                   ))}
@@ -727,7 +770,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               ? undefined
               : effectiveState.weeklyChores.find((chore) => chore.id === editingChoreId)
           }
-          childMembers={childMembers}
+          childMembers={assignableMembers}
           onCancel={() => setEditingChoreId(null)}
           onSave={(chore) => void upsertChore(chore)}
         />
@@ -742,7 +785,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                 )
               : undefined
           }
-          childMembers={childMembers}
+          childMembers={assignableMembers}
           chores={effectiveState.weeklyChores}
           defaultChildId={assignmentModal.mode === "add" ? assignmentModal.childId : undefined}
           defaultChoreId={assignmentModal.mode === "add" ? assignmentModal.choreId : undefined}
@@ -802,6 +845,7 @@ function ChoreTile({
             <h3 className="text-lg font-semibold">{chore.title}</h3>
             <p className="mt-1 text-sm text-[#657381]">
               {getChoreCategoryLabel(chore.category)} · {chore.estimatedMinutes} min
+              {chore.allowanceAmount ? ` · ${formatCurrency(chore.allowanceAmount)}` : ""}
             </p>
           </div>
           <StatusPill
@@ -874,6 +918,9 @@ function AssignmentCard({
           <p className="mt-1 text-sm text-[#657381]">
             {assignment.child?.preferredName ?? assignment.childId} ·{" "}
             {formatTimeRange(assignment.startTime, assignment.endTime)}
+            {assignment.chore?.allowanceAmount
+              ? ` · ${formatCurrency(assignment.chore.allowanceAmount)}`
+              : ""}
           </p>
         </div>
         <StatusPill isComplete={assignment.isComplete} label={assignment.isComplete ? "Done" : "Open"} />
@@ -918,6 +965,9 @@ function ChoreEditor({
     normalizeChoreCategory(chore?.category),
   );
   const [estimatedMinutes, setEstimatedMinutes] = useState(String(chore?.estimatedMinutes ?? 10));
+  const [allowanceAmount, setAllowanceAmount] = useState(
+    chore?.allowanceAmount ? String(chore.allowanceAmount) : "",
+  );
   const [requiresAdultCheck, setRequiresAdultCheck] = useState(Boolean(chore?.requiresAdultCheck));
   const [eligibleAssigneeIds, setEligibleAssigneeIds] = useState<string[]>(
     chore?.eligibleAssigneeIds.length ? chore.eligibleAssigneeIds : childMembers.map((child) => child.id),
@@ -937,6 +987,7 @@ function ChoreEditor({
       estimatedMinutes: Number(estimatedMinutes) || 10,
       eligibleAssigneeIds,
       requiresAdultCheck,
+      allowanceAmount: normalizeCurrencyAmount(allowanceAmount),
     });
   }
 
@@ -977,8 +1028,21 @@ function ChoreEditor({
           />
         </label>
       </div>
+      <label className="grid gap-1 text-sm">
+        <span className="font-semibold">Allowance payout</span>
+        <input
+          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+          inputMode="decimal"
+          min="0"
+          onChange={(event) => setAllowanceAmount(event.target.value)}
+          placeholder="0.50"
+          step="0.01"
+          type="number"
+          value={allowanceAmount}
+        />
+      </label>
       <fieldset className="grid gap-2 text-sm">
-        <legend className="font-semibold">Eligible kids</legend>
+        <legend className="font-semibold">Eligible household members</legend>
         <div className="flex flex-wrap gap-2">
           {childMembers.map((child) => (
             <label
@@ -1141,7 +1205,7 @@ function RoutineChoreEditor({
       </fieldset>
 
       <fieldset className="grid gap-2 text-sm">
-        <legend className="font-semibold">Kids</legend>
+        <legend className="font-semibold">Household members</legend>
         <div className="flex flex-wrap gap-2">
           {childMembers.map((child) => (
             <label
@@ -1191,15 +1255,28 @@ function AssignmentEditor({
   onCancel: () => void;
   onSave: (assignment: WeeklyChoreAssignmentTemplate) => void;
 }) {
+  const initialChoreId = assignment?.choreId ?? defaultChoreId ?? chores[0]?.id ?? "";
+  const initialStartTime = assignment?.startTime ?? "16:00";
+  const initialEndTime =
+    assignment?.endTime ??
+    addMinutesToTime(
+      initialStartTime,
+      chores.find((chore) => chore.id === initialChoreId)?.estimatedMinutes ?? 15,
+    );
   const [childId, setChildId] = useState(
     assignment?.childId ?? defaultChildId ?? childMembers[0]?.id ?? "",
   );
-  const [choreId, setChoreId] = useState(assignment?.choreId ?? defaultChoreId ?? chores[0]?.id ?? "");
+  const [choreId, setChoreId] = useState(initialChoreId);
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>(
     assignment?.dayOfWeek ?? defaultDayOfWeek ?? "MO",
   );
-  const [startTime, setStartTime] = useState(assignment?.startTime ?? "16:00");
-  const [endTime, setEndTime] = useState(assignment?.endTime ?? "16:15");
+  const [startTime, setStartTime] = useState(initialStartTime);
+  const [endTime, setEndTime] = useState(initialEndTime);
+  const [durationMinutes, setDurationMinutes] = useState(
+    getDurationMinutes(initialStartTime, initialEndTime) ??
+      chores.find((chore) => chore.id === initialChoreId)?.estimatedMinutes ??
+      15,
+  );
 
   function submit() {
     if (!childId || !choreId) {
@@ -1220,7 +1297,7 @@ function AssignmentEditor({
     <EditorShell onCancel={onCancel} title={assignment ? "Edit assignment" : "Assign chore"}>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold">Kid</span>
+          <span className="font-semibold">Assignee</span>
           <select
             className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
             onChange={(event) => setChildId(event.target.value)}
@@ -1237,7 +1314,14 @@ function AssignmentEditor({
           <span className="font-semibold">Chore</span>
           <select
             className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setChoreId(event.target.value)}
+            onChange={(event) => {
+              const nextChoreId = event.target.value;
+              const nextDuration = chores.find((chore) => chore.id === nextChoreId)?.estimatedMinutes ?? durationMinutes;
+
+              setChoreId(nextChoreId);
+              setDurationMinutes(nextDuration);
+              setEndTime(addMinutesToTime(startTime, nextDuration));
+            }}
             value={choreId}
           >
             {chores.map((chore) => (
@@ -1267,7 +1351,12 @@ function AssignmentEditor({
           <span className="font-semibold">Start</span>
           <input
             className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setStartTime(event.target.value)}
+            onChange={(event) => {
+              const nextStartTime = event.target.value;
+
+              setStartTime(nextStartTime);
+              setEndTime(addMinutesToTime(nextStartTime, durationMinutes));
+            }}
             type="time"
             value={startTime}
           />
@@ -1276,7 +1365,12 @@ function AssignmentEditor({
           <span className="font-semibold">End</span>
           <input
             className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setEndTime(event.target.value)}
+            onChange={(event) => {
+              const nextEndTime = event.target.value;
+
+              setEndTime(nextEndTime);
+              setDurationMinutes(getDurationMinutes(startTime, nextEndTime) ?? durationMinutes);
+            }}
             type="time"
             value={endTime}
           />
@@ -1635,6 +1729,7 @@ function mapRemoteChore(chore: RemoteChoreRow): WeeklyChore {
     estimatedMinutes: chore.metadata.estimatedMinutes ?? 10,
     eligibleAssigneeIds: chore.metadata.eligibleAssigneeIds ?? [],
     requiresAdultCheck: chore.metadata.requiresAdultCheck,
+    allowanceAmount: normalizeCurrencyAmount(chore.metadata.allowanceAmount),
   };
 }
 
@@ -1651,6 +1746,7 @@ async function saveRemoteChore(householdId: string, chore: WeeklyChore) {
       estimatedMinutes: chore.estimatedMinutes,
       eligibleAssigneeIds: chore.eligibleAssigneeIds,
       requiresAdultCheck: chore.requiresAdultCheck ?? false,
+      allowanceAmount: chore.allowanceAmount ?? null,
     },
   };
 
@@ -1720,45 +1816,6 @@ async function saveRemoteChoreAssignment({
 
   if (assignmentError) {
     throw assignmentError;
-  }
-}
-
-async function createRemoteChoreCompletion({
-  assignment,
-  householdId,
-  occurrenceDate,
-  remoteMemberId,
-}: {
-  assignment: WeeklyChoreAssignmentTemplate;
-  householdId: string;
-  occurrenceDate: string;
-  remoteMemberId: string;
-}) {
-  const supabase = createBrowserSupabaseClient();
-  const { error } = await supabase.from("chore_completions").insert({
-    household_id: householdId,
-    chore_id: assignment.choreId,
-    assignment_template_id: assignment.id,
-    occurrence_date: occurrenceDate,
-    completed_by_member_id: remoteMemberId,
-    completed_at: `${occurrenceDate}T${assignment.endTime}:00`,
-  });
-
-  if (error) {
-    throw error;
-  }
-}
-
-async function deleteRemoteChoreCompletion(householdId: string, completionId: string) {
-  const supabase = createBrowserSupabaseClient();
-  const { error } = await supabase
-    .from("chore_completions")
-    .delete()
-    .eq("household_id", householdId)
-    .eq("id", completionId);
-
-  if (error) {
-    throw error;
   }
 }
 
@@ -1868,6 +1925,42 @@ function mergeChoreSeeds(
     }));
 
   return [...configuredChores, ...normalizedSeeds];
+}
+
+function getDurationMinutes(startTime: string, endTime: string) {
+  const startMinutes = parseTimeMinutes(startTime);
+  const endMinutes = parseTimeMinutes(endTime);
+
+  if (startMinutes === null || endMinutes === null) {
+    return null;
+  }
+
+  const duration = endMinutes - startMinutes;
+  return duration > 0 ? duration : null;
+}
+
+function addMinutesToTime(startTime: string, minutesToAdd: number) {
+  const startMinutes = parseTimeMinutes(startTime);
+
+  if (startMinutes === null) {
+    return startTime;
+  }
+
+  const normalizedMinutes = ((startMinutes + minutesToAdd) % (24 * 60) + 24 * 60) % (24 * 60);
+  const hours = String(Math.floor(normalizedMinutes / 60)).padStart(2, "0");
+  const minutes = String(normalizedMinutes % 60).padStart(2, "0");
+
+  return `${hours}:${minutes}`;
+}
+
+function parseTimeMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
 }
 
 function createId(value: string) {

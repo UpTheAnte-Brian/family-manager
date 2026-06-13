@@ -10,6 +10,7 @@ export default async function Home() {
 
   return (
     <ProfileDashboard
+      allowance={plannerData.allowance}
       chores={plannerData.chores}
       configuredResponsibilities={parentResponsibilities}
       dayTemplates={plannerData.dayTemplates}

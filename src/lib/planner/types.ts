@@ -79,6 +79,7 @@ export type WeeklyChore = {
   estimatedMinutes: number;
   eligibleAssigneeIds: string[];
   requiresAdultCheck?: boolean;
+  allowanceAmount?: number;
 };
 
 export type WeeklyChoreAssignmentTemplate = {
@@ -98,6 +99,19 @@ export type ChoreCompletion = {
   completedAt: string;
   completedBy?: string;
   notes?: string;
+};
+
+export type AllowanceEntry = {
+  id: string;
+  childId: string;
+  amount: number;
+  source: "chore-completion" | "manual-adjustment";
+  occurredAt: string;
+  choreCompletionId?: string;
+  choreId?: string;
+  assignmentTemplateId?: string;
+  choreTitle?: string;
+  note?: string;
 };
 
 export type PlannerData = {
@@ -120,6 +134,9 @@ export type PlannerData = {
     weeklyChores: WeeklyChore[];
     weeklyAssignmentTemplates: WeeklyChoreAssignmentTemplate[];
     completions: ChoreCompletion[];
+  };
+  allowance: {
+    entries: AllowanceEntry[];
   };
   calendarSources: {
     id: string;

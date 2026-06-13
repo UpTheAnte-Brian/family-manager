@@ -126,6 +126,9 @@ function createPlanner(): PlannerData {
       weeklyAssignmentTemplates: [],
       completions: [],
     },
+    allowance: {
+      entries: [],
+    },
     calendarSources: [
       {
         id: "family-calendar",

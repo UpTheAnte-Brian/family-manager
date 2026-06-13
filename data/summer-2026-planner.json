@@ -5912,7 +5912,7 @@
     {
       "id": "allowance",
       "label": "Allowance",
-      "status": "planned"
+      "status": "active"
     }
   ],
   "chores": {
@@ -6013,6 +6013,7 @@
         "title": "Empty dishwasher",
         "category": "kitchen",
         "estimatedMinutes": 10,
+        "allowanceAmount": 0.5,
         "eligibleAssigneeIds": [
           "mason",
           "reagan"
@@ -6216,5 +6217,8 @@
       }
     ],
     "completions": []
+  },
+  "allowance": {
+    "entries": []
   }
 }
