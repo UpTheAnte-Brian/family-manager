@@ -1,3 +1,4 @@
+import { isMissingAllowanceEntriesTableError } from "@/lib/allowance/remote";
 import { getChoreAllowanceAmount, toAllowanceCents } from "@/lib/allowance/storage";
 import type { WeeklyChore, WeeklyChoreAssignmentTemplate } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -54,12 +55,27 @@ export async function createRemoteChoreCompletion({
     });
 
     if (allowanceError) {
+      if (isMissingAllowanceEntriesTableError(allowanceError)) {
+        return {
+          allowanceTracked: false,
+          completedAt,
+          id: data.id,
+        };
+      }
+
       await supabase.from("chore_completions").delete().eq("household_id", householdId).eq("id", data.id);
       throw allowanceError;
     }
+
+    return {
+      allowanceTracked: true,
+      completedAt,
+      id: data.id,
+    };
   }
 
   return {
+    allowanceTracked: false,
     completedAt,
     id: data.id,
   };

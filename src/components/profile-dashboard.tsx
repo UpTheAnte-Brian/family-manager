@@ -14,6 +14,7 @@ import {
   removeAllowanceEntriesForCompletion,
   type AllowanceStorageState,
 } from "@/lib/allowance/storage";
+import { isMissingAllowanceEntriesTableError } from "@/lib/allowance/remote";
 import { normalizeChoreCategory } from "@/lib/chores/categories";
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
@@ -784,7 +785,11 @@ export function ProfileDashboard({
           completions: [...current.completions, nextCompletion],
         }));
 
-        if (allowanceEntry && selectedMember.role === "child") {
+        if (
+          allowanceEntry &&
+          createdCompletion.allowanceTracked &&
+          selectedMember.role === "child"
+        ) {
           setAllowanceState((current) => ({
             entries: [...current.entries, allowanceEntry],
           }));
@@ -2357,6 +2362,10 @@ async function loadRemoteAllowanceEntries({
     .returns<RemoteAllowanceEntryRow[]>();
 
   if (error) {
+    if (isMissingAllowanceEntriesTableError(error)) {
+      return [];
+    }
+
     throw error;
   }
 

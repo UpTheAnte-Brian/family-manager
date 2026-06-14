@@ -1,9 +1,9 @@
 create table public.allowance_entries (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households(id) on delete cascade,
-  household_member_id uuid not null,
-  chore_completion_id uuid,
-  chore_id uuid,
+  household_member_id uuid not null references public.household_members(id) on delete cascade,
+  chore_completion_id uuid references public.chore_completions(id) on delete cascade,
+  chore_id uuid references public.chores(id) on delete set null,
   entry_type text not null default 'chore_completion' check (entry_type in ('chore_completion', 'manual_adjustment')),
   amount_cents integer not null,
   occurred_at timestamptz not null default now(),
@@ -11,16 +11,7 @@ create table public.allowance_entries (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  foreign key (household_id, household_member_id)
-    references public.household_members(household_id, id)
-    on delete cascade,
-  foreign key (household_id, chore_completion_id)
-    references public.chore_completions(household_id, id)
-    on delete cascade,
-  foreign key (household_id, chore_id)
-    references public.chores(household_id, id)
-    on delete set null,
-  unique (household_id, chore_completion_id)
+  unique (chore_completion_id)
 );
 
 create index allowance_entries_member_occurred_at_idx

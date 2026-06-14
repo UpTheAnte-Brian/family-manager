@@ -298,7 +298,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           return "Completion cleared.";
         }
 
-        await createRemoteChoreCompletion({
+        const createdCompletion = await createRemoteChoreCompletion({
           assignment,
           chore: choresById.get(assignment.choreId),
           earnsAllowance: memberById.get(assignment.childId)?.role === "child",
@@ -306,7 +306,9 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           occurrenceDate: selectedDate,
           remoteMemberId: getRemoteMemberId(remoteMembers, assignment.childId),
         });
-        return "Completion saved to Supabase.";
+        return createdCompletion.allowanceTracked
+          ? "Completion saved to Supabase."
+          : "Completion saved. Allowance sync will start after the allowance migration is deployed.";
       });
       return;
     }
@@ -693,18 +695,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               </Panel>
             ) : null}
 
-            <Panel
-              action={
-                <button
-                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
-                  onClick={() => setEditingChoreId("new")}
-                  type="button"
-                >
-                  Capture
-                </button>
-              }
-              title="Warehouse"
-            >
+            <Panel title="Warehouse">
               {backlogChores.length > 0 ? (
                 <div className="grid gap-2">
                   {backlogChores.map((chore) => (
@@ -992,7 +983,7 @@ function ChoreEditor({
   }
 
   return (
-    <EditorShell onCancel={onCancel} title={chore ? "Edit chore" : "Capture chore"}>
+    <EditorShell onCancel={onCancel} title={chore ? "Edit chore" : "Add chore"}>
       <label className="grid gap-1 text-sm">
         <span className="font-semibold">Name</span>
         <input
