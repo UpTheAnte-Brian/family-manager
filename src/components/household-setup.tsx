@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
+import { AdminBaselineTemplates } from "@/components/admin-baseline-templates";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
-import type { HouseholdMember } from "@/lib/planner/types";
+import type { DayTemplate, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
 import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -15,6 +16,7 @@ type SetupStatus = "idle" | "loading" | "success" | "error";
 type SetupStepId = "account" | "household" | "members" | "access";
 
 type HouseholdSetupProps = {
+  defaultDayTemplates: DayTemplate[];
   plannerMembers: HouseholdMember[];
 };
 
@@ -67,7 +69,7 @@ type CreatedHouseholdRow = {
 
 const emptyMemberDraft = createBlankMemberDraft("parent");
 
-export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
+export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: HouseholdSetupProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState<Session | null>(null);
@@ -705,6 +707,22 @@ export function HouseholdSetup({ plannerMembers }: HouseholdSetupProps) {
                   index={6}
                   isOpen={openStep === 6}
                   onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 6 : 0)}
+                  summary={
+                    !isHouseholdAdmin
+                      ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage baseline flows.`
+                      : "Define the household's baseline day flows in Supabase."
+                  }
+                  title="Baseline flows"
+                >
+                  <AdminBaselineTemplates defaultTemplates={defaultDayTemplates} />
+                </WorkflowStep>
+
+                <WorkflowStep
+                  complete={false}
+                  disabled={!hasMembers || !isHouseholdAdmin}
+                  index={7}
+                  isOpen={openStep === 7}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 7 : 0)}
                   summary={
                     !isHouseholdAdmin
                       ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage calendar imports.`

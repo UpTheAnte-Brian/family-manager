@@ -45,6 +45,7 @@ import type {
   HouseholdMember,
   PlannerData,
   RoutineChore,
+  ScheduleBlock,
   WeeklyChore,
   WeeklyChoreAssignmentTemplate,
 } from "@/lib/planner/types";
@@ -65,6 +66,7 @@ type DashboardState = {
   localItems: LocalHouseholdItem[];
   localRoutines: LocalRoutineItem[];
   localResponsibilities: LocalResponsibilityItem[];
+  localScheduleEvents: LocalScheduledEvent[];
   localTemporaryRoutines: LocalTemporaryRoutineItem[];
 };
 
@@ -93,6 +95,11 @@ type DashboardRoutineItem = {
   completionKey?: string;
 };
 
+type DashboardHouseholdItem = LocalHouseholdItem & {
+  completionKey?: string;
+  remoteActionItemId?: string;
+};
+
 type DashboardResponsibilityItem = {
   id: string;
   title: string;
@@ -116,8 +123,13 @@ type DashboardResponsibilityItem = {
 };
 
 type RemoteTemporaryRoutineMetadata = {
+  baselineBlockId?: string;
+  baselineTemplateId?: string;
+  baselineTemplateName?: string;
   kind?: string;
-  category?: ResponsibilityCategory;
+  category?: string;
+  noiseLevel?: "low" | "medium" | "high" | "variable";
+  location?: ScheduleBlock["location"];
   routineTemplateId?: string;
   routineTemplateName?: string;
   stepId?: string;
@@ -165,10 +177,12 @@ type RemoteChoreCompletionRow = {
 
 type RemoteActionItemRow = {
   id: string;
+  item_kind?: "routine" | "task" | "reminder";
   title: string;
   days_of_week?: string[];
   start_time: string | null;
   end_time: string | null;
+  occurrence_date?: string | null;
   metadata: RemoteTemporaryRoutineMetadata;
   created_at: string;
 };
@@ -188,6 +202,20 @@ type RemoteTemporaryRoutineLoad = {
   completionMap: Record<string, boolean>;
   memberIdsByExternalKey: Record<string, string>;
   externalKeysByMemberId: Record<string, string>;
+};
+
+type RemoteHouseholdItemLoad = {
+  completionMap: Record<string, boolean>;
+  items: DashboardHouseholdItem[];
+  responsibilities: LocalResponsibilityItem[];
+};
+
+type RemoteBaselineTemplateLoad = {
+  templates: DayTemplate[];
+};
+
+type RemoteBaselineScheduleLoad = {
+  events: DashboardEvent[];
 };
 
 type RemoteRoutineLoad = {
@@ -218,6 +246,12 @@ type RemoteAllowanceEntryRow = {
 
 type DashboardEvent = FixedEvent & {
   assignedMemberIds?: string[];
+};
+
+type LocalScheduledEvent = FixedEvent & {
+  assignedMemberIds: string[];
+  createdAt: string;
+  baselineBlockId?: string;
 };
 
 const storageKey = "family-manager:dashboard:v1";
@@ -273,6 +307,7 @@ export function ProfileDashboard({
       localItems: [],
       localRoutines: [],
       localResponsibilities: [],
+      localScheduleEvents: [],
       localTemporaryRoutines: [],
     }),
     [chores.completions, defaultMemberId],
@@ -309,14 +344,23 @@ export function ProfileDashboard({
   );
   const { household, households, selectHousehold, status: householdStatus } = useCurrentHousehold();
   const [remoteTemporaryRoutines, setRemoteTemporaryRoutines] = useState<LocalTemporaryRoutineItem[]>([]);
+  const [remoteBaselineTemplates, setRemoteBaselineTemplates] = useState<DayTemplate[]>([]);
+  const [remoteBaselineScheduleEvents, setRemoteBaselineScheduleEvents] = useState<DashboardEvent[]>([]);
+  const [remoteHouseholdItems, setRemoteHouseholdItems] = useState<DashboardHouseholdItem[]>([]);
+  const [remoteResponsibilities, setRemoteResponsibilities] = useState<LocalResponsibilityItem[]>([]);
   const [remoteTemporaryCompletions, setRemoteTemporaryCompletions] = useState<Record<string, boolean>>({});
+  const [remoteHouseholdItemCompletions, setRemoteHouseholdItemCompletions] = useState<Record<string, boolean>>({});
   const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
   const [remoteRoutineCompletions, setRemoteRoutineCompletions] = useState<Record<string, boolean>>({});
   const [remoteAllowanceEntries, setRemoteAllowanceEntries] = useState<AllowanceEntry[]>([]);
   const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
   const [remoteTemporaryRoutineError, setRemoteTemporaryRoutineError] = useState("");
+  const [remoteBaselineError, setRemoteBaselineError] = useState("");
+  const [remoteHouseholdItemError, setRemoteHouseholdItemError] = useState("");
   const [remoteChoreError, setRemoteChoreError] = useState("");
   const [remoteAllowanceError, setRemoteAllowanceError] = useState("");
+  const [baselineScheduleSyncVersion, setBaselineScheduleSyncVersion] = useState(0);
+  const [householdItemSyncVersion, setHouseholdItemSyncVersion] = useState(0);
   const [temporaryRoutineSyncVersion, setTemporaryRoutineSyncVersion] = useState(0);
   const [routineSyncVersion, setRoutineSyncVersion] = useState(0);
   const [choreSyncVersion, setChoreSyncVersion] = useState(0);
@@ -326,26 +370,33 @@ export function ProfileDashboard({
     | { mode: "edit"; responsibility: LocalResponsibilityItem }
     | null
   >(null);
+  const [baselineScheduleModal, setBaselineScheduleModal] = useState<ScheduleBlock[] | null>(null);
+  const [selectedBaselineBlockIds, setSelectedBaselineBlockIds] = useState<string[]>([]);
   const [temporaryRoutineModal, setTemporaryRoutineModal] = useState(false);
   const [collapsedResponsibilityCategories, setCollapsedResponsibilityCategories] = useState<
     Partial<Record<ResponsibilityCategory, boolean>>
   >({});
   const wasMorningRoutineCompleteRef = useRef(false);
+  const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
+  const selectedMember =
+    members.find((member) => member.id === state.selectedMemberId) ?? members[0];
+  const effectiveDayTemplates = useMemo(
+    () =>
+      isRemoteHouseholdReady && remoteBaselineTemplates.length > 0
+        ? [...remoteBaselineTemplates, ...dayTemplates]
+        : dayTemplates,
+    [dayTemplates, isRemoteHouseholdReady, remoteBaselineTemplates],
+  );
   const displayedDay = useMemo(
     () =>
       getDashboardDayContext({
         date: selectedDate,
-        dayTemplates,
+        dayTemplates: effectiveDayTemplates,
         fixedEvents,
         season,
-        today,
       }),
-    [dayTemplates, fixedEvents, season, selectedDate, today],
+    [effectiveDayTemplates, fixedEvents, season, selectedDate],
   );
-
-  const selectedMember =
-    members.find((member) => member.id === state.selectedMemberId) ?? members[0];
-  const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
   const choresById = useMemo(
     () => new Map(choreConfig.weeklyChores.map((chore) => [chore.id, chore])),
     [choreConfig.weeklyChores],
@@ -370,6 +421,14 @@ export function ProfileDashboard({
     calendarTeamAssignments,
     displayedDay.date,
   );
+  const localScheduleEvents = getLocalScheduleEventsForDate(
+    state.localScheduleEvents,
+    displayedDay.date,
+  );
+  const dayScheduleEvents = getDayScheduleEvents(
+    importedEvents,
+    isRemoteHouseholdReady ? remoteBaselineScheduleEvents : localScheduleEvents,
+  );
   const configuredEvents = getConfiguredEventsAfterAppliedSourceReplacements(
     displayedDay.fixedEvents,
     calendarSources,
@@ -383,12 +442,16 @@ export function ProfileDashboard({
   }));
   const birthdayEvents = getBirthdayEventsForDate(members, displayedDay.date);
   const effectiveEvents = [...configuredEvents, ...importedEvents, ...birthdayEvents];
-  const scheduleEvents = getRelevantEvents(importedEvents, selectedMember);
-  const otherScheduleEvents = getOtherEvents(importedEvents, scheduleEvents, selectedMember);
+  const scheduleEvents = getRelevantEvents(dayScheduleEvents, selectedMember);
+  const otherScheduleEvents = getOtherEvents(dayScheduleEvents, scheduleEvents, selectedMember);
   const dayTypeLabel = getEffectiveDayTypeLabel(displayedDay.dayTypeLabel, effectiveEvents);
-  const visibleLocalItems = getVisibleLocalItems(state.localItems, selectedMember, displayedDay.date);
-  const localTasks = visibleLocalItems.filter((item) => item.kind === "task");
-  const localReminders = visibleLocalItems.filter((item) => item.kind === "reminder");
+  const visibleHouseholdItems = getVisibleLocalItems(
+    isRemoteHouseholdReady ? [...remoteHouseholdItems, ...state.localItems] : state.localItems,
+    selectedMember,
+    displayedDay.date,
+  );
+  const localTasks = visibleHouseholdItems.filter((item) => item.kind === "task");
+  const localReminders = visibleHouseholdItems.filter((item) => item.kind === "reminder");
   const temporaryRoutines = isRemoteHouseholdReady
     ? remoteTemporaryRoutines
     : state.localTemporaryRoutines;
@@ -397,19 +460,27 @@ export function ProfileDashboard({
       ...state,
       actionCompletions: {
         ...state.actionCompletions,
+        ...remoteHouseholdItemCompletions,
         ...remoteRoutineCompletions,
         ...remoteTemporaryCompletions,
       },
       choreCompletions: choreConfig.completions,
       localTemporaryRoutines: temporaryRoutines,
     }),
-    [choreConfig.completions, remoteRoutineCompletions, remoteTemporaryCompletions, state, temporaryRoutines],
+    [
+      choreConfig.completions,
+      remoteHouseholdItemCompletions,
+      remoteRoutineCompletions,
+      remoteTemporaryCompletions,
+      state,
+      temporaryRoutines,
+    ],
   );
   const responsibilityItems = getResponsibilityItems(
     routineItems,
     assignments,
     configuredResponsibilities,
-    state.localResponsibilities,
+    isRemoteHouseholdReady ? [...remoteResponsibilities, ...state.localResponsibilities] : state.localResponsibilities,
     temporaryRoutines,
     localTasks,
     selectedMember,
@@ -433,6 +504,9 @@ export function ProfileDashboard({
   const isPastSelectedDate = displayedDay.date < today.date;
   const isTodaySelected = displayedDay.date === today.date;
   const groupedResponsibilityItems = groupResponsibilitiesByCategory(responsibilityItems);
+  const selectedBaselineBlocks = displayedDay.baseline.blocks.filter((block) =>
+    selectedBaselineBlockIds.includes(block.id),
+  );
   const householdId = household?.householdId;
 
   useEffect(() => {
@@ -494,6 +568,42 @@ export function ProfileDashboard({
     let isActive = true;
     const currentHouseholdId = householdId;
 
+    async function loadRemoteBaselineTemplateConfig() {
+      try {
+        const remoteState = await loadRemoteBaselineTemplates(currentHouseholdId);
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteBaselineTemplates(remoteState.templates);
+        setRemoteBaselineError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteBaselineError(
+          error instanceof Error ? error.message : "Could not load baseline flows from Supabase.",
+        );
+      }
+    }
+
+    void loadRemoteBaselineTemplateConfig();
+
+    return () => {
+      isActive = false;
+    };
+  }, [householdId, householdStatus]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
     async function loadRemoteTemporaryRoutinesForHousehold() {
       try {
         const remoteState = await loadRemoteTemporaryRoutines(currentHouseholdId);
@@ -523,6 +633,91 @@ export function ProfileDashboard({
       isActive = false;
     };
   }, [householdId, householdStatus, temporaryRoutineSyncVersion]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadRemoteBaselineEventsForDate() {
+      try {
+        const remoteState = await loadRemoteBaselineScheduleEvents(
+          currentHouseholdId,
+          displayedDay.date,
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteBaselineScheduleEvents(remoteState.events);
+        setRemoteBaselineError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteBaselineError(
+          error instanceof Error
+            ? error.message
+            : "Could not load baseline schedule events from Supabase.",
+        );
+      }
+    }
+
+    void loadRemoteBaselineEventsForDate();
+
+    return () => {
+      isActive = false;
+    };
+  }, [displayedDay.date, householdId, householdStatus, baselineScheduleSyncVersion]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadRemoteHouseholdActionItemsForDay() {
+      try {
+        const remoteState = await loadRemoteHouseholdItems(
+          currentHouseholdId,
+          displayedDay.date,
+          displayedDay.dayOfWeek,
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteResponsibilities(remoteState.responsibilities);
+        setRemoteHouseholdItems(remoteState.items);
+        setRemoteHouseholdItemCompletions(remoteState.completionMap);
+        setRemoteHouseholdItemError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteHouseholdItemError(
+          error instanceof Error
+            ? error.message
+            : "Could not load responsibilities, tasks, or reminders from Supabase.",
+        );
+      }
+    }
+
+    void loadRemoteHouseholdActionItemsForDay();
+
+    return () => {
+      isActive = false;
+    };
+  }, [displayedDay.date, displayedDay.dayOfWeek, householdId, householdItemSyncVersion, householdStatus]);
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready" || selectedMember.role !== "child") {
@@ -643,6 +838,21 @@ export function ProfileDashboard({
       ...current,
       selectedMemberId: memberId,
     }));
+  }
+
+  function clearBaselineScheduleSelection() {
+    setSelectedBaselineBlockIds([]);
+    setBaselineScheduleModal(null);
+  }
+
+  function setDashboardDate(nextDate: string) {
+    clearBaselineScheduleSelection();
+    setSelectedDate(nextDate);
+  }
+
+  function shiftDashboardDate(days: number) {
+    clearBaselineScheduleSelection();
+    setSelectedDate((current) => shiftDate(current, days));
   }
 
   async function toggleRoutine(routine: DashboardRoutineItem) {
@@ -860,8 +1070,13 @@ export function ProfileDashboard({
     const key = item.completionKey ?? getActionKey(displayedDay.date, selectedMember.id, item.id);
     const isComplete = Boolean(dashboardStateForView.actionCompletions[key]);
 
-    if (isRemoteHouseholdReady && item.source === "temporary-routine" && item.remoteActionItemId) {
-      setRemoteTemporaryCompletions((current) => ({
+    if (isRemoteHouseholdReady && item.remoteActionItemId) {
+      const setCompletionState =
+        item.source === "temporary-routine"
+          ? setRemoteTemporaryCompletions
+          : setRemoteHouseholdItemCompletions;
+
+      setCompletionState((current) => ({
         ...current,
         [key]: !isComplete,
       }));
@@ -874,16 +1089,27 @@ export function ProfileDashboard({
           householdId: household!.householdId,
           memberId: remoteMemberIdsByExternalKey[selectedMember.id],
         });
-        setTemporaryRoutineSyncVersion((current) => current + 1);
-        setRemoteTemporaryRoutineError("");
+        if (item.source === "temporary-routine") {
+          setTemporaryRoutineSyncVersion((current) => current + 1);
+          setRemoteTemporaryRoutineError("");
+        } else {
+          setHouseholdItemSyncVersion((current) => current + 1);
+          setRemoteHouseholdItemError("");
+        }
       } catch (error) {
-        setRemoteTemporaryCompletions((current) => ({
+        setCompletionState((current) => ({
           ...current,
           [key]: isComplete,
         }));
-        setRemoteTemporaryRoutineError(
-          error instanceof Error ? error.message : "Could not save temporary routine completion.",
-        );
+        if (item.source === "temporary-routine") {
+          setRemoteTemporaryRoutineError(
+            error instanceof Error ? error.message : "Could not save temporary routine completion.",
+          );
+        } else {
+          setRemoteHouseholdItemError(
+            error instanceof Error ? error.message : "Could not save task completion.",
+          );
+        }
       }
 
       return;
@@ -898,11 +1124,36 @@ export function ProfileDashboard({
     }));
   }
 
-  function addLocalResponsibility(input: Omit<LocalResponsibilityItem, "createdAt" | "id">) {
+  async function addLocalResponsibility(input: Omit<LocalResponsibilityItem, "createdAt" | "id">) {
     const title = input.title.trim();
 
     if (!title) {
       return false;
+    }
+
+    if (isRemoteHouseholdReady && householdId) {
+      const remoteMemberId = remoteMemberIdsByExternalKey[input.assigneeId];
+
+      if (!remoteMemberId) {
+        setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
+        return false;
+      }
+
+      try {
+        await saveRemoteResponsibility({
+          householdId,
+          memberId: remoteMemberId,
+          responsibility: input,
+        });
+        setHouseholdItemSyncVersion((current) => current + 1);
+        setRemoteHouseholdItemError("");
+        return true;
+      } catch (error) {
+        setRemoteHouseholdItemError(
+          error instanceof Error ? error.message : "Could not save responsibility to Supabase.",
+        );
+        return false;
+      }
     }
 
     const createdAt = new Date().toISOString();
@@ -923,7 +1174,88 @@ export function ProfileDashboard({
     return true;
   }
 
-  function updateLocalResponsibility(
+  function toggleBaselineBlockSelection(blockId: string) {
+    setSelectedBaselineBlockIds((current) =>
+      current.includes(blockId)
+        ? current.filter((candidate) => candidate !== blockId)
+        : [...current, blockId],
+    );
+  }
+
+  async function addBaselineBlocksToSchedule(blocks: ScheduleBlock[], assignedMemberIds: string[]) {
+    const normalizedAssignedMemberIds = Array.from(new Set(assignedMemberIds));
+
+    if (blocks.length === 0 || normalizedAssignedMemberIds.length === 0) {
+      return false;
+    }
+
+    if (isRemoteHouseholdReady && householdId) {
+      const remoteMemberIds = normalizedAssignedMemberIds
+        .map((memberId) => remoteMemberIdsByExternalKey[memberId])
+        .filter((memberId): memberId is string => Boolean(memberId));
+
+      if (remoteMemberIds.length !== normalizedAssignedMemberIds.length) {
+        setRemoteBaselineError("Open Setup and save household members before assigning baseline blocks.");
+        return false;
+      }
+
+      try {
+        await saveRemoteBaselineScheduleEvents({
+          assignedMemberIds: remoteMemberIds,
+          blocks,
+          date: displayedDay.date,
+          householdId,
+        });
+        setBaselineScheduleSyncVersion((current) => current + 1);
+        setRemoteBaselineError("");
+        return true;
+      } catch (error) {
+        setRemoteBaselineError(
+          error instanceof Error ? error.message : "Could not save baseline blocks to Supabase.",
+        );
+        return false;
+      }
+    }
+
+    let addedEventCount = 0;
+
+    setState((current) => {
+      const createdAt = new Date().toISOString();
+      const existingEventKeys = new Set(current.localScheduleEvents.map(getLocalScheduleEventKey));
+      const nextLocalScheduleEvents = [...current.localScheduleEvents];
+
+      for (const block of blocks) {
+        const nextEvent = createLocalScheduleEvent({
+          assignedMemberIds: normalizedAssignedMemberIds,
+          block,
+          createdAt,
+          date: displayedDay.date,
+        });
+        const eventKey = getLocalScheduleEventKey(nextEvent);
+
+        if (existingEventKeys.has(eventKey)) {
+          continue;
+        }
+
+        existingEventKeys.add(eventKey);
+        nextLocalScheduleEvents.push(nextEvent);
+        addedEventCount += 1;
+      }
+
+      if (addedEventCount === 0) {
+        return current;
+      }
+
+      return {
+        ...current,
+        localScheduleEvents: nextLocalScheduleEvents,
+      };
+    });
+
+    return addedEventCount > 0;
+  }
+
+  async function updateLocalResponsibility(
     responsibilityId: string,
     input: Omit<LocalResponsibilityItem, "createdAt" | "id">,
   ) {
@@ -931,6 +1263,32 @@ export function ProfileDashboard({
 
     if (!title) {
       return false;
+    }
+
+    if (isRemoteHouseholdReady && householdId && isUuid(responsibilityId)) {
+      const remoteMemberId = remoteMemberIdsByExternalKey[input.assigneeId];
+
+      if (!remoteMemberId) {
+        setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
+        return false;
+      }
+
+      try {
+        await saveRemoteResponsibility({
+          householdId,
+          memberId: remoteMemberId,
+          responsibility: input,
+          responsibilityId,
+        });
+        setHouseholdItemSyncVersion((current) => current + 1);
+        setRemoteHouseholdItemError("");
+        return true;
+      } catch (error) {
+        setRemoteHouseholdItemError(
+          error instanceof Error ? error.message : "Could not update responsibility in Supabase.",
+        );
+        return false;
+      }
     }
 
     setState((current) => ({
@@ -949,7 +1307,23 @@ export function ProfileDashboard({
     return true;
   }
 
-  function removeLocalResponsibility(responsibilityId: string) {
+  async function removeLocalResponsibility(responsibilityId: string) {
+    if (isRemoteHouseholdReady && householdId && isUuid(responsibilityId)) {
+      try {
+        await deleteRemoteHouseholdActionItem({
+          actionItemId: responsibilityId,
+          householdId,
+        });
+        setHouseholdItemSyncVersion((current) => current + 1);
+        setRemoteHouseholdItemError("");
+      } catch (error) {
+        setRemoteHouseholdItemError(
+          error instanceof Error ? error.message : "Could not remove responsibility from Supabase.",
+        );
+      }
+      return;
+    }
+
     setState((current) => {
       const removedResponsibility = current.localResponsibilities.find(
         (responsibility) => responsibility.id === responsibilityId,
@@ -970,6 +1344,29 @@ export function ProfileDashboard({
         ),
       };
     });
+  }
+
+  async function removeScheduledBaselineEvent(eventId: string) {
+    if (isRemoteHouseholdReady && householdId) {
+      try {
+        await deleteRemoteBaselineScheduleEvent({
+          actionItemId: eventId,
+          householdId,
+        });
+        setBaselineScheduleSyncVersion((current) => current + 1);
+        setRemoteBaselineError("");
+      } catch (error) {
+        setRemoteBaselineError(
+          error instanceof Error ? error.message : "Could not remove baseline schedule event.",
+        );
+      }
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      localScheduleEvents: current.localScheduleEvents.filter((event) => event.id !== eventId),
+    }));
   }
 
   async function addTemporaryRoutine(input: Omit<LocalTemporaryRoutineItem, "createdAt" | "id">) {
@@ -1154,7 +1551,7 @@ export function ProfileDashboard({
               <div className="grid grid-cols-3 gap-2 sm:w-[340px]">
                 <button
                   className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
-                  onClick={() => setSelectedDate((current) => shiftDate(current, -1))}
+                  onClick={() => shiftDashboardDate(-1)}
                   type="button"
                 >
                   Previous
@@ -1162,14 +1559,14 @@ export function ProfileDashboard({
                 <button
                   className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={isTodaySelected}
-                  onClick={() => setSelectedDate(today.date)}
+                  onClick={() => setDashboardDate(today.date)}
                   type="button"
                 >
                   Today
                 </button>
                 <button
                   className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
-                  onClick={() => setSelectedDate((current) => shiftDate(current, 1))}
+                  onClick={() => shiftDashboardDate(1)}
                   type="button"
                 >
                   Next
@@ -1316,7 +1713,16 @@ export function ProfileDashboard({
               {scheduleEvents.length > 0 ? (
                 <ol className="grid gap-2">
                   {scheduleEvents.map((event) => (
-                    <EventRow event={event} key={event.id} />
+                    <EventRow
+                      event={event}
+                      key={event.id}
+                      members={members}
+                      onRemove={
+                        event.source === "baseline-flow"
+                          ? () => void removeScheduledBaselineEvent(event.id)
+                          : undefined
+                      }
+                    />
                   ))}
                 </ol>
               ) : (
@@ -1328,7 +1734,16 @@ export function ProfileDashboard({
               {otherScheduleEvents.length > 0 ? (
                 <ol className="grid gap-2">
                   {otherScheduleEvents.map((event) => (
-                    <OtherEventRow event={event} key={event.id} members={members} />
+                    <OtherEventRow
+                      event={event}
+                      key={event.id}
+                      members={members}
+                      onRemove={
+                        event.source === "baseline-flow"
+                          ? () => void removeScheduledBaselineEvent(event.id)
+                          : undefined
+                      }
+                    />
                   ))}
                 </ol>
               ) : (
@@ -1368,11 +1783,23 @@ export function ProfileDashboard({
                 <li>
                   Temporary routines sync through Supabase when a household is connected.
                 </li>
-                <li>Local browser storage is still used for prototype-only routines, tasks, and reminders.</li>
+                <li>
+                  Local browser storage is only used as a fallback when no household is connected.
+                </li>
               </ul>
               {isRemoteHouseholdReady && remoteTemporaryRoutineError ? (
                 <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
                   {remoteTemporaryRoutineError}
+                </p>
+              ) : null}
+              {isRemoteHouseholdReady && remoteBaselineError ? (
+                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                  {remoteBaselineError}
+                </p>
+              ) : null}
+              {isRemoteHouseholdReady && remoteHouseholdItemError ? (
+                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                  {remoteHouseholdItemError}
                 </p>
               ) : null}
               {isRemoteHouseholdReady && remoteChoreError ? (
@@ -1446,18 +1873,56 @@ export function ProfileDashboard({
           </div>
 
           <div className="xl:col-span-2">
-            <Panel title="Baseline Flow">
+            <Panel
+              action={
+                displayedDay.baseline.blocks.length > 0 ? (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {selectedBaselineBlockIds.length > 0 ? (
+                      <button
+                        className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                        onClick={() => setSelectedBaselineBlockIds([])}
+                        type="button"
+                      >
+                        Clear selection
+                      </button>
+                    ) : null}
+                    <button
+                      className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={selectedBaselineBlocks.length === 0}
+                      onClick={() => setBaselineScheduleModal(selectedBaselineBlocks)}
+                      type="button"
+                    >
+                      Add selected to day schedule
+                    </button>
+                  </div>
+                ) : undefined
+              }
+              title="Baseline Flow"
+            >
               {displayedDay.baseline.blocks.length > 0 ? (
                 <ol className="grid gap-2 md:grid-cols-2">
                   {displayedDay.baseline.blocks.slice(0, 8).map((block) => (
-                    <li
-                      className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
-                      key={block.id}
-                    >
-                      <span className="font-semibold text-[#17202a]">{block.title}</span>
-                      <span className="text-[#657381]">
-                        {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel}
-                      </span>
+                    <li key={block.id}>
+                      <button
+                        aria-pressed={selectedBaselineBlockIds.includes(block.id)}
+                        className={`grid w-full gap-2 border px-3 py-3 text-left text-sm ${
+                          selectedBaselineBlockIds.includes(block.id)
+                            ? "border-[#dc546a] bg-[#fff4f5] shadow-[inset_0_0_0_1px_#dc546a]"
+                            : "border-[#d7e0e7] bg-[#f8fafc]"
+                        }`}
+                        onClick={() => toggleBaselineBlockSelection(block.id)}
+                        type="button"
+                      >
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="font-semibold text-[#17202a]">{block.title}</span>
+                          <span className="border border-[#d7e0e7] bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                            {selectedBaselineBlockIds.includes(block.id) ? "Selected" : "Click to add"}
+                          </span>
+                        </span>
+                        <span className="text-[#657381]">
+                          {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel}
+                        </span>
+                      </button>
                     </li>
                   ))}
                 </ol>
@@ -1477,16 +1942,32 @@ export function ProfileDashboard({
           }
           members={members}
           onClose={() => setResponsibilityModal(null)}
-          onSave={(input) => {
-            const saved =
+          onSave={async (input) => {
+            const saved = await (
               responsibilityModal.mode === "edit"
                 ? updateLocalResponsibility(responsibilityModal.responsibility.id, input)
-                : addLocalResponsibility(input);
+                : addLocalResponsibility(input)
+            );
 
             if (saved) {
               setResponsibilityModal(null);
             }
           }}
+        />
+      ) : null}
+      {baselineScheduleModal ? (
+        <BaselineScheduleModal
+          blocks={baselineScheduleModal}
+          defaultSelectedMemberIds={selectedMember?.role === "parent" ? [] : [selectedMember?.id ?? ""]}
+          members={members}
+          onClose={() => setBaselineScheduleModal(null)}
+          onSave={async (assignedMemberIds) => {
+            if (await addBaselineBlocksToSchedule(baselineScheduleModal, assignedMemberIds)) {
+              setBaselineScheduleModal(null);
+              setSelectedBaselineBlockIds([]);
+            }
+          }}
+          selectedDate={displayedDay.date}
         />
       ) : null}
       {temporaryRoutineModal ? (
@@ -1511,18 +1992,12 @@ function getDashboardDayContext({
   dayTemplates,
   fixedEvents,
   season,
-  today,
 }: {
   date: string;
   dayTemplates: DayTemplate[];
   fixedEvents: FixedEvent[];
   season: PlannerData["season"];
-  today: TodayContext;
 }): TodayContext {
-  if (date === today.date) {
-    return today;
-  }
-
   const dayOfWeek = getDayOfWeekForDate(date);
   const dayEvents = fixedEvents.filter((event) => event.date === date);
   const dayType = getDayTypeForDate(date, dayOfWeek, dayEvents, season);
@@ -1685,6 +2160,26 @@ function choreCategoryToResponsibilityCategory(category?: string): Responsibilit
   return "chores";
 }
 
+function normalizeRemoteResponsibilityCategory(category?: string): ResponsibilityCategory {
+  if (
+    category === "morning-routine" ||
+    category === "homework" ||
+    category === "chores" ||
+    category === "sports" ||
+    category === "personal-hygiene" ||
+    category === "work" ||
+    category === "personal" ||
+    category === "investments" ||
+    category === "family-planning" ||
+    category === "home-maintenance" ||
+    category === "finance"
+  ) {
+    return category;
+  }
+
+  return "chores";
+}
+
 function groupResponsibilitiesByCategory(items: DashboardResponsibilityItem[]) {
   return responsibilityCategories
     .map((category) => [category, items.filter((item) => item.category === category)] as const)
@@ -1787,7 +2282,7 @@ function getResponsibilityItems(
   configuredResponsibilities: LocalResponsibilityItem[],
   localResponsibilities: LocalResponsibilityItem[],
   localTemporaryRoutines: LocalTemporaryRoutineItem[],
-  localTasks: LocalHouseholdItem[],
+  localTasks: DashboardHouseholdItem[],
   member: HouseholdMember,
   today: TodayContext,
 ): DashboardResponsibilityItem[] {
@@ -1839,6 +2334,8 @@ function getResponsibilityItems(
       category: responsibility.category ?? "chores",
       source: "local" as const,
       localResponsibility: responsibility,
+      remoteActionItemId: isUuid(responsibility.id) ? responsibility.id : undefined,
+      completionKey: getActionKey(today.date, responsibility.assigneeId, responsibility.id),
     }));
   const datedTasks = localTasks.map((item) => ({
     id: item.id,
@@ -1847,7 +2344,9 @@ function getResponsibilityItems(
     endTime: "Today",
     category: "personal" as const,
     source: "dated-task" as const,
-    localTaskId: item.id,
+    localTaskId: item.remoteActionItemId ? undefined : item.id,
+    remoteActionItemId: item.remoteActionItemId,
+    completionKey: item.completionKey,
   }));
   const temporaryRoutineItems = localTemporaryRoutines.flatMap((routine) => {
     if (routine.assigneeId !== member.id || today.date < routine.startsOn || today.date > routine.endsOn) {
@@ -1879,7 +2378,7 @@ function getResponsibilityItems(
   );
 }
 
-function getRelevantEvents(events: DashboardEvent[], member: HouseholdMember) {
+function getRelevantEvents(events: FixedEvent[], member: HouseholdMember) {
   if (member.role === "parent") {
     return events;
   }
@@ -1903,11 +2402,7 @@ function getRelevantEvents(events: DashboardEvent[], member: HouseholdMember) {
   });
 }
 
-function getOtherEvents(
-  allEvents: DashboardEvent[],
-  memberEvents: DashboardEvent[],
-  member: HouseholdMember,
-) {
+function getOtherEvents(allEvents: FixedEvent[], memberEvents: FixedEvent[], member: HouseholdMember) {
   if (member.role === "parent") {
     return [];
   }
@@ -1917,11 +2412,24 @@ function getOtherEvents(
   return allEvents.filter((event) => !memberEventIds.has(event.id));
 }
 
+function getLocalScheduleEventsForDate(events: LocalScheduledEvent[], date: string) {
+  return events.filter((event) => event.date === date);
+}
+
+function getDayScheduleEvents(
+  importedEvents: DashboardEvent[],
+  localScheduleEvents: FixedEvent[],
+) {
+  return [...importedEvents, ...localScheduleEvents].sort((first, second) =>
+    compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
+  );
+}
+
 function getReminderItems(
   member: HouseholdMember,
   events: FixedEvent[],
   responsibilityCount: number,
-  localReminders: LocalHouseholdItem[],
+  localReminders: DashboardHouseholdItem[],
   today: TodayContext,
 ) {
   const sportsToday = events.some((event) => event.category === "sports");
@@ -2066,7 +2574,7 @@ function hasCompletion(completions: ChoreCompletion[], assignmentId: string, dat
 }
 
 function getVisibleLocalItems(
-  items: LocalHouseholdItem[],
+  items: DashboardHouseholdItem[],
   member: HouseholdMember,
   date: string,
 ) {
@@ -2091,6 +2599,601 @@ function getTemporaryRoutineCompletionKey(
   occurrenceId: string,
 ) {
   return `${date}:${memberId}:temporary-routine:${routineId}:${occurrenceId}`;
+}
+
+function normalizeRemoteDaysOfWeek(daysOfWeek: string[] | null | undefined): DayOfWeek[] {
+  return dayOptions.filter((day) => daysOfWeek?.includes(day));
+}
+
+async function loadRemoteHouseholdItems(
+  householdId: string,
+  date: string,
+  dayOfWeek: DayOfWeek,
+): Promise<RemoteHouseholdItemLoad> {
+  const supabase = createBrowserSupabaseClient();
+  const { data: members, error: membersError } = await supabase
+    .from("household_members")
+    .select("id, external_key")
+    .eq("household_id", householdId)
+    .returns<RemoteHouseholdMemberRow[]>();
+
+  if (membersError) {
+    throw membersError;
+  }
+
+  const externalKeysByMemberId = Object.fromEntries(
+    (members ?? []).map((member) => [member.id, member.external_key]),
+  );
+
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, item_kind, title, days_of_week, start_time, end_time, occurrence_date, metadata, created_at")
+    .eq("household_id", householdId)
+    .in("item_kind", ["task", "reminder"])
+    .eq("status", "active")
+    .returns<RemoteActionItemRow[]>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const relevantActionItems = (actionItems ?? []).filter((item) => {
+    if (item.item_kind === "task" && item.occurrence_date === null) {
+      return item.metadata.kind === "custom-responsibility" && (item.days_of_week ?? []).includes(dayOfWeek);
+    }
+
+    if (item.occurrence_date !== date) {
+      return false;
+    }
+
+    return item.metadata.kind !== "baseline-schedule-block";
+  });
+
+  const actionItemIds = relevantActionItems.map((item) => item.id);
+  const { data: assignments, error: assignmentsError } =
+    actionItemIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_assignments")
+          .select("assignable_id, household_member_id")
+          .eq("household_id", householdId)
+          .eq("assignable_type", "action_item")
+          .in("assignable_id", actionItemIds)
+          .returns<RemoteAssignmentRow[]>();
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const { data: completions, error: completionsError } =
+    actionItemIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_action_item_completions")
+          .select("action_item_id, occurrence_date")
+          .eq("household_id", householdId)
+          .eq("occurrence_date", date)
+          .in("action_item_id", actionItemIds)
+          .returns<RemoteActionCompletionRow[]>();
+
+  if (completionsError) {
+    throw completionsError;
+  }
+
+  const assignedMemberIdsByActionItemId = new Map<string, string[]>();
+
+  for (const assignment of assignments ?? []) {
+    if (!assignment.household_member_id) {
+      continue;
+    }
+
+    const externalKey = externalKeysByMemberId[assignment.household_member_id];
+
+    if (!externalKey) {
+      continue;
+    }
+
+    assignedMemberIdsByActionItemId.set(assignment.assignable_id, [
+      ...(assignedMemberIdsByActionItemId.get(assignment.assignable_id) ?? []),
+      externalKey,
+    ]);
+  }
+
+  const completionMap: Record<string, boolean> = {};
+  const completionsByActionItemId = new Set((completions ?? []).map((completion) => completion.action_item_id));
+  const responsibilities: LocalResponsibilityItem[] = [];
+  const items: DashboardHouseholdItem[] = [];
+
+  for (const item of relevantActionItems) {
+    const assignedMemberIds = assignedMemberIdsByActionItemId.get(item.id) ?? [];
+    const assigneeId = assignedMemberIds[0] ?? "";
+
+    if (item.item_kind === "task" && item.occurrence_date === null) {
+      if (!assigneeId) {
+        continue;
+      }
+
+      responsibilities.push({
+        id: item.id,
+        title: item.title,
+        category: normalizeRemoteResponsibilityCategory(item.metadata.category),
+        assigneeId,
+        daysOfWeek: normalizeRemoteDaysOfWeek(item.days_of_week),
+        startTime: normalizeTimeForInput(item.start_time),
+        endTime: normalizeTimeForInput(item.end_time),
+        createdAt: item.created_at,
+      });
+      continue;
+    }
+
+    const completionKey = getActionKey(date, assigneeId || "household", item.id);
+
+    if (item.item_kind === "task" && completionsByActionItemId.has(item.id)) {
+      completionMap[completionKey] = true;
+    }
+
+    items.push({
+      id: item.id,
+      kind: item.item_kind as LocalHouseholdItem["kind"],
+      title: item.title,
+      assigneeId,
+      date: item.occurrence_date ?? date,
+      createdAt: item.created_at,
+      completionKey: item.item_kind === "task" ? completionKey : undefined,
+      remoteActionItemId: item.id,
+    });
+  }
+
+  return {
+    completionMap,
+    items,
+    responsibilities,
+  };
+}
+
+async function saveRemoteResponsibility({
+  householdId,
+  memberId,
+  responsibility,
+  responsibilityId,
+}: {
+  householdId: string;
+  memberId: string;
+  responsibility: Omit<LocalResponsibilityItem, "createdAt" | "id">;
+  responsibilityId?: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const row = {
+    household_id: householdId,
+    item_kind: "task",
+    title: responsibility.title.trim(),
+    source: "manual",
+    days_of_week: responsibility.daysOfWeek,
+    start_time: responsibility.startTime,
+    end_time: responsibility.endTime,
+    metadata: {
+      kind: "custom-responsibility",
+      category: responsibility.category ?? "chores",
+    },
+  };
+  const query =
+    responsibilityId && isUuid(responsibilityId)
+      ? supabase
+          .from("household_action_items")
+          .update(row)
+          .eq("household_id", householdId)
+          .eq("id", responsibilityId)
+      : supabase.from("household_action_items").insert(row);
+  const { data: item, error: itemError } = await query.select("id").single<{ id: string }>();
+
+  if (itemError) {
+    throw itemError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .eq("assignable_id", item.id);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const { error: assignmentError } = await supabase.from("household_assignments").insert({
+    household_id: householdId,
+    assignable_type: "action_item",
+    assignable_id: item.id,
+    assignee_type: "member",
+    household_member_id: memberId,
+  });
+
+  if (assignmentError) {
+    throw assignmentError;
+  }
+}
+
+async function deleteRemoteHouseholdActionItem({
+  actionItemId,
+  householdId,
+}: {
+  actionItemId: string;
+  householdId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { error: completionsError } = await supabase
+    .from("household_action_item_completions")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("action_item_id", actionItemId);
+
+  if (completionsError) {
+    throw completionsError;
+  }
+
+  const { error: assignmentsError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .eq("assignable_id", actionItemId);
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const { error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("id", actionItemId);
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+}
+
+async function loadRemoteBaselineTemplates(
+  householdId: string,
+): Promise<RemoteBaselineTemplateLoad> {
+  const supabase = createBrowserSupabaseClient();
+  const { data: actionItems, error } = await supabase
+    .from("household_action_items")
+    .select("id, title, days_of_week, start_time, end_time, metadata, created_at")
+    .eq("household_id", householdId)
+    .eq("item_kind", "routine")
+    .eq("status", "active")
+    .eq("metadata->>kind", "baseline-template-block")
+    .returns<RemoteActionItemRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  const templateGroups = new Map<
+    string,
+    {
+      blocksById: Map<string, ScheduleBlock>;
+      daysOfWeek: Set<DayOfWeek>;
+      endsOn: string;
+      label: string;
+      startsOn: string;
+    }
+  >();
+
+  for (const item of actionItems ?? []) {
+    const templateId = item.metadata.baselineTemplateId;
+
+    if (!templateId) {
+      continue;
+    }
+
+    const group =
+      templateGroups.get(templateId) ??
+      {
+        blocksById: new Map<string, ScheduleBlock>(),
+        daysOfWeek: new Set<DayOfWeek>(),
+        endsOn: item.metadata.endsOn ?? "",
+        label: item.metadata.baselineTemplateName ?? "Baseline flow",
+        startsOn: item.metadata.startsOn ?? "",
+      };
+
+    for (const day of normalizeRemoteDaysOfWeek(item.days_of_week)) {
+      group.daysOfWeek.add(day);
+    }
+
+    const blockId = item.metadata.stepId ?? item.id;
+    if (!group.blocksById.has(blockId)) {
+      group.blocksById.set(blockId, {
+        id: blockId,
+        startTime: normalizeTimeForInput(item.start_time),
+        endTime: normalizeTimeForInput(item.end_time),
+        title: item.title,
+        category: item.metadata.category ?? "personal",
+        noiseLevel: item.metadata.noiseLevel ?? "medium",
+        location: item.metadata.location ?? "home",
+        calendarBehavior: "draft",
+      });
+    }
+
+    templateGroups.set(templateId, group);
+  }
+
+  return {
+    templates: [...templateGroups.entries()].map(([id, group]) => ({
+      id,
+      label: group.label,
+      appliesTo: {
+        daysOfWeek: [...group.daysOfWeek],
+        dateRange: {
+          startsOn: group.startsOn,
+          endsOn: group.endsOn,
+        },
+      },
+      blocks: [...group.blocksById.values()].sort((first, second) =>
+        compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
+      ),
+    })),
+  };
+}
+
+async function loadRemoteBaselineScheduleEvents(
+  householdId: string,
+  date: string,
+): Promise<RemoteBaselineScheduleLoad> {
+  const supabase = createBrowserSupabaseClient();
+  const { data: members, error: membersError } = await supabase
+    .from("household_members")
+    .select("id, external_key")
+    .eq("household_id", householdId)
+    .returns<RemoteHouseholdMemberRow[]>();
+
+  if (membersError) {
+    throw membersError;
+  }
+
+  const externalKeysByMemberId = Object.fromEntries(
+    (members ?? []).map((member) => [member.id, member.external_key]),
+  );
+
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, title, days_of_week, start_time, end_time, metadata, created_at")
+    .eq("household_id", householdId)
+    .eq("item_kind", "task")
+    .eq("status", "active")
+    .eq("occurrence_date", date)
+    .eq("metadata->>kind", "baseline-schedule-block")
+    .returns<RemoteActionItemRow[]>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const actionItemIds = (actionItems ?? []).map((item) => item.id);
+  const { data: assignments, error: assignmentsError } =
+    actionItemIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_assignments")
+          .select("assignable_id, household_member_id")
+          .eq("household_id", householdId)
+          .eq("assignable_type", "action_item")
+          .in("assignable_id", actionItemIds)
+          .returns<RemoteAssignmentRow[]>();
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const assignedMemberIdsByActionItemId = new Map<string, string[]>();
+
+  for (const assignment of assignments ?? []) {
+    if (!assignment.household_member_id) {
+      continue;
+    }
+
+    const externalKey = externalKeysByMemberId[assignment.household_member_id];
+
+    if (!externalKey) {
+      continue;
+    }
+
+    assignedMemberIdsByActionItemId.set(assignment.assignable_id, [
+      ...(assignedMemberIdsByActionItemId.get(assignment.assignable_id) ?? []),
+      externalKey,
+    ]);
+  }
+
+  return {
+    events: (actionItems ?? []).map((item) => ({
+      id: item.id,
+      source: "baseline-flow",
+      date,
+      startTime: normalizeTimeForInput(item.start_time),
+      endTime: normalizeTimeForInput(item.end_time),
+      title: item.title,
+      category: item.metadata.category ?? "personal",
+      calendarBehavior: "draft",
+      assignedMemberIds: assignedMemberIdsByActionItemId.get(item.id) ?? [],
+    })),
+  };
+}
+
+async function saveRemoteBaselineScheduleEvents({
+  assignedMemberIds,
+  blocks,
+  date,
+  householdId,
+}: {
+  assignedMemberIds: string[];
+  blocks: ScheduleBlock[];
+  date: string;
+  householdId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { data: existingActionItems, error: existingActionItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, title, start_time, end_time, metadata")
+    .eq("household_id", householdId)
+    .eq("item_kind", "task")
+    .eq("status", "active")
+    .eq("occurrence_date", date)
+    .eq("metadata->>kind", "baseline-schedule-block")
+    .returns<
+      Array<{
+        id: string;
+        title: string;
+        start_time: string | null;
+        end_time: string | null;
+        metadata: RemoteTemporaryRoutineMetadata;
+      }>
+    >();
+
+  if (existingActionItemsError) {
+    throw existingActionItemsError;
+  }
+
+  const existingActionItemIds = (existingActionItems ?? []).map((item) => item.id);
+  const { data: existingAssignments, error: existingAssignmentsError } =
+    existingActionItemIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_assignments")
+          .select("assignable_id, household_member_id")
+          .eq("household_id", householdId)
+          .eq("assignable_type", "action_item")
+          .in("assignable_id", existingActionItemIds)
+          .returns<RemoteAssignmentRow[]>();
+
+  if (existingAssignmentsError) {
+    throw existingAssignmentsError;
+  }
+
+  const assignedMemberIdsByActionItemId = new Map<string, string[]>();
+
+  for (const assignment of existingAssignments ?? []) {
+    if (!assignment.household_member_id) {
+      continue;
+    }
+
+    assignedMemberIdsByActionItemId.set(assignment.assignable_id, [
+      ...(assignedMemberIdsByActionItemId.get(assignment.assignable_id) ?? []),
+      assignment.household_member_id,
+    ]);
+  }
+
+  const existingKeys = new Set(
+    (existingActionItems ?? []).map((item) =>
+      getScheduledBaselineEventKey({
+        assignedIds: assignedMemberIdsByActionItemId.get(item.id) ?? [],
+        baselineBlockId: item.metadata.baselineBlockId ?? item.id,
+        date,
+        endTime: normalizeTimeForInput(item.end_time),
+        startTime: normalizeTimeForInput(item.start_time),
+        title: item.title,
+      }),
+    ),
+  );
+  const rows = blocks
+    .filter(
+      (block) =>
+        !existingKeys.has(
+          getScheduledBaselineEventKey({
+            assignedIds: assignedMemberIds,
+            baselineBlockId: block.id,
+            date,
+            endTime: block.endTime,
+            startTime: block.startTime,
+            title: block.title,
+          }),
+        ),
+    )
+    .map((block) => ({
+      household_id: householdId,
+      item_kind: "task",
+      title: block.title,
+      source: "manual",
+      occurrence_date: date,
+    start_time: block.startTime,
+    end_time: block.endTime,
+      metadata: {
+        kind: "baseline-schedule-block",
+        baselineBlockId: block.id,
+        category: block.category,
+        noiseLevel: block.noiseLevel,
+        location: block.location,
+      },
+    }));
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .insert(rows)
+    .select("id")
+    .returns<Array<{ id: string }>>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const assignmentRows = (actionItems ?? []).flatMap((item) =>
+    assignedMemberIds.map((memberId) => ({
+      household_id: householdId,
+      assignable_type: "action_item",
+      assignable_id: item.id,
+      assignee_type: "member",
+      household_member_id: memberId,
+    })),
+  );
+
+  const { error: assignmentsError } = await supabase.from("household_assignments").insert(assignmentRows);
+
+  if (assignmentsError) {
+    await supabase
+      .from("household_action_items")
+      .delete()
+      .eq("household_id", householdId)
+      .in(
+        "id",
+        (actionItems ?? []).map((item) => item.id),
+      );
+    throw assignmentsError;
+  }
+}
+
+async function deleteRemoteBaselineScheduleEvent({
+  actionItemId,
+  householdId,
+}: {
+  actionItemId: string;
+  householdId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { error: assignmentsError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .eq("assignable_id", actionItemId);
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const { error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("id", actionItemId);
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
 }
 
 async function loadRemoteRoutines(
@@ -2479,7 +3582,7 @@ async function loadRemoteTemporaryRoutines(householdId: string): Promise<RemoteT
       {
         id: routineId,
         title: item.title,
-        category: metadata.category ?? "personal-hygiene",
+        category: (metadata.category as ResponsibilityCategory | undefined) ?? "personal-hygiene",
         assigneeId,
         startsOn: metadata.startsOn,
         endsOn: metadata.endsOn,
@@ -2716,6 +3819,138 @@ function normalizeTimeForInput(value: string | null) {
   return value ? value.slice(0, 5) : "";
 }
 
+function BaselineScheduleModal({
+  blocks,
+  defaultSelectedMemberIds,
+  members,
+  onClose,
+  onSave,
+  selectedDate,
+}: {
+  blocks: ScheduleBlock[];
+  defaultSelectedMemberIds: string[];
+  members: HouseholdMember[];
+  onClose: () => void;
+  onSave: (assignedMemberIds: string[]) => void | Promise<void>;
+  selectedDate: string;
+}) {
+  const [selectedMemberIds, setSelectedMemberIds] = useState(
+    defaultSelectedMemberIds.filter(Boolean),
+  );
+  const [isSaving, setIsSaving] = useState(false);
+
+  function toggleMember(memberId: string) {
+    setSelectedMemberIds((current) =>
+      current.includes(memberId)
+        ? current.filter((candidate) => candidate !== memberId)
+        : [...current, memberId],
+    );
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (selectedMemberIds.length === 0) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await onSave(selectedMemberIds);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Add to day schedule</h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Adding {blocks.length} baseline block{blocks.length === 1 ? "" : "s"} to{" "}
+              {formatDateLabel(selectedDate)}.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mb-4 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+            Selected Day
+          </p>
+          <p className="mt-1 font-semibold text-[#17202a]">{formatDateLabel(selectedDate)}</p>
+        </div>
+
+        <form className="grid gap-4" onSubmit={submit}>
+          <section className="grid gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+              Baseline blocks
+            </h3>
+            <ol className="grid gap-2">
+              {blocks.map((block) => (
+                <li
+                  className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
+                  key={block.id}
+                >
+                  <span className="font-semibold text-[#17202a]">{block.title}</span>
+                  <span className="text-[#657381]">
+                    {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <fieldset className="grid gap-2 text-sm">
+            <legend className="font-semibold">Family members</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {members.map((member) => (
+                <label
+                  className="flex items-center gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                  key={member.id}
+                >
+                  <input
+                    checked={selectedMemberIds.includes(member.id)}
+                    onChange={() => toggleMember(member.id)}
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-semibold text-[#17202a]">{member.preferredName}</span>
+                    <span className="block text-xs uppercase tracking-[0.12em] text-[#657381]">
+                      {member.role}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <button
+            className="justify-self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSaving || selectedMemberIds.length === 0}
+            type="submit"
+          >
+            {isSaving ? "Saving..." : `Add to ${formatDateLabel(selectedDate)}`}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function TemporaryRoutineModal({
   defaultAssigneeId,
   defaultDate,
@@ -2906,7 +4141,7 @@ function ResponsibilityModal({
   initialResponsibility?: LocalResponsibilityItem;
   members: HouseholdMember[];
   onClose: () => void;
-  onSave: (input: Omit<LocalResponsibilityItem, "createdAt" | "id">) => void;
+  onSave: (input: Omit<LocalResponsibilityItem, "createdAt" | "id">) => void | Promise<void>;
 }) {
   const [title, setTitle] = useState(initialResponsibility?.title ?? "");
   const [category, setCategory] = useState<ResponsibilityCategory>(
@@ -2920,18 +4155,26 @@ function ResponsibilityModal({
   );
   const [startTime, setStartTime] = useState(initialResponsibility?.startTime ?? "16:00");
   const [endTime, setEndTime] = useState(initialResponsibility?.endTime ?? "16:15");
+  const [isSaving, setIsSaving] = useState(false);
   const isEditing = Boolean(initialResponsibility);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSave({
-      assigneeId,
-      category,
-      daysOfWeek,
-      endTime,
-      startTime,
-      title,
-    });
+
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        assigneeId,
+        category,
+        daysOfWeek,
+        endTime,
+        startTime,
+        title,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function toggleDay(day: DayOfWeek) {
@@ -2959,7 +4202,8 @@ function ResponsibilityModal({
             </p>
           </div>
           <button
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSaving}
             onClick={onClose}
             type="button"
           >
@@ -3049,10 +4293,10 @@ function ResponsibilityModal({
             <span />
             <button
               className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={daysOfWeek.length === 0}
+              disabled={isSaving || daysOfWeek.length === 0}
               type="submit"
             >
-              {isEditing ? "Save" : "Add"}
+              {isSaving ? "Saving..." : isEditing ? "Save" : "Add"}
             </button>
           </div>
         </form>
@@ -3068,6 +4312,79 @@ function createId(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function createLocalScheduleEvent({
+  assignedMemberIds,
+  block,
+  createdAt,
+  date,
+}: {
+  assignedMemberIds: string[];
+  block: ScheduleBlock;
+  createdAt: string;
+  date: string;
+}) {
+  return {
+    id: createId(
+      `baseline-flow-${date}-${block.id}-${assignedMemberIds.join("-")}-${createdAt}`,
+    ),
+    assignedMemberIds,
+    baselineBlockId: block.id,
+    calendarBehavior: "draft" as const,
+    category: block.category,
+    createdAt,
+    date,
+    endTime: block.endTime,
+    source: "baseline-flow",
+    startTime: block.startTime,
+    title: block.title,
+  };
+}
+
+function getLocalScheduleEventKey(
+  event: Pick<
+    LocalScheduledEvent,
+    "assignedMemberIds" | "baselineBlockId" | "date" | "endTime" | "startTime" | "title"
+  >,
+) {
+  return getScheduledBaselineEventKey({
+    assignedIds: event.assignedMemberIds,
+    baselineBlockId: event.baselineBlockId ?? "manual",
+    date: event.date,
+    endTime: event.endTime,
+    startTime: event.startTime,
+    title: event.title,
+  });
+}
+
+function getScheduledBaselineEventKey({
+  assignedIds,
+  baselineBlockId,
+  date,
+  endTime,
+  startTime,
+  title,
+}: {
+  assignedIds: string[];
+  baselineBlockId: string;
+  date: string;
+  endTime: string;
+  startTime: string;
+  title: string;
+}) {
+  return [
+    date,
+    startTime,
+    endTime,
+    title,
+    baselineBlockId,
+    [...assignedIds].sort().join(","),
+  ].join("|");
+}
+
 function sourceLabel(source: string) {
   if (source === "sportsengine-calendar") {
     return "Sports";
@@ -3075,6 +4392,10 @@ function sourceLabel(source: string) {
 
   if (source === "family-calendar") {
     return "Family";
+  }
+
+  if (source === "baseline-flow") {
+    return "Baseline";
   }
 
   return source.replace(/-calendar$/, "").replace(/-/g, " ");
@@ -3274,30 +4595,62 @@ function ChecklistItem({
   );
 }
 
-function EventRow({ event }: { event: FixedEvent }) {
+function EventRow({
+  event,
+  members,
+  onRemove,
+}: {
+  event: FixedEvent;
+  members: HouseholdMember[];
+  onRemove?: () => void;
+}) {
+  const assignedMemberNames = getAssignedMemberNames(event, members);
+
   return (
-    <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[120px_1fr_80px]">
+    <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[120px_1fr_auto]">
       <time className="font-semibold text-[#1f6f8b]">
         {formatTimeRange(event.startTime, event.endTime)}
       </time>
       <div>
         <p className="font-semibold">{event.title}</p>
+        {assignedMemberNames.length > 0 ? (
+          <p className="mt-1 text-xs text-[#657381]">{assignedMemberNames.join(", ")}</p>
+        ) : null}
         {event.locationNote ? <p className="mt-1 text-xs text-[#657381]">{event.locationNote}</p> : null}
       </div>
-      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-        {sourceLabel(event.source)}
+      <span className="grid justify-items-end gap-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+          {sourceLabel(event.source)}
+        </span>
+        {onRemove ? (
+          <button
+            className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#8a2f2f]"
+            onClick={onRemove}
+            type="button"
+          >
+            Remove
+          </button>
+        ) : null}
       </span>
     </li>
   );
 }
 
-function OtherEventRow({ event, members }: { event: FixedEvent; members: HouseholdMember[] }) {
+function OtherEventRow({
+  event,
+  members,
+  onRemove,
+}: {
+  event: FixedEvent;
+  members: HouseholdMember[];
+  onRemove?: () => void;
+}) {
   const assignedMemberNames = getAssignedMemberNames(event, members);
   const eventOwnerLabel =
     assignedMemberNames.length > 0 ? assignedMemberNames.join(", ") : "Household";
 
   return (
-    <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[120px_1fr_110px]">
+    <li className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[120px_1fr_auto]">
       <time className="font-semibold text-[#1f6f8b]">
         {formatTimeRange(event.startTime, event.endTime)}
       </time>
@@ -3306,8 +4659,19 @@ function OtherEventRow({ event, members }: { event: FixedEvent; members: Househo
         <p className="mt-1 text-xs text-[#657381]">{eventOwnerLabel}</p>
         {event.locationNote ? <p className="mt-1 text-xs text-[#657381]">{event.locationNote}</p> : null}
       </div>
-      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-        {sourceLabel(event.source)}
+      <span className="grid justify-items-end gap-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+          {sourceLabel(event.source)}
+        </span>
+        {onRemove ? (
+          <button
+            className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#8a2f2f]"
+            onClick={onRemove}
+            type="button"
+          >
+            Remove
+          </button>
+        ) : null}
       </span>
     </li>
   );
