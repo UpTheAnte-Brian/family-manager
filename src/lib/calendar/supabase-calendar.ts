@@ -9,6 +9,7 @@ import { formatDateTimePartsInTimeZone, toCalendarEventIsoRange } from "@/lib/ca
 import type {
   AppliedCalendarEvent,
   CalendarSource,
+  CalendarSourceSchedule,
   CalendarSourceKind,
 } from "@/lib/calendar/types";
 import { useLocalStorageState } from "@/lib/storage/local";
@@ -320,6 +321,12 @@ export function useCalendarFeed() {
           last_sync_message: source.lastSyncMessage ?? null,
           metadata: {
             defaultMemberIds: source.defaultMemberIds,
+            scheduledSync: source.schedule
+              ? {
+                  lastAttemptedOn: source.schedule.lastAttemptedOn ?? null,
+                  time: source.schedule.time,
+                }
+              : null,
           },
         },
         {
@@ -568,6 +575,7 @@ function mapSourceRow(row: CalendarSourceRow): CalendarSource {
         : undefined,
     lastSyncMessage: row.last_sync_message ?? undefined,
     notes: row.notes ?? undefined,
+    schedule: getCalendarSourceSchedule(row.metadata.scheduledSync),
   };
 }
 
@@ -634,4 +642,27 @@ function getOptionalString(value: unknown) {
 
 function getStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function getCalendarSourceSchedule(value: unknown): CalendarSourceSchedule | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const input = value as {
+    lastAttemptedOn?: unknown;
+    time?: unknown;
+  };
+
+  if (typeof input.time !== "string" || !/^\d{2}:\d{2}$/.test(input.time)) {
+    return undefined;
+  }
+
+  return {
+    lastAttemptedOn:
+      typeof input.lastAttemptedOn === "string" && input.lastAttemptedOn
+        ? input.lastAttemptedOn
+        : undefined,
+    time: input.time,
+  };
 }

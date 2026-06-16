@@ -19,6 +19,8 @@ type CalendarFormState = {
   label: string;
   kind: CalendarSourceKind;
   url: string;
+  syncMode: "manual" | "scheduled";
+  syncTime: string;
   defaultMemberIds: string[];
   notes: string;
 };
@@ -27,6 +29,8 @@ const defaultFormState: CalendarFormState = {
   label: "",
   kind: "ics-url",
   url: "",
+  syncMode: "manual",
+  syncTime: "05:00",
   defaultMemberIds: [],
   notes: "",
 };
@@ -91,11 +95,17 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       kind: form.kind,
       url: form.url.trim(),
       enabled: true,
-      syncMode: "manual",
+      syncMode: form.syncMode,
       defaultVisibility: form.defaultMemberIds.length > 0 ? "assigned-members" : "family",
       defaultMemberIds: form.defaultMemberIds,
       lastSyncStatus: "never",
       notes: form.notes.trim() || undefined,
+      schedule:
+        form.syncMode === "scheduled"
+          ? {
+              time: form.syncTime,
+            }
+          : undefined,
     };
 
     setSources((current) => {
@@ -137,6 +147,41 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       delete next[sourceId];
       return next;
     });
+  }
+
+  function updateSourceSchedule(sourceId: string, updates: Partial<Pick<CalendarSource, "syncMode" | "schedule">>) {
+    let nextSource: CalendarSource | undefined;
+
+    setSources((current) =>
+      current.map((source) => {
+        if (source.id !== sourceId) {
+          return source;
+        }
+
+        const syncMode = updates.syncMode ?? source.syncMode;
+        const schedule =
+          syncMode === "scheduled"
+            ? {
+                lastAttemptedOn:
+                  updates.schedule?.lastAttemptedOn ??
+                  source.schedule?.lastAttemptedOn,
+                time: updates.schedule?.time ?? source.schedule?.time ?? "05:00",
+              }
+            : undefined;
+
+        nextSource = {
+          ...source,
+          schedule,
+          syncMode,
+        };
+
+        return nextSource;
+      }),
+    );
+
+    if (nextSource) {
+      void saveCalendarSource(nextSource);
+    }
   }
 
   async function applyPreview(source: CalendarSource) {
@@ -405,6 +450,41 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
             <span className="text-xs leading-5 text-[#657381]">{calendarSourceGuides[form.kind]}</span>
           </label>
 
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Refresh Mode</span>
+              <select
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    syncMode: event.target.value as CalendarSource["syncMode"],
+                  }))
+                }
+                value={form.syncMode}
+              >
+                <option value="manual">Manual preview + apply</option>
+                <option value="scheduled">Daily scheduled refresh</option>
+              </select>
+            </label>
+
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Daily Time</span>
+              <input
+                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 disabled:opacity-50"
+                disabled={form.syncMode !== "scheduled"}
+                onChange={(event) => setForm((current) => ({ ...current, syncTime: event.target.value }))}
+                step={60}
+                type="time"
+                value={form.syncTime}
+              />
+            </label>
+          </div>
+          <p className="text-xs leading-5 text-[#657381]">
+            Scheduled sources can keep refreshing from the deployed app once a server cron is enabled. Preview and
+            apply still remain available for spot checks.
+          </p>
+
           <fieldset className="grid gap-2 text-sm">
             <legend className="font-semibold">Default members</legend>
             <div className="grid grid-cols-2 gap-2">
@@ -473,6 +553,42 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
                       {source.kind} · {source.enabled ? "imports shown" : "imports hidden"} · {source.lastSyncStatus ?? "never"}
                     </p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold text-[#17202a]">Refresh mode</span>
+                        <select
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) =>
+                            updateSourceSchedule(source.id, {
+                              syncMode: event.target.value as CalendarSource["syncMode"],
+                            })
+                          }
+                          value={source.syncMode}
+                        >
+                          <option value="manual">Manual</option>
+                          <option value="scheduled">Scheduled daily</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold text-[#17202a]">Daily time</span>
+                        <input
+                          className="border border-[#d7e0e7] bg-white px-3 py-2 disabled:opacity-50"
+                          disabled={source.syncMode !== "scheduled"}
+                          onChange={(event) =>
+                            updateSourceSchedule(source.id, {
+                              schedule: {
+                                lastAttemptedOn: source.schedule?.lastAttemptedOn,
+                                time: event.target.value,
+                              },
+                            })
+                          }
+                          step={60}
+                          type="time"
+                          value={source.schedule?.time ?? "05:00"}
+                        />
+                      </label>
+                    </div>
+                    <p className="mt-2 text-sm text-[#4c5965]">{getScheduleSummary(source, timeZone)}</p>
                     <fieldset className="mt-3 grid gap-2 text-sm">
                       <legend className="font-semibold text-[#17202a]">Show on dashboards for</legend>
                       <div className="flex flex-wrap gap-2">
@@ -576,6 +692,18 @@ function getPreviewMessage(preview: CalendarPreviewResult) {
   }
 
   return `Found ${preview.eventCount} ${eventLabel}. Apply will import ${preview.eventCount}.`;
+}
+
+function getScheduleSummary(source: CalendarSource, timeZone: string) {
+  if (source.syncMode !== "scheduled") {
+    return "Runs only when a parent previews and applies this source.";
+  }
+
+  const attemptedLabel = source.schedule?.lastAttemptedOn
+    ? ` Last scheduled attempt: ${source.schedule.lastAttemptedOn} (${timeZone}).`
+    : "";
+
+  return `Scheduled to refresh daily around ${source.schedule?.time ?? "05:00"} in ${timeZone}.${attemptedLabel}`;
 }
 
 function getErrorMessage(error: unknown, fallback: string) {

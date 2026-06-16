@@ -26,6 +26,7 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 - Browser-local checklist completion tracking, chore allowance ledger tracking, plus editable routine steps, recurring responsibilities, and same-day task/reminder quick-add.
 - Admin setup route for shared calendar source URLs, ICS preview, and local apply-to-dashboard.
 - Browser-local ICS setup for Apple Calendar, SportsEngine, school, and other shared calendar feeds.
+- Optional scheduled refresh for saved shared calendar feeds when the app is deployed with Supabase service credentials.
 - Supabase migration target for recurring routines, recurring responsibilities, dated tasks, dated reminders, and shared completion records.
 
 ## Data Status
@@ -56,6 +57,8 @@ Apply the Supabase migrations, then configure these values locally and in Vercel
 ```bash
 NEXT_PUBLIC_SUPABASE_URL="https://..."
 NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
+SUPABASE_SERVICE_ROLE_KEY="..."
+CRON_SECRET="..."
 ```
 
 Supabase data access requires an authenticated Supabase session and a matching `household_users` row. Without that session, the app keeps working from browser `localStorage`.
@@ -89,7 +92,20 @@ Use this flow for Apple/shared family calendars, SportsEngine, school calendars,
 4. Preview the feed.
 5. Apply the preview to the local dashboard feed.
 
+For sources that should stay current, switch the source to `Daily scheduled refresh` and choose a time. Scheduled refreshes run from the deployed app and reapply the source automatically after the configured time in the household timezone.
+
 Calendar source setup syncs through Supabase when the Supabase env vars are configured. Without Supabase, it remains browser-local.
+
+## Scheduled Calendar Refresh
+
+Saved calendar sources can refresh automatically without a Mac Mini when all of the following are true:
+
+- the source is stored in Supabase
+- the source uses `Daily scheduled refresh`
+- `SUPABASE_SERVICE_ROLE_KEY` is configured in Vercel
+- `/api/cron/calendar-sync` is being called on a schedule
+
+This repo includes [vercel.json](/Users/brianjohnson/Documents/Development/family-manager/vercel.json) to call that route hourly on production. The route checks which scheduled sources are due and only refreshes each source once per local household day.
 
 ## Local Calendar Import Script
 

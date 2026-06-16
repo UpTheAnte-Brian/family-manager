@@ -5,6 +5,11 @@ export type CalendarSourceKind =
   | "school-calendar"
   | "manual-upload";
 
+export type CalendarSourceSchedule = {
+  lastAttemptedOn?: string;
+  time: string;
+};
+
 export type CalendarSource = {
   id: string;
   label: string;
@@ -19,6 +24,7 @@ export type CalendarSource = {
   lastSyncStatus?: "success" | "error" | "never";
   lastSyncMessage?: string;
   notes?: string;
+  schedule?: CalendarSourceSchedule;
 };
 
 export type ImportedCalendarEvent = {

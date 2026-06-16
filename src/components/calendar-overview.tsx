@@ -90,11 +90,13 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
   const [sourceType, setSourceType] = useState<"all" | "configured" | "imported">("all");
   const [selectedTeamKey, setSelectedTeamKey] = useState("all");
   const [selectedMonth, setSelectedMonth] = useState(season.startsOn.slice(0, 7));
+  const [hidePastEvents, setHidePastEvents] = useState(true);
   const [manualEventModal, setManualEventModal] = useState(false);
   const [manualEventStatus, setManualEventStatus] = useState<{
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  const todayDateKey = getTodayDateKey();
 
   const sourceLabels = useMemo(
     () => new Map(calendarSources.map((source) => [source.id, source.label])),
@@ -216,8 +218,9 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
       selectedMemberId === "all" ||
       event.assignedMemberIds.includes(selectedMemberId) ||
       (selectedMemberId === "unassigned" && event.assignedMemberIds.length === 0);
+    const matchesPastEvents = !hidePastEvents || compareStrings(event.date, todayDateKey) >= 0;
 
-    return matchesMonth && matchesSource && matchesTeam && matchesMember;
+    return matchesMonth && matchesSource && matchesTeam && matchesMember && matchesPastEvents;
   });
   const monthOptions = getMonthOptions(getCalendarWindowStartsOn(season.startsOn), season.endsOn);
   const teamOptions = getTeamOptions(rows);
@@ -350,7 +353,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
-        <section className="grid gap-3 border border-[#cbd5df] bg-white p-4 shadow-sm lg:grid-cols-[1fr_170px_170px_220px_220px]">
+        <section className="grid gap-3 border border-[#cbd5df] bg-white p-4 shadow-sm xl:grid-cols-[1fr_170px_170px_220px_220px_180px]">
           <div className="grid grid-cols-3 gap-3 text-sm">
             <Stat label="Configured" value={displayConfiguredEvents.length} />
             <Stat label="Imported" value={appliedEvents.length} />
@@ -413,6 +416,17 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
                 </option>
               ))}
             </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-semibold">Past events</span>
+            <span className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 font-semibold text-[#4c5965]">
+              <input
+                checked={hidePastEvents}
+                onChange={(event) => setHidePastEvents(event.target.checked)}
+                type="checkbox"
+              />
+              Hide past events
+            </span>
           </label>
         </section>
 
