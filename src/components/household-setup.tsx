@@ -22,6 +22,7 @@ type HouseholdSetupProps = {
 };
 
 type HouseholdMemberRow = {
+  archived_at: string | null;
   birth_date: string | null;
   display_name: string | null;
   external_key: string;
@@ -32,12 +33,14 @@ type HouseholdMemberRow = {
   preferred_name: string;
   relationship: string | null;
   role: "parent" | "child";
+  status: "active" | "archived";
 };
 
 type MemberDraft = {
   birthDate: string;
   displayName: string;
   externalKey: string;
+  householdMemberId: string | null;
   morningRoutineAllowanceAmount: string;
   preferredName: string;
   relationship: string;
@@ -103,19 +106,21 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     : false;
   const hasAccount = Boolean(session);
   const hasHousehold = Boolean(selectedHousehold);
-  const hasMembers = householdMembers.length > 0;
+  const activeHouseholdMembers = householdMembers.filter((member) => member.status === "active");
+  const archivedHouseholdMembers = householdMembers.filter((member) => member.status === "archived");
+  const hasMembers = activeHouseholdMembers.length > 0;
   const setupProgress = [hasAccount, hasHousehold, hasMembers].filter(Boolean).length;
   const recommendedOpenStep = getRecommendedOpenStep(authReady, hasAccount, hasHousehold, hasMembers);
   const openStep = openStepOverride ?? recommendedOpenStep;
   const activeAccessEntries = householdAccessEntries.filter((entry) => entry.entry_type === "member");
   const pendingInvitationEntries = householdAccessEntries.filter((entry) => entry.entry_type === "invitation");
   const adminMembers = useMemo(() => {
-    if (householdMembers.length === 0) {
+    if (activeHouseholdMembers.length === 0) {
       return plannerMembers;
     }
 
-    return householdMembers.map(mapRemoteMemberToPlannerMember);
-  }, [householdMembers, plannerMembers]);
+    return activeHouseholdMembers.map(mapRemoteMemberToPlannerMember);
+  }, [activeHouseholdMembers, plannerMembers]);
 
   useEffect(() => {
     let isActive = true;
@@ -216,9 +221,13 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
           return;
         }
 
+        const nextActiveMembers = nextState.members.filter((member) => member.status === "active");
+
         setHouseholdMembers(nextState.members);
         setHouseholdAccessEntries(nextState.accessEntries);
-        setMemberDrafts(nextState.members.length > 0 ? nextState.members.map(mapRemoteMemberToDraft) : [emptyMemberDraft]);
+        setMemberDrafts(
+          nextActiveMembers.length > 0 ? nextActiveMembers.map(mapRemoteMemberToDraft) : [emptyMemberDraft],
+        );
       } catch (error) {
         if (!isActive) {
           return;
@@ -348,16 +357,33 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
     await runSetupAction(async () => {
       const normalizedInvitationEmail = invitationEmail.trim().toLowerCase();
-
       const invitation = await inviteUserToHousehold(
         selectedHouseholdId,
         normalizedInvitationEmail,
         invitationRole,
       );
+      setRefreshVersion((current) => current + 1);
+
+      try {
+        await sendHouseholdAccessInviteEmail(invitation.invited_email);
+      } catch (error) {
+        throw new Error(
+          `Invitation saved for ${invitation.invited_email}, but the email could not be sent: ${getSupabaseLikeErrorMessage(error, "Could not send the invite email.")}`,
+        );
+      }
+
       setInvitationEmail("");
       setInvitationRole("parent");
-      setRefreshVersion((current) => current + 1);
-      return `Invitation saved for ${invitation.invited_email}.`;
+      return `Invitation saved for ${invitation.invited_email}. Email sent.`;
+    }, "access");
+  }
+
+  async function resendHouseholdAccessInvitation(invitationEmailToResend: string) {
+    await runSetupAction(async () => {
+      const normalizedInvitationEmail = invitationEmailToResend.trim().toLowerCase();
+
+      await sendHouseholdAccessInviteEmail(normalizedInvitationEmail);
+      return `Invite email resent to ${normalizedInvitationEmail}.`;
     }, "access");
   }
 
@@ -367,6 +393,33 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
       setRefreshVersion((current) => current + 1);
       return "Invitation revoked.";
     }, "access");
+  }
+
+  async function archiveMember(memberId: string) {
+    const memberToArchive = householdMembers.find((member) => member.id === memberId);
+    const memberLabel =
+      memberToArchive?.preferred_name || memberToArchive?.display_name || "this family member";
+    const shouldArchive = window.confirm(
+      `Archive ${memberLabel}? Their history will stay in Supabase, but they will stop appearing in normal household views until restored.`,
+    );
+
+    if (!shouldArchive) {
+      return;
+    }
+
+    await runSetupAction(async () => {
+      const member = await archiveHouseholdMember(memberId);
+      setRefreshVersion((current) => current + 1);
+      return `${member.preferred_name} archived.`;
+    }, "members");
+  }
+
+  async function restoreMember(memberId: string) {
+    await runSetupAction(async () => {
+      const member = await restoreHouseholdMember(memberId);
+      setRefreshVersion((current) => current + 1);
+      return `${member.preferred_name} restored.`;
+    }, "members");
   }
 
   async function saveMemberDrafts(householdId: string) {
@@ -383,6 +436,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
           member.role === "child" ? normalizeCurrencyAmount(member.morningRoutineAllowanceAmount) : undefined;
 
         return {
+          archived_at: null,
           household_id: householdId,
           external_key: member.externalKey,
           preferred_name: member.preferredName,
@@ -390,6 +444,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
           role: member.role,
           relationship: member.relationship || null,
           birth_date: member.birthDate || null,
+          status: "active",
           metadata: morningRoutineAllowanceAmount
             ? {
                 morningRoutineAllowanceAmount,
@@ -431,6 +486,21 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
   }
 
   function removeMember(tempId: string) {
+    const memberToRemove = memberDrafts.find((member) => member.tempId === tempId);
+
+    if (!memberToRemove) {
+      return;
+    }
+
+    const memberLabel = memberToRemove.preferredName || memberToRemove.displayName || "this family member";
+    const shouldRemove = window.confirm(
+      `Remove ${memberLabel} from this draft list? This only changes the unsaved list on this page. It does not delete the Supabase record.`,
+    );
+
+    if (!shouldRemove) {
+      return;
+    }
+
     setMemberDrafts((current) =>
       current.length === 1 ? [createBlankMemberDraft("parent")] : current.filter((member) => member.tempId !== tempId),
     );
@@ -651,16 +721,19 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                       : !isHouseholdAdmin
                         ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage setup.`
                         : hasMembers
-                          ? `${householdMembers.length} member${householdMembers.length === 1 ? "" : "s"} saved`
+                          ? `${activeHouseholdMembers.length} member${activeHouseholdMembers.length === 1 ? "" : "s"} saved`
                           : "Add the people who should appear on dashboards and assignments."
                   }
                   title="Family members"
                 >
                   <MemberDraftEditor
+                    archivedMembers={archivedHouseholdMembers}
                     drafts={memberDrafts}
                     onAddMember={addMember}
+                    onArchiveMember={archiveMember}
                     onLoadPlannerMembers={loadPlannerMembers}
                     onRemoveMember={removeMember}
+                    onRestoreMember={restoreMember}
                     onSave={saveMembers}
                     onUpdateMember={updateMember}
                     status={status}
@@ -694,6 +767,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                     onInvitationEmailChange={setInvitationEmail}
                     onInvitationRoleChange={setInvitationRole}
                     onInvite={inviteHouseholdAccess}
+                    onResendInvitation={resendHouseholdAccessInvitation}
                     onRevokeInvitation={revokeHouseholdAccessInvitation}
                   />
                   {activeStep === "access" && message ? (
@@ -917,18 +991,24 @@ function WorkflowStep({
 }
 
 function MemberDraftEditor({
+  archivedMembers,
   drafts,
   onAddMember,
+  onArchiveMember,
   onLoadPlannerMembers,
   onRemoveMember,
+  onRestoreMember,
   onSave,
   onUpdateMember,
   status,
 }: Readonly<{
+  archivedMembers: HouseholdMemberRow[];
   drafts: MemberDraft[];
   onAddMember: (role: "parent" | "child") => void;
+  onArchiveMember: (memberId: string) => void;
   onLoadPlannerMembers: () => void;
   onRemoveMember: (tempId: string) => void;
+  onRestoreMember: (memberId: string) => void;
   onSave: () => void;
   onUpdateMember: (tempId: string, patch: Partial<MemberDraft>) => void;
   status: SetupStatus;
@@ -969,82 +1049,92 @@ function MemberDraftEditor({
         </div>
       </div>
       <ol className="grid gap-2">
-        {drafts.map((member) => (
-          <li
-            className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_140px_auto]"
-            key={member.tempId}
-          >
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Preferred name</span>
-              <input
-                className="border border-[#d7e0e7] bg-white px-3 py-2"
-                onChange={(event) => onUpdateMember(member.tempId, { preferredName: event.target.value })}
-                value={member.preferredName}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Display name</span>
-              <input
-                className="border border-[#d7e0e7] bg-white px-3 py-2"
-                onChange={(event) => onUpdateMember(member.tempId, { displayName: event.target.value })}
-                value={member.displayName}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Birthday</span>
-              <input
-                className="border border-[#d7e0e7] bg-white px-3 py-2"
-                onChange={(event) => onUpdateMember(member.tempId, { birthDate: event.target.value })}
-                required
-                type="date"
-                value={member.birthDate}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Role</span>
-              <select
-                className="border border-[#d7e0e7] bg-white px-3 py-2"
-                onChange={(event) => onUpdateMember(member.tempId, { role: event.target.value as "parent" | "child" })}
-                value={member.role}
-              >
-                <option value="parent">Parent</option>
-                <option value="child">Child</option>
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Relationship</span>
-              <input
-                className="border border-[#d7e0e7] bg-white px-3 py-2"
-                onChange={(event) => onUpdateMember(member.tempId, { relationship: event.target.value })}
-                value={member.relationship}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Morning credit</span>
-              <input
-                className="border border-[#d7e0e7] bg-white px-3 py-2 disabled:bg-[#eef2f6] disabled:text-[#9aa5b1]"
-                disabled={member.role !== "child"}
-                inputMode="decimal"
-                min="0"
-                onChange={(event) =>
-                  onUpdateMember(member.tempId, { morningRoutineAllowanceAmount: event.target.value })
-                }
-                placeholder={member.role === "child" ? "0.25" : "Child only"}
-                step="0.01"
-                type="number"
-                value={member.morningRoutineAllowanceAmount}
-              />
-            </label>
-            <button
-              className="self-end border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
-              disabled={status === "loading"}
-              onClick={() => onRemoveMember(member.tempId)}
-              type="button"
+        {drafts.map((member) => {
+          const isSavedMember = Boolean(member.householdMemberId);
+
+          return (
+            <li
+              className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_140px_auto]"
+              key={member.tempId}
             >
-              Remove
-            </button>
-          </li>
-        ))}
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Preferred name</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => onUpdateMember(member.tempId, { preferredName: event.target.value })}
+                  value={member.preferredName}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Display name</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => onUpdateMember(member.tempId, { displayName: event.target.value })}
+                  value={member.displayName}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Birthday</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => onUpdateMember(member.tempId, { birthDate: event.target.value })}
+                  required
+                  type="date"
+                  value={member.birthDate}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Role</span>
+                <select
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) =>
+                    onUpdateMember(member.tempId, { role: event.target.value as "parent" | "child" })
+                  }
+                  value={member.role}
+                >
+                  <option value="parent">Parent</option>
+                  <option value="child">Child</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Relationship</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => onUpdateMember(member.tempId, { relationship: event.target.value })}
+                  value={member.relationship}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Morning credit</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 disabled:bg-[#eef2f6] disabled:text-[#9aa5b1]"
+                  disabled={member.role !== "child"}
+                  inputMode="decimal"
+                  min="0"
+                  onChange={(event) =>
+                    onUpdateMember(member.tempId, { morningRoutineAllowanceAmount: event.target.value })
+                  }
+                  placeholder={member.role === "child" ? "0.25" : "Child only"}
+                  step="0.01"
+                  type="number"
+                  value={member.morningRoutineAllowanceAmount}
+                />
+              </label>
+              <button
+                className="self-end border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
+                disabled={status === "loading"}
+                onClick={() =>
+                  isSavedMember && member.householdMemberId
+                    ? onArchiveMember(member.householdMemberId)
+                    : onRemoveMember(member.tempId)
+                }
+                type="button"
+              >
+                {isSavedMember ? "Archive" : "Discard"}
+              </button>
+            </li>
+          );
+        })}
       </ol>
       <button
         className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
@@ -1054,6 +1144,41 @@ function MemberDraftEditor({
       >
         Save family members
       </button>
+      {archivedMembers.length > 0 ? (
+        <section className="grid gap-3 border border-[#d7e0e7] bg-white p-4 shadow-sm">
+          <div>
+            <h3 className="text-lg font-semibold">Archived members</h3>
+            <p className="mt-1 text-sm leading-6 text-[#4c5965]">
+              Archived members stay out of chores, routines, and dashboards until restored.
+            </p>
+          </div>
+          <ul className="grid gap-2">
+            {archivedMembers.map((member) => (
+              <li
+                className="flex flex-wrap items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                key={member.id}
+              >
+                <div>
+                  <p className="font-semibold">{member.display_name ?? member.preferred_name}</p>
+                  <p className="mt-1 text-xs text-[#657381]">
+                    {formatHouseholdMemberRole(member.role)}
+                    {member.relationship ? ` · ${member.relationship}` : ""}
+                    {member.archived_at ? ` · Archived ${formatCompactDate(member.archived_at)}` : ""}
+                  </p>
+                </div>
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                  disabled={status === "loading"}
+                  onClick={() => onRestoreMember(member.id)}
+                  type="button"
+                >
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -1067,6 +1192,7 @@ function HouseholdAccessEditor({
   onInvitationEmailChange,
   onInvitationRoleChange,
   onInvite,
+  onResendInvitation,
   onRevokeInvitation,
 }: Readonly<{
   activeEntries: HouseholdAccessEntryRow[];
@@ -1077,6 +1203,7 @@ function HouseholdAccessEditor({
   onInvitationEmailChange: (value: string) => void;
   onInvitationRoleChange: (value: InvitationRole) => void;
   onInvite: () => void;
+  onResendInvitation: (invitationEmail: string) => void;
   onRevokeInvitation: (invitationId: string) => void;
 }>) {
   return (
@@ -1157,14 +1284,24 @@ function HouseholdAccessEditor({
                       {entry.invited_by_email ? ` · invited by ${entry.invited_by_email}` : ""}
                     </p>
                   </div>
-                  <button
-                    className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
-                    disabled={status === "loading"}
-                    onClick={() => onRevokeInvitation(entry.entry_id)}
-                    type="button"
-                  >
-                    Revoke
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                      disabled={status === "loading"}
+                      onClick={() => onResendInvitation(entry.email)}
+                      type="button"
+                    >
+                      Resend invite
+                    </button>
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
+                      disabled={status === "loading"}
+                      onClick={() => onRevokeInvitation(entry.entry_id)}
+                      type="button"
+                    >
+                      Revoke
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1185,8 +1322,9 @@ async function loadHouseholdWorkflowState(selectedHouseholdId: string, includeAc
   const supabase = createBrowserSupabaseClient();
   const { data: members, error: membersError } = await supabase
     .from("household_members")
-    .select("id, external_key, preferred_name, display_name, role, relationship, birth_date, metadata")
+    .select("id, external_key, preferred_name, display_name, role, relationship, birth_date, metadata, status, archived_at")
     .eq("household_id", selectedHouseholdId)
+    .order("status", { ascending: true })
     .order("role", { ascending: false })
     .order("preferred_name", { ascending: true })
     .returns<HouseholdMemberRow[]>();
@@ -1260,6 +1398,21 @@ async function inviteUserToHousehold(
   return invitation;
 }
 
+async function sendHouseholdAccessInviteEmail(invitationEmail: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email: invitationEmail,
+    options: {
+      emailRedirectTo: getAuthRedirectTo(),
+      shouldCreateUser: true,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function revokeHouseholdInvitation(invitationId: string) {
   const supabase = createBrowserSupabaseClient();
   const { error } = await supabase.rpc("revoke_household_invitation", {
@@ -1269,6 +1422,45 @@ async function revokeHouseholdInvitation(invitationId: string) {
   if (error) {
     throw error;
   }
+}
+
+async function archiveHouseholdMember(memberId: string): Promise<HouseholdMemberRow> {
+  return mutateHouseholdMember(memberId, "archive_household_member");
+}
+
+async function restoreHouseholdMember(memberId: string): Promise<HouseholdMemberRow> {
+  return mutateHouseholdMember(memberId, "restore_household_member");
+}
+
+async function mutateHouseholdMember(
+  memberId: string,
+  rpcName: "archive_household_member" | "restore_household_member",
+): Promise<HouseholdMemberRow> {
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .rpc(rpcName, {
+      target_member_id: memberId,
+    })
+    .returns<HouseholdMemberRow | HouseholdMemberRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  const member = Array.isArray(data) ? data[0] : data;
+
+  if (
+    !member ||
+    typeof member !== "object" ||
+    !("id" in member) ||
+    typeof member.id !== "string" ||
+    !("preferred_name" in member) ||
+    typeof member.preferred_name !== "string"
+  ) {
+    throw new Error("Supabase did not return the saved family member.");
+  }
+
+  return member;
 }
 
 function mapRemoteMemberToPlannerMember(member: HouseholdMemberRow): HouseholdMember {
@@ -1306,6 +1498,7 @@ function mapRemoteMemberToDraft(member: HouseholdMemberRow): MemberDraft {
     birthDate: member.birth_date ?? "",
     displayName: member.display_name ?? member.preferred_name,
     externalKey: member.external_key,
+    householdMemberId: member.id,
     morningRoutineAllowanceAmount: member.metadata?.morningRoutineAllowanceAmount
       ? String(member.metadata.morningRoutineAllowanceAmount)
       : "",
@@ -1323,6 +1516,7 @@ function createBlankMemberDraft(role: "parent" | "child"): MemberDraft {
     birthDate: "",
     displayName: "",
     externalKey: `${role}-${tempId}`,
+    householdMemberId: null,
     morningRoutineAllowanceAmount: "",
     preferredName: "",
     relationship: "",
@@ -1336,6 +1530,7 @@ function mapPlannerMemberToDraft(member: HouseholdMember): MemberDraft {
     birthDate: member.birthDate ?? "",
     displayName: member.displayName,
     externalKey: member.id,
+    householdMemberId: null,
     morningRoutineAllowanceAmount: member.morningRoutineAllowanceAmount
       ? String(member.morningRoutineAllowanceAmount)
       : "",
@@ -1359,6 +1554,24 @@ function formatHouseholdAccessRole(role: string) {
     default:
       return role;
   }
+}
+
+function formatHouseholdMemberRole(role: "parent" | "child") {
+  return role === "parent" ? "Parent" : "Child";
+}
+
+function formatCompactDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 
 function getValidMemberDrafts(members: MemberDraft[]) {

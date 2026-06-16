@@ -68,6 +68,7 @@ export function AdminBaselineTemplates({ defaultTemplates }: AdminBaselineTempla
     starterTemplate.blocks.map(mapBlockToDraft),
   );
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -179,6 +180,7 @@ export function AdminBaselineTemplates({ defaultTemplates }: AdminBaselineTempla
       }
 
       resetTemplateForm();
+      setEditorMode(null);
       setRefreshVersion((current) => current + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not save baseline template.");
@@ -221,8 +223,22 @@ export function AdminBaselineTemplates({ defaultTemplates }: AdminBaselineTempla
     setEndsOn(template.endsOn);
     setSelectedDays(template.daysOfWeek);
     setBlocks(template.blocks.map((block) => ({ ...block })));
+    setEditorMode("edit");
     setErrorMessage("");
-    setStatusMessage(`Editing ${template.name}.`);
+    setStatusMessage("");
+  }
+
+  function createTemplate() {
+    resetTemplateForm();
+    setEditorMode("create");
+    setErrorMessage("");
+    setStatusMessage("");
+  }
+
+  function closeEditor() {
+    resetTemplateForm();
+    setEditorMode(null);
+    setErrorMessage("");
   }
 
   function resetTemplateForm() {
@@ -272,260 +288,342 @@ export function AdminBaselineTemplates({ defaultTemplates }: AdminBaselineTempla
       <div className="flex flex-col gap-2 border-b border-[#d7e0e7] pb-4">
         <h2 className="text-xl font-semibold">Baseline flows</h2>
         <p className="text-sm text-[#4c5965]">
-          Save reusable day-flow templates in Supabase so the dashboard can load them on any
-          device.
+          Save reusable day-flow templates in Supabase so the dashboard can load the right default
+          flow on any device.
         </p>
       </div>
 
       {householdId && householdStatus === "ready" ? (
         <>
-          <form className="mt-4 grid gap-4" onSubmit={saveTemplate}>
-            <div className="grid gap-3 lg:grid-cols-[1fr_170px_170px]">
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Template</span>
-                <input
-                  className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                  onChange={(event) => setTemplateName(event.target.value)}
-                  value={templateName}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Starts</span>
-                <input
-                  className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                  onChange={(event) => setStartsOn(event.target.value)}
-                  type="date"
-                  value={startsOn}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Ends</span>
-                <input
-                  className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                  onChange={(event) => setEndsOn(event.target.value)}
-                  type="date"
-                  value={endsOn}
-                />
-              </label>
+          <div className="mt-4 grid gap-4">
+            <div className="flex flex-col gap-3 rounded-sm border border-[#d7e0e7] bg-[#f8fafc] p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                    Source of truth
+                  </p>
+                  <p className="mt-2 text-sm text-[#4c5965]">
+                    Saved baseline flows drive the default baseline shown on the dashboard for
+                    matching dates and days. If someone adds those blocks to a specific day from the
+                    dashboard, that day becomes its own scheduled copy and does not auto-update when
+                    the template changes later.
+                  </p>
+                </div>
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
+                  onClick={createTemplate}
+                  type="button"
+                >
+                  Create baseline flow
+                </button>
+              </div>
             </div>
 
-            <fieldset className="grid gap-2 text-sm">
-              <legend className="font-semibold">Days</legend>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-                {dayOptions.map((day) => (
-                  <label
-                    className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
-                    key={day}
-                  >
-                    <input
-                      checked={selectedDays.includes(day)}
-                      onChange={() => toggleDay(day)}
-                      type="checkbox"
-                    />
-                    {day}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            {statusMessage && !editorMode ? (
+              <p className="border border-[#b8d8c2] bg-[#f3fbf5] px-3 py-2 text-sm text-[#24523b]">
+                {statusMessage}
+              </p>
+            ) : null}
+            {errorMessage && !editorMode ? (
+              <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                {errorMessage}
+              </p>
+            ) : null}
 
             <div className="grid gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                  Baseline blocks
-                </h3>
-                <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                  onClick={addBlock}
-                  type="button"
-                >
-                  Add block
-                </button>
-              </div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                Saved flows
+              </h3>
+              {templates.length > 0 ? (
+                <ol className="grid gap-3">
+                  {templates.map((template) => (
+                    <li
+                      className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-4"
+                      key={template.id}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-[#17202a]">{template.name}</p>
+                          <p className="mt-1 text-sm text-[#657381]">
+                            {template.startsOn} to {template.endsOn} · {template.daysOfWeek.join(", ")}
+                          </p>
+                          <p className="mt-1 text-sm text-[#657381]">
+                            {template.blocks.length} block{template.blocks.length === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                            onClick={() => editTemplate(template)}
+                            type="button"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
+                            onClick={() => void removeTemplate(template)}
+                            type="button"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
 
-              <div className="grid gap-3">
-                {blocks.map((block) => (
-                  <div
-                    className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3"
-                    key={block.id}
-                  >
-                    <div className="grid gap-3 lg:grid-cols-[1fr_120px_120px_auto]">
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">Block</span>
-                        <input
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) => updateBlock(block.id, { title: event.target.value })}
-                          value={block.title}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">Start</span>
-                        <input
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) => updateBlock(block.id, { startTime: event.target.value })}
-                          type="time"
-                          value={block.startTime}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">End</span>
-                        <input
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) => updateBlock(block.id, { endTime: event.target.value })}
-                          type="time"
-                          value={block.endTime}
-                        />
-                      </label>
-                      <button
-                        className="self-end border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
-                        onClick={() => removeBlock(block.id)}
-                        type="button"
-                      >
-                        Remove
-                      </button>
-                    </div>
-
-                    <div className="grid gap-3 lg:grid-cols-3">
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">Category</span>
-                        <input
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) => updateBlock(block.id, { category: event.target.value })}
-                          value={block.category}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">Noise</span>
-                        <select
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) =>
-                            updateBlock(block.id, { noiseLevel: event.target.value as NoiseLevel })
-                          }
-                          value={block.noiseLevel}
-                        >
-                          {noiseLevelOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">Location</span>
-                        <select
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) =>
-                            updateBlock(block.id, {
-                              location: event.target.value as ScheduleBlock["location"],
-                            })
-                          }
-                          value={block.location}
-                        >
-                          {locationOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      <ol className="grid gap-2 md:grid-cols-2">
+                        {template.blocks.map((block) => (
+                          <li
+                            className="grid gap-1 border border-[#d7e0e7] bg-white px-3 py-3 text-sm"
+                            key={block.id}
+                          >
+                            <span className="font-semibold text-[#17202a]">{block.title}</span>
+                            <span className="text-[#657381]">
+                              {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel} ·{" "}
+                              {block.location}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="border border-dashed border-[#cbd5df] bg-white px-3 py-4 text-sm text-[#4c5965]">
+                  No household baseline flows are saved yet.
+                </p>
+              )}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2">
-              {editingTemplate ? (
-                <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
-                  onClick={resetTemplateForm}
-                  type="button"
-                >
-                  Cancel edit
-                </button>
-              ) : null}
-              <button
-                className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isSaving}
-                type="submit"
+            {editorMode ? (
+              <div
+                aria-modal="true"
+                className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+                role="dialog"
               >
-                {isSaving
-                  ? "Saving..."
-                  : editingTemplate
-                    ? "Update baseline flow"
-                    : "Save baseline flow"}
-              </button>
-            </div>
-          </form>
-
-          {statusMessage ? (
-            <p className="mt-4 border border-[#b8d8c2] bg-[#f3fbf5] px-3 py-2 text-sm text-[#24523b]">
-              {statusMessage}
-            </p>
-          ) : null}
-          {errorMessage ? (
-            <p className="mt-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          <div className="mt-6 grid gap-3">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-              Saved flows
-            </h3>
-            {templates.length > 0 ? (
-              <ol className="grid gap-3">
-                {templates.map((template) => (
-                  <li
-                    className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-4"
-                    key={template.id}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-[#17202a]">{template.name}</p>
-                        <p className="mt-1 text-sm text-[#657381]">
-                          {template.startsOn} to {template.endsOn} · {template.daysOfWeek.join(", ")}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                          onClick={() => editTemplate(template)}
-                          type="button"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
-                          onClick={() => void removeTemplate(template)}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+                  <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                        {editorMode === "edit" ? "Editing Existing Flow" : "Creating New Flow"}
+                      </p>
+                      <h3 className="mt-1 text-xl font-semibold text-[#17202a]">
+                        {editorMode === "edit" ? "Edit baseline flow" : "Create baseline flow"}
+                      </h3>
+                      <p className="mt-1 max-w-3xl text-sm text-[#4c5965]">
+                        {editorMode === "edit"
+                          ? "Changes here update the saved template the dashboard uses for matching baseline days."
+                          : "Start with the default structure, adjust it, and save a reusable household baseline flow."}
+                      </p>
                     </div>
+                    <button
+                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+                      onClick={closeEditor}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
 
-                    <ol className="grid gap-2 md:grid-cols-2">
-                      {template.blocks.map((block) => (
-                        <li
-                          className="grid gap-1 border border-[#d7e0e7] bg-white px-3 py-3 text-sm"
-                          key={block.id}
+                  <div className="min-h-0 overflow-y-auto px-5 py-4">
+                    {statusMessage ? (
+                      <p className="mb-4 border border-[#b8d8c2] bg-[#f3fbf5] px-3 py-2 text-sm text-[#24523b]">
+                        {statusMessage}
+                      </p>
+                    ) : null}
+                    {errorMessage ? (
+                      <p className="mb-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                        {errorMessage}
+                      </p>
+                    ) : null}
+
+                    <form className="grid gap-4" onSubmit={saveTemplate}>
+                      <div className="grid gap-3 lg:grid-cols-[1fr_170px_170px]">
+                        <label className="grid gap-1 text-sm">
+                          <span className="font-semibold">Template</span>
+                          <input
+                            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                            onChange={(event) => setTemplateName(event.target.value)}
+                            value={templateName}
+                          />
+                        </label>
+                        <label className="grid gap-1 text-sm">
+                          <span className="font-semibold">Starts</span>
+                          <input
+                            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                            onChange={(event) => setStartsOn(event.target.value)}
+                            type="date"
+                            value={startsOn}
+                          />
+                        </label>
+                        <label className="grid gap-1 text-sm">
+                          <span className="font-semibold">Ends</span>
+                          <input
+                            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                            onChange={(event) => setEndsOn(event.target.value)}
+                            type="date"
+                            value={endsOn}
+                          />
+                        </label>
+                      </div>
+
+                      <fieldset className="grid gap-2 text-sm">
+                        <legend className="font-semibold">Days</legend>
+                        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                          {dayOptions.map((day) => (
+                            <label
+                              className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
+                              key={day}
+                            >
+                              <input
+                                checked={selectedDays.includes(day)}
+                                onChange={() => toggleDay(day)}
+                                type="checkbox"
+                              />
+                              {day}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+
+                      <div className="grid gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                            Baseline blocks
+                          </h4>
+                          <button
+                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                            onClick={addBlock}
+                            type="button"
+                          >
+                            Add block
+                          </button>
+                        </div>
+
+                        <div className="grid gap-3">
+                          {blocks.map((block) => (
+                            <div
+                              className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3"
+                              key={block.id}
+                            >
+                              <div className="grid gap-3 lg:grid-cols-[1fr_120px_120px_auto]">
+                                <label className="grid gap-1 text-sm">
+                                  <span className="font-semibold">Block</span>
+                                  <input
+                                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                                    onChange={(event) =>
+                                      updateBlock(block.id, { title: event.target.value })
+                                    }
+                                    value={block.title}
+                                  />
+                                </label>
+                                <label className="grid gap-1 text-sm">
+                                  <span className="font-semibold">Start</span>
+                                  <input
+                                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                                    onChange={(event) =>
+                                      updateBlock(block.id, { startTime: event.target.value })
+                                    }
+                                    type="time"
+                                    value={block.startTime}
+                                  />
+                                </label>
+                                <label className="grid gap-1 text-sm">
+                                  <span className="font-semibold">End</span>
+                                  <input
+                                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                                    onChange={(event) =>
+                                      updateBlock(block.id, { endTime: event.target.value })
+                                    }
+                                    type="time"
+                                    value={block.endTime}
+                                  />
+                                </label>
+                                <button
+                                  className="self-end border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#8a2f2f]"
+                                  onClick={() => removeBlock(block.id)}
+                                  type="button"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div className="grid gap-3 lg:grid-cols-3">
+                                <label className="grid gap-1 text-sm">
+                                  <span className="font-semibold">Category</span>
+                                  <input
+                                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                                    onChange={(event) =>
+                                      updateBlock(block.id, { category: event.target.value })
+                                    }
+                                    value={block.category}
+                                  />
+                                </label>
+                                <label className="grid gap-1 text-sm">
+                                  <span className="font-semibold">Noise</span>
+                                  <select
+                                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                                    onChange={(event) =>
+                                      updateBlock(block.id, {
+                                        noiseLevel: event.target.value as NoiseLevel,
+                                      })
+                                    }
+                                    value={block.noiseLevel}
+                                  >
+                                    {noiseLevelOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="grid gap-1 text-sm">
+                                  <span className="font-semibold">Location</span>
+                                  <select
+                                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                                    onChange={(event) =>
+                                      updateBlock(block.id, {
+                                        location: event.target.value as ScheduleBlock["location"],
+                                      })
+                                    }
+                                    value={block.location}
+                                  >
+                                    {locationOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                          onClick={closeEditor}
+                          type="button"
                         >
-                          <span className="font-semibold text-[#17202a]">{block.title}</span>
-                          <span className="text-[#657381]">
-                            {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel} ·{" "}
-                            {block.location}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="border border-dashed border-[#cbd5df] bg-white px-3 py-4 text-sm text-[#4c5965]">
-                No household baseline flows are saved yet.
-              </p>
-            )}
+                          Cancel
+                        </button>
+                        <button
+                          className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={isSaving}
+                          type="submit"
+                        >
+                          {isSaving
+                            ? "Saving..."
+                            : editorMode === "edit"
+                              ? "Update baseline flow"
+                              : "Save baseline flow"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </>
       ) : (

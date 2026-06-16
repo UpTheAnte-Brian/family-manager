@@ -567,6 +567,7 @@ export function ProfileDashboard({
           .from("household_members")
           .select("id, external_key, metadata")
           .eq("household_id", currentHouseholdId)
+          .eq("status", "active")
           .returns<RemoteHouseholdMemberConfigRow[]>();
 
         if (error) {
@@ -2880,6 +2881,7 @@ async function loadRemoteHouseholdItems(
     .from("household_members")
     .select("id, external_key")
     .eq("household_id", householdId)
+    .eq("status", "active")
     .returns<RemoteHouseholdMemberRow[]>();
 
   if (membersError) {
@@ -3212,6 +3214,7 @@ async function loadRemoteBaselineScheduleEvents(
     .from("household_members")
     .select("id, external_key")
     .eq("household_id", householdId)
+    .eq("status", "active")
     .returns<RemoteHouseholdMemberRow[]>();
 
   if (membersError) {
@@ -3471,6 +3474,7 @@ async function loadRemoteRoutines(
     .from("household_members")
     .select("id, external_key")
     .eq("household_id", householdId)
+    .eq("status", "active")
     .returns<RemoteHouseholdMemberRow[]>();
 
   if (membersError) {
@@ -3578,6 +3582,7 @@ async function loadRemoteDashboardChoreState(
     .from("household_members")
     .select("id, external_key")
     .eq("household_id", householdId)
+    .eq("status", "active")
     .returns<RemoteHouseholdMemberRow[]>();
 
   if (membersError) {
@@ -3769,6 +3774,7 @@ async function loadRemoteTemporaryRoutines(householdId: string): Promise<RemoteT
     .from("household_members")
     .select("id, external_key")
     .eq("household_id", householdId)
+    .eq("status", "active")
     .returns<RemoteHouseholdMemberRow[]>();
 
   if (membersError) {
@@ -4225,11 +4231,11 @@ function BaselineScheduleModal({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-center bg-[#17202a]/45 px-4 py-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
       role="dialog"
     >
-      <div className="w-full max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#cbd5df] bg-white p-5 shadow-xl">
+        <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold">Add to day schedule</h2>
             <p className="mt-1 text-sm text-[#4c5965]">
@@ -4246,65 +4252,69 @@ function BaselineScheduleModal({
           </button>
         </div>
 
-        <div className="mb-4 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
-            Selected Day
-          </p>
-          <p className="mt-1 font-semibold text-[#17202a]">{formatDateLabel(selectedDate)}</p>
-        </div>
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="mb-4 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+              Selected Day
+            </p>
+            <p className="mt-1 font-semibold text-[#17202a]">{formatDateLabel(selectedDate)}</p>
+          </div>
 
-        <form className="grid gap-4" onSubmit={submit}>
-          <section className="grid gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-              Baseline blocks
-            </h3>
-            <ol className="grid gap-2">
-              {blocks.map((block) => (
-                <li
-                  className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
-                  key={block.id}
-                >
-                  <span className="font-semibold text-[#17202a]">{block.title}</span>
-                  <span className="text-[#657381]">
-                    {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <fieldset className="grid gap-2 text-sm">
-            <legend className="font-semibold">Family members</legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {members.map((member) => (
-                <label
-                  className="flex items-center gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
-                  key={member.id}
-                >
-                  <input
-                    checked={selectedMemberIds.includes(member.id)}
-                    onChange={() => toggleMember(member.id)}
-                    type="checkbox"
-                  />
-                  <span>
-                    <span className="block font-semibold text-[#17202a]">{member.preferredName}</span>
-                    <span className="block text-xs uppercase tracking-[0.12em] text-[#657381]">
-                      {member.role}
+          <form className="grid gap-4" onSubmit={submit}>
+            <section className="grid gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                Baseline blocks
+              </h3>
+              <ol className="grid gap-2">
+                {blocks.map((block) => (
+                  <li
+                    className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
+                    key={block.id}
+                  >
+                    <span className="font-semibold text-[#17202a]">{block.title}</span>
+                    <span className="text-[#657381]">
+                      {formatTimeRange(block.startTime, block.endTime)} · {block.noiseLevel}
                     </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+                  </li>
+                ))}
+              </ol>
+            </section>
 
-          <button
-            className="justify-self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isSaving || selectedMemberIds.length === 0}
-            type="submit"
-          >
-            {isSaving ? "Saving..." : `Add to ${formatDateLabel(selectedDate)}`}
-          </button>
-        </form>
+            <fieldset className="grid gap-2 text-sm">
+              <legend className="font-semibold">Family members</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {members.map((member) => (
+                  <label
+                    className="flex items-center gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                    key={member.id}
+                  >
+                    <input
+                      checked={selectedMemberIds.includes(member.id)}
+                      onChange={() => toggleMember(member.id)}
+                      type="checkbox"
+                    />
+                    <span>
+                      <span className="block font-semibold text-[#17202a]">
+                        {member.preferredName}
+                      </span>
+                      <span className="block text-xs uppercase tracking-[0.12em] text-[#657381]">
+                        {member.role}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <button
+              className="justify-self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSaving || selectedMemberIds.length === 0}
+              type="submit"
+            >
+              {isSaving ? "Saving..." : `Add to ${formatDateLabel(selectedDate)}`}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

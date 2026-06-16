@@ -1507,6 +1507,7 @@ async function loadRemoteChoreState(householdId: string) {
     .from("household_members")
     .select("id, external_key, preferred_name, role")
     .eq("household_id", householdId)
+    .eq("status", "active")
     .returns<RemoteMemberRow[]>();
 
   if (membersError) {
