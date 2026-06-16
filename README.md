@@ -105,7 +105,7 @@ Saved calendar sources can refresh automatically without a Mac Mini when all of 
 - `SUPABASE_SERVICE_ROLE_KEY` is configured in Vercel
 - `/api/cron/calendar-sync` is being called on a schedule
 
-This repo includes [vercel.json](/Users/brianjohnson/Documents/Development/family-manager/vercel.json) to call that route hourly on production. The route checks which scheduled sources are due and only refreshes each source once per local household day.
+This repo includes [vercel.json](/Users/brianjohnson/Documents/Development/family-manager/vercel.json) to call that route once daily on production, which fits Vercel Hobby cron limits. The route checks which scheduled sources are due and only refreshes each source once per local household day.
 
 ## Local Calendar Import Script
 
