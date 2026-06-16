@@ -13,6 +13,7 @@ export type HouseholdMember = {
   role: "parent" | "child";
   relationship: "dad" | "mom" | "son" | "daughter";
   birthDate?: string;
+  morningRoutineAllowanceAmount?: number;
   workFromHome?: boolean;
   focusWindows?: {
     startTime: string;
@@ -105,13 +106,16 @@ export type AllowanceEntry = {
   id: string;
   childId: string;
   amount: number;
-  source: "chore-completion" | "manual-adjustment";
+  source: "chore-completion" | "manual-adjustment" | "morning-routine-completion";
   occurredAt: string;
   choreCompletionId?: string;
   choreId?: string;
   assignmentTemplateId?: string;
   choreTitle?: string;
+  label?: string;
   note?: string;
+  routineCategory?: string;
+  routineCompletionDate?: string;
 };
 
 export type PlannerData = {

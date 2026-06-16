@@ -14,7 +14,18 @@ import {
   removeAllowanceEntriesForCompletion,
   type AllowanceStorageState,
 } from "@/lib/allowance/storage";
-import { isMissingAllowanceEntriesTableError } from "@/lib/allowance/remote";
+import {
+  createRemoteMorningRoutineAllowanceEntry,
+  deleteRemoteMorningRoutineAllowanceEntry,
+  isMissingAllowanceEntriesTableError,
+} from "@/lib/allowance/remote";
+import {
+  createMorningRoutineAllowanceEntry,
+  getMorningRoutineAllowanceAmount,
+  getMorningRoutineOccurredAt,
+  hasMorningRoutineAllowanceEntry,
+  removeMorningRoutineAllowanceEntries,
+} from "@/lib/allowance/morning-routine";
 import { normalizeChoreCategory } from "@/lib/chores/categories";
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
@@ -143,6 +154,17 @@ type RemoteTemporaryRoutineMetadata = {
 type RemoteHouseholdMemberRow = {
   id: string;
   external_key: string;
+  metadata?: {
+    morningRoutineAllowanceAmount?: number;
+  };
+};
+
+type RemoteHouseholdMemberConfigRow = {
+  id: string;
+  external_key: string;
+  metadata: {
+    morningRoutineAllowanceAmount?: number;
+  };
 };
 
 type RemoteChoreRow = {
@@ -236,11 +258,15 @@ type RemoteAllowanceEntryRow = {
   amount_cents: number;
   chore_completion_id: string | null;
   chore_id: string | null;
+  entry_type: string;
   occurred_at: string;
   metadata: {
     assignmentTemplateId?: string;
     choreTitle?: string;
+    label?: string;
     note?: string;
+    routineCategory?: string;
+    routineCompletionDate?: string;
   };
 };
 
@@ -354,6 +380,9 @@ export function ProfileDashboard({
   const [remoteRoutineCompletions, setRemoteRoutineCompletions] = useState<Record<string, boolean>>({});
   const [remoteAllowanceEntries, setRemoteAllowanceEntries] = useState<AllowanceEntry[]>([]);
   const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
+  const [remoteMemberConfigsByExternalKey, setRemoteMemberConfigsByExternalKey] = useState<
+    Record<string, { morningRoutineAllowanceAmount?: number }>
+  >({});
   const [remoteTemporaryRoutineError, setRemoteTemporaryRoutineError] = useState("");
   const [remoteBaselineError, setRemoteBaselineError] = useState("");
   const [remoteHouseholdItemError, setRemoteHouseholdItemError] = useState("");
@@ -365,6 +394,7 @@ export function ProfileDashboard({
   const [routineSyncVersion, setRoutineSyncVersion] = useState(0);
   const [choreSyncVersion, setChoreSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
+  const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
   const [responsibilityModal, setResponsibilityModal] = useState<
     | { mode: "add" }
     | { mode: "edit"; responsibility: LocalResponsibilityItem }
@@ -376,7 +406,11 @@ export function ProfileDashboard({
   const [collapsedResponsibilityCategories, setCollapsedResponsibilityCategories] = useState<
     Partial<Record<ResponsibilityCategory, boolean>>
   >({});
-  const wasMorningRoutineCompleteRef = useRef(false);
+  const morningRoutineProgressRef = useRef<{ contextKey: string; isComplete: boolean }>({
+    contextKey: "",
+    isComplete: false,
+  });
+  const morningRoutineAllowanceSyncQueueRef = useRef(Promise.resolve());
   const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
   const selectedMember =
     members.find((member) => member.id === state.selectedMemberId) ?? members[0];
@@ -500,6 +534,9 @@ export function ProfileDashboard({
   )
     .filter((entry) => entry.childId === selectedMember.id)
     .sort((first, second) => compareStrings(second.occurredAt, first.occurredAt));
+  const selectedMemberMorningRoutineAllowanceAmount = isRemoteHouseholdReady
+    ? getMorningRoutineAllowanceAmount(remoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
+    : getMorningRoutineAllowanceAmount(selectedMember);
   const allowanceBalance = getAllowanceBalance(selectedMemberAllowanceEntries, selectedMember.id);
   const isPastSelectedDate = displayedDay.date < today.date;
   const isTodaySelected = displayedDay.date === today.date;
@@ -514,6 +551,65 @@ export function ProfileDashboard({
       router.replace("/admin");
     }
   }, [householdStatus, router]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadRemoteMemberConfigs() {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const { data, error } = await supabase
+          .from("household_members")
+          .select("id, external_key, metadata")
+          .eq("household_id", currentHouseholdId)
+          .returns<RemoteHouseholdMemberConfigRow[]>();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteMemberIdsByExternalKey(
+          Object.fromEntries((data ?? []).map((member) => [member.external_key, member.id])),
+        );
+        setRemoteMemberConfigsByExternalKey(
+          Object.fromEntries(
+            (data ?? []).map((member) => [
+              member.external_key,
+              {
+                morningRoutineAllowanceAmount: normalizeCurrencyAmount(
+                  member.metadata?.morningRoutineAllowanceAmount,
+                ),
+              },
+            ]),
+          ),
+        );
+        setRemoteAllowanceError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteAllowanceError(
+          error instanceof Error ? error.message : "Could not load household member settings.",
+        );
+      }
+    }
+
+    void loadRemoteMemberConfigs();
+
+    return () => {
+      isActive = false;
+    };
+  }, [householdId, householdStatus]);
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready") {
@@ -805,33 +901,194 @@ export function ProfileDashboard({
   useEffect(() => {
     const morningRoutineItems =
       groupedResponsibilityItems.find(([category]) => category === "morning-routine")?.[1] ?? [];
+    const contextKey = `${displayedDay.date}:${selectedMember.id}`;
 
     if (morningRoutineItems.length === 0) {
+      morningRoutineProgressRef.current = {
+        contextKey,
+        isComplete: false,
+      };
       return;
     }
 
     const isMorningRoutineComplete = morningRoutineItems.every((item) =>
       isResponsibilityComplete(item, dashboardStateForView, displayedDay.date, selectedMember.id),
     );
+    const previousProgress = morningRoutineProgressRef.current;
 
-    const wasMorningRoutineComplete = wasMorningRoutineCompleteRef.current;
-    wasMorningRoutineCompleteRef.current = isMorningRoutineComplete;
+    if (previousProgress.contextKey !== contextKey) {
+      morningRoutineProgressRef.current = {
+        contextKey,
+        isComplete: isMorningRoutineComplete,
+      };
 
-    if (isMorningRoutineComplete && !wasMorningRoutineComplete) {
+      if (isMorningRoutineComplete) {
+        setCollapsedResponsibilityCategories((current) => ({
+          ...current,
+          "morning-routine": true,
+        }));
+      }
+
+      return;
+    }
+
+    if (previousProgress.isComplete === isMorningRoutineComplete) {
+      return;
+    }
+
+    morningRoutineProgressRef.current = {
+      contextKey,
+      isComplete: isMorningRoutineComplete,
+    };
+
+    if (isMorningRoutineComplete) {
       setCollapsedResponsibilityCategories((current) => ({
         ...current,
         "morning-routine": true,
       }));
+      queueMorningRoutineAllowanceSync({
+        childId: selectedMember.id,
+        completionDate: displayedDay.date,
+        contextKey,
+        occurredAt: getMorningRoutineOccurredAt(displayedDay.date, morningRoutineItems),
+        rewardAmount: selectedMemberMorningRoutineAllowanceAmount,
+        shouldAward: true,
+      });
       return;
     }
 
-    if (!isMorningRoutineComplete && wasMorningRoutineComplete) {
-      setCollapsedResponsibilityCategories((current) => ({
-        ...current,
-        "morning-routine": false,
-      }));
-    }
-  }, [dashboardStateForView, displayedDay.date, groupedResponsibilityItems, selectedMember.id]);
+    setCollapsedResponsibilityCategories((current) => ({
+      ...current,
+      "morning-routine": false,
+    }));
+    queueMorningRoutineAllowanceSync({
+      childId: selectedMember.id,
+      completionDate: displayedDay.date,
+      contextKey,
+      occurredAt: getMorningRoutineOccurredAt(displayedDay.date, morningRoutineItems),
+      rewardAmount: selectedMemberMorningRoutineAllowanceAmount,
+      shouldAward: false,
+    });
+  }, [
+    dashboardStateForView,
+    displayedDay.date,
+    groupedResponsibilityItems,
+    selectedMember.id,
+    selectedMemberMorningRoutineAllowanceAmount,
+  ]);
+
+  function queueMorningRoutineAllowanceSync({
+    childId,
+    completionDate,
+    contextKey,
+    occurredAt,
+    rewardAmount,
+    shouldAward,
+  }: {
+    childId: string;
+    completionDate: string;
+    contextKey: string;
+    occurredAt: string;
+    rewardAmount: number | undefined;
+    shouldAward: boolean;
+  }) {
+    morningRoutineAllowanceSyncQueueRef.current = morningRoutineAllowanceSyncQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (selectedMember.role !== "child") {
+          return;
+        }
+
+        const celebrate = () => {
+          if (contextKey === `${displayedDay.date}:${selectedMember.id}`) {
+            setMorningRoutineCelebrationKey((current) => current + 1);
+          }
+        };
+
+        if (isRemoteHouseholdReady && householdId) {
+          const remoteMemberId = remoteMemberIdsByExternalKey[childId];
+
+          if (!remoteMemberId) {
+            if (shouldAward && rewardAmount) {
+              setRemoteAllowanceError("Open Setup and save household members before tracking allowance.");
+            }
+            return;
+          }
+
+          try {
+            if (!shouldAward || !rewardAmount) {
+              await deleteRemoteMorningRoutineAllowanceEntry({
+                completionDate,
+                householdId,
+                householdMemberId: remoteMemberId,
+              });
+              setRemoteAllowanceEntries((current) =>
+                removeMorningRoutineAllowanceEntries(current, childId, completionDate),
+              );
+              setRemoteAllowanceError("");
+            } else {
+              const entry = await createRemoteMorningRoutineAllowanceEntry({
+                amount: rewardAmount,
+                childId,
+                completionDate,
+                householdId,
+                householdMemberId: remoteMemberId,
+                occurredAt,
+              });
+
+              setRemoteAllowanceEntries((current) => {
+                const withoutExisting = removeMorningRoutineAllowanceEntries(current, childId, completionDate);
+                return [...withoutExisting, entry];
+              });
+              setRemoteAllowanceError("");
+            }
+          } catch (error) {
+            setRemoteAllowanceError(
+              error instanceof Error ? error.message : "Could not update morning routine allowance.",
+            );
+            return;
+          }
+
+          if (shouldAward) {
+            celebrate();
+          }
+
+          return;
+        }
+
+        setAllowanceState((current) => {
+          const nextEntries = removeMorningRoutineAllowanceEntries(current.entries, childId, completionDate);
+
+          if (!shouldAward || !rewardAmount) {
+            return {
+              entries: nextEntries,
+            };
+          }
+
+          if (hasMorningRoutineAllowanceEntry(current.entries, childId, completionDate)) {
+            return current;
+          }
+
+          const entry = createMorningRoutineAllowanceEntry({
+            amount: rewardAmount,
+            childId,
+            completionDate,
+            id: createId(`morning-routine-${childId}-${completionDate}`),
+            occurredAt,
+          });
+
+          return entry
+            ? {
+                entries: [...nextEntries, entry],
+              }
+            : current;
+        });
+
+        if (shouldAward) {
+          celebrate();
+        }
+      });
+  }
 
   function selectMember(memberId: string) {
     setState((current) => ({
@@ -1814,8 +2071,13 @@ export function ProfileDashboard({
                 <div>
                   <h2 className="text-lg font-semibold">Bank</h2>
                   <p className="mt-1 text-sm text-[#657381]">
-                    Allowance earned from paid chore completions.
+                    Allowance earned from paid chore completions and full morning routine closeout.
                   </p>
+                  {selectedMember.role === "child" && selectedMemberMorningRoutineAllowanceAmount ? (
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                      Morning routine credit {formatCurrency(selectedMemberMorningRoutineAllowanceAmount)} per day
+                    </p>
+                  ) : null}
                 </div>
                 {selectedMember.role === "child" ? (
                   <div className="text-right">
@@ -1840,7 +2102,7 @@ export function ProfileDashboard({
                       key={entry.id}
                     >
                       <div>
-                        <p className="font-semibold">{entry.choreTitle ?? "Allowance credit"}</p>
+                        <p className="font-semibold">{entry.choreTitle ?? entry.label ?? "Allowance credit"}</p>
                         <p className="mt-1 text-xs text-[#657381]">
                           {formatDateLabel(entry.occurredAt.slice(0, 10))}
                         </p>
@@ -1982,6 +2244,9 @@ export function ProfileDashboard({
             }
           }}
         />
+      ) : null}
+      {morningRoutineCelebrationKey > 0 ? (
+        <MorningRoutineFireworks key={morningRoutineCelebrationKey} />
       ) : null}
     </main>
   );
@@ -3458,7 +3723,7 @@ async function loadRemoteAllowanceEntries({
   const supabase = createBrowserSupabaseClient();
   const { data, error } = await supabase
     .from("allowance_entries")
-    .select("id, household_member_id, amount_cents, chore_completion_id, chore_id, occurred_at, metadata")
+    .select("id, household_member_id, amount_cents, chore_completion_id, chore_id, entry_type, occurred_at, metadata")
     .eq("household_id", householdId)
     .eq("household_member_id", remoteMemberId)
     .order("occurred_at", { ascending: false })
@@ -3476,13 +3741,21 @@ async function loadRemoteAllowanceEntries({
     id: entry.id,
     childId,
     amount: entry.amount_cents / 100,
-    source: "chore-completion",
+    source:
+      entry.entry_type === "morning_routine_completion"
+        ? "morning-routine-completion"
+        : entry.entry_type === "manual_adjustment"
+          ? "manual-adjustment"
+          : "chore-completion",
     occurredAt: entry.occurred_at,
     assignmentTemplateId: entry.metadata.assignmentTemplateId,
     choreCompletionId: entry.chore_completion_id ?? undefined,
     choreId: entry.chore_id ?? undefined,
     choreTitle: entry.metadata.choreTitle,
+    label: entry.metadata.label,
     note: entry.metadata.note,
+    routineCategory: entry.metadata.routineCategory,
+    routineCompletionDate: entry.metadata.routineCompletionDate,
   }));
 }
 
@@ -3817,6 +4090,92 @@ async function saveRemoteActionItemCompletion({
 
 function normalizeTimeForInput(value: string | null) {
   return value ? value.slice(0, 5) : "";
+}
+
+function MorningRoutineFireworks() {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setIsVisible(false);
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  if (!isVisible) {
+    return null;
+  }
+
+  const bursts = [
+    { color: "#22c55e", left: "18%", top: "22%", size: 132 },
+    { color: "#38bdf8", left: "50%", top: "14%", size: 156 },
+    { color: "#f97316", left: "80%", top: "24%", size: 128 },
+  ];
+
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.14),rgba(255,255,255,0))] animate-[fireworks-fade_1800ms_ease-out_forwards]" />
+      {bursts.map((burst, burstIndex) => (
+        <div
+          className="absolute -translate-x-1/2 -translate-y-1/2"
+          key={`${burst.left}-${burst.top}`}
+          style={{
+            left: burst.left,
+            top: burst.top,
+          }}
+        >
+          {Array.from({ length: 14 }).map((_, particleIndex) => {
+            const angle = (360 / 14) * particleIndex;
+
+            return (
+              <span
+                className="absolute left-0 top-0 block h-1.5 rounded-full animate-[fireworks-burst_1200ms_cubic-bezier(0.18,0.8,0.32,1)_forwards]"
+                key={`${burstIndex}-${particleIndex}`}
+                style={{
+                  animationDelay: `${burstIndex * 120}ms`,
+                  backgroundColor: burst.color,
+                  boxShadow: `0 0 18px ${burst.color}`,
+                  transform: `rotate(${angle}deg) translateY(-${burst.size / 2}px)`,
+                  transformOrigin: "0 0",
+                  width: `${18 + (particleIndex % 4) * 6}px`,
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
+      <style jsx>{`
+        @keyframes fireworks-burst {
+          0% {
+            opacity: 0;
+            transform: scale(0.2);
+          }
+          12% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.15);
+          }
+        }
+
+        @keyframes fireworks-fade {
+          0% {
+            opacity: 0;
+          }
+          20% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 function BaselineScheduleModal({

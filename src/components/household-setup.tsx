@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
+import { normalizeCurrencyAmount } from "@/lib/allowance/storage";
 import { AdminBaselineTemplates } from "@/components/admin-baseline-templates";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
@@ -25,6 +26,9 @@ type HouseholdMemberRow = {
   display_name: string | null;
   external_key: string;
   id: string;
+  metadata: {
+    morningRoutineAllowanceAmount?: number;
+  };
   preferred_name: string;
   relationship: string | null;
   role: "parent" | "child";
@@ -34,6 +38,7 @@ type MemberDraft = {
   birthDate: string;
   displayName: string;
   externalKey: string;
+  morningRoutineAllowanceAmount: string;
   preferredName: string;
   relationship: string;
   role: "parent" | "child";
@@ -373,16 +378,25 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     }
 
     const { error } = await supabase.from("household_members").upsert(
-      memberRows.map((member) => ({
-        household_id: householdId,
-        external_key: member.externalKey,
-        preferred_name: member.preferredName,
-        display_name: member.displayName || member.preferredName,
-        role: member.role,
-        relationship: member.relationship || null,
-        birth_date: member.birthDate || null,
-        metadata: {},
-      })),
+      memberRows.map((member) => {
+        const morningRoutineAllowanceAmount =
+          member.role === "child" ? normalizeCurrencyAmount(member.morningRoutineAllowanceAmount) : undefined;
+
+        return {
+          household_id: householdId,
+          external_key: member.externalKey,
+          preferred_name: member.preferredName,
+          display_name: member.displayName || member.preferredName,
+          role: member.role,
+          relationship: member.relationship || null,
+          birth_date: member.birthDate || null,
+          metadata: morningRoutineAllowanceAmount
+            ? {
+                morningRoutineAllowanceAmount,
+              }
+            : {},
+        };
+      }),
       {
         onConflict: "household_id,external_key",
       },
@@ -429,6 +443,8 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
           ? {
               ...member,
               ...patch,
+              morningRoutineAllowanceAmount:
+                patch.role === "parent" ? "" : patch.morningRoutineAllowanceAmount ?? member.morningRoutineAllowanceAmount,
               externalKey:
                 patch.preferredName && member.externalKey === createMemberExternalKey(member.preferredName)
                   ? createMemberExternalKey(patch.preferredName)
@@ -921,7 +937,9 @@ function MemberDraftEditor({
     <div className="grid gap-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm leading-6 text-[#4c5965]">
-          These names and birthdays become the durable member records used by dashboards, routines, chores, and calendar assignments.
+          These names and birthdays become the durable member records used by dashboards, routines,
+          chores, and calendar assignments. Child members can also earn a daily morning routine
+          credit when every item in that category is checked off.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -953,7 +971,7 @@ function MemberDraftEditor({
       <ol className="grid gap-2">
         {drafts.map((member) => (
           <li
-            className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_auto]"
+            className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_140px_auto]"
             key={member.tempId}
           >
             <label className="grid gap-1 text-sm">
@@ -999,6 +1017,22 @@ function MemberDraftEditor({
                 className="border border-[#d7e0e7] bg-white px-3 py-2"
                 onChange={(event) => onUpdateMember(member.tempId, { relationship: event.target.value })}
                 value={member.relationship}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Morning credit</span>
+              <input
+                className="border border-[#d7e0e7] bg-white px-3 py-2 disabled:bg-[#eef2f6] disabled:text-[#9aa5b1]"
+                disabled={member.role !== "child"}
+                inputMode="decimal"
+                min="0"
+                onChange={(event) =>
+                  onUpdateMember(member.tempId, { morningRoutineAllowanceAmount: event.target.value })
+                }
+                placeholder={member.role === "child" ? "0.25" : "Child only"}
+                step="0.01"
+                type="number"
+                value={member.morningRoutineAllowanceAmount}
               />
             </label>
             <button
@@ -1151,7 +1185,7 @@ async function loadHouseholdWorkflowState(selectedHouseholdId: string, includeAc
   const supabase = createBrowserSupabaseClient();
   const { data: members, error: membersError } = await supabase
     .from("household_members")
-    .select("id, external_key, preferred_name, display_name, role, relationship, birth_date")
+    .select("id, external_key, preferred_name, display_name, role, relationship, birth_date, metadata")
     .eq("household_id", selectedHouseholdId)
     .order("role", { ascending: false })
     .order("preferred_name", { ascending: true })
@@ -1242,6 +1276,9 @@ function mapRemoteMemberToPlannerMember(member: HouseholdMemberRow): HouseholdMe
     id: member.external_key,
     preferredName: member.preferred_name,
     displayName: member.display_name ?? member.preferred_name,
+    morningRoutineAllowanceAmount: normalizeCurrencyAmount(
+      member.metadata?.morningRoutineAllowanceAmount,
+    ),
     role: member.role,
     relationship: normalizePlannerRelationship(member.relationship, member.role),
     birthDate: member.birth_date ?? undefined,
@@ -1269,6 +1306,9 @@ function mapRemoteMemberToDraft(member: HouseholdMemberRow): MemberDraft {
     birthDate: member.birth_date ?? "",
     displayName: member.display_name ?? member.preferred_name,
     externalKey: member.external_key,
+    morningRoutineAllowanceAmount: member.metadata?.morningRoutineAllowanceAmount
+      ? String(member.metadata.morningRoutineAllowanceAmount)
+      : "",
     preferredName: member.preferred_name,
     relationship: member.relationship ?? "",
     role: member.role,
@@ -1283,6 +1323,7 @@ function createBlankMemberDraft(role: "parent" | "child"): MemberDraft {
     birthDate: "",
     displayName: "",
     externalKey: `${role}-${tempId}`,
+    morningRoutineAllowanceAmount: "",
     preferredName: "",
     relationship: "",
     role,
@@ -1295,6 +1336,9 @@ function mapPlannerMemberToDraft(member: HouseholdMember): MemberDraft {
     birthDate: member.birthDate ?? "",
     displayName: member.displayName,
     externalKey: member.id,
+    morningRoutineAllowanceAmount: member.morningRoutineAllowanceAmount
+      ? String(member.morningRoutineAllowanceAmount)
+      : "",
     preferredName: member.preferredName,
     relationship: member.relationship,
     role: member.role,
@@ -1324,6 +1368,7 @@ function getValidMemberDrafts(members: MemberDraft[]) {
       displayName: member.displayName.trim(),
       birthDate: member.birthDate.trim(),
       externalKey: member.externalKey.trim() || createMemberExternalKey(member.preferredName),
+      morningRoutineAllowanceAmount: member.morningRoutineAllowanceAmount.trim(),
       preferredName: member.preferredName.trim(),
       relationship: member.relationship.trim(),
     }))
