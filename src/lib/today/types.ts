@@ -84,5 +84,7 @@ export type LocalHouseholdItem = {
   assigneeId: string;
   date: string;
   createdAt: string;
+  category?: ResponsibilityCategory;
   completedAt?: string;
+  displayMode?: "dated" | "open-responsibility";
 };

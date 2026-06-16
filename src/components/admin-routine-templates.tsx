@@ -74,6 +74,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(weekdayOptions);
   const [steps, setSteps] = useState<RoutineStepDraft[]>(defaultRoutineSteps);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -194,6 +195,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
       }
 
       resetRoutineTemplateForm();
+      setEditorMode(null);
       setRefreshVersion((current) => current + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Could not save routine template.");
@@ -231,8 +233,22 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
     setSelectedMemberIds(template.assignedMemberIds);
     setSelectedDays(template.daysOfWeek.length > 0 ? template.daysOfWeek : weekdayOptions);
     setSteps(template.steps.length > 0 ? template.steps.map((step) => ({ ...step })) : defaultRoutineSteps);
+    setEditorMode("edit");
     setErrorMessage("");
-    setStatusMessage(`Editing ${template.name}.`);
+    setStatusMessage("");
+  }
+
+  function createTemplate() {
+    resetRoutineTemplateForm();
+    setEditorMode("create");
+    setErrorMessage("");
+    setStatusMessage("");
+  }
+
+  function closeEditor() {
+    resetRoutineTemplateForm();
+    setEditorMode(null);
+    setErrorMessage("");
   }
 
   function resetRoutineTemplateForm() {
@@ -304,189 +320,263 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
 
       {householdStatus === "ready" && householdId ? (
         <>
-          <form className="grid gap-4 border border-[#d7e0e7] bg-[#f8fafc] p-3" onSubmit={saveRoutineTemplate}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold">
-                  {editingTemplate ? `Edit ${editingTemplate.name}` : "Create routine template"}
-                </h3>
-                <p className="mt-1 text-xs text-[#657381]">
-                  {editingTemplate
-                    ? "Changes update this saved template and the assigned routine steps."
-                    : "Build a reusable routine, then apply it to one or more kids."}
-                </p>
-              </div>
-              {editingTemplate ? (
-                <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965]"
-                  onClick={resetRoutineTemplateForm}
-                  type="button"
-                >
-                  New template
-                </button>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Template name</span>
-                <input
-                  className="border border-[#d7e0e7] bg-white px-3 py-2"
-                  onChange={(event) => setTemplateName(event.target.value)}
-                  value={templateName}
-                />
-              </label>
-              <fieldset className="grid gap-2">
-                <legend className="text-sm font-semibold">Apply to</legend>
-                <div className="flex flex-wrap gap-2">
-                  {childMembers.map((member) => (
-                    <label
-                      className="flex items-center gap-2 border border-[#d7e0e7] bg-white px-2 py-1 text-sm font-semibold text-[#4c5965]"
-                      key={member.id}
-                    >
-                      <input
-                        checked={selectedMemberIds.includes(member.id)}
-                        onChange={() => toggleMember(member.id)}
-                        type="checkbox"
-                      />
-                      {member.preferredName}
-                    </label>
-                  ))}
+          <div className="grid gap-4">
+            <div className="flex flex-col gap-3 rounded-sm border border-[#d7e0e7] bg-[#f8fafc] p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                    Source of truth
+                  </p>
+                  <p className="mt-2 text-sm text-[#4c5965]">
+                    Saved routine templates are the recurring routine steps the dashboard loads for
+                    matching weekdays and assigned kids. Editing a template updates those recurring
+                    steps directly instead of creating a separate copy.
+                  </p>
                 </div>
-              </fieldset>
-            </div>
-
-            <fieldset className="grid gap-2">
-              <legend className="text-sm font-semibold">Days</legend>
-              <div className="flex flex-wrap gap-2">
-                {dayOptions.map((day) => (
-                  <label
-                    className="flex items-center gap-2 border border-[#d7e0e7] bg-white px-2 py-1 text-sm font-semibold text-[#4c5965]"
-                    key={day}
-                  >
-                    <input
-                      checked={selectedDays.includes(day)}
-                      onChange={() => toggleDay(day)}
-                      type="checkbox"
-                    />
-                    {day}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">Steps</h3>
                 <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                  onClick={addStep}
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
+                  onClick={createTemplate}
                   type="button"
                 >
-                  Add step
+                  Create routine template
                 </button>
-              </div>
-              <div className="grid gap-2">
-                {steps.map((step) => (
-                  <div className="grid gap-2 md:grid-cols-[1fr_130px_130px_90px]" key={step.id}>
-                    <input
-                      aria-label="Step title"
-                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
-                      onChange={(event) => updateStep(step.id, { title: event.target.value })}
-                      value={step.title}
-                    />
-                    <input
-                      aria-label="Step start"
-                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
-                      onChange={(event) => updateStep(step.id, { startTime: event.target.value })}
-                      type="time"
-                      value={step.startTime}
-                    />
-                    <input
-                      aria-label="Step end"
-                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
-                      onChange={(event) => updateStep(step.id, { endTime: event.target.value })}
-                      type="time"
-                      value={step.endTime}
-                    />
-                    <button
-                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965]"
-                      onClick={() => removeStep(step.id)}
-                      type="button"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
               </div>
             </div>
 
-            {errorMessage ? (
+            {errorMessage && !editorMode ? (
               <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
                 {errorMessage}
               </p>
             ) : null}
-            {statusMessage ? (
+            {statusMessage && !editorMode ? (
               <p className="border border-[#b7d7ce] bg-[#f0faf7] px-3 py-2 text-sm text-[#2f6f73]">
                 {statusMessage}
               </p>
             ) : null}
 
-            <div className="flex justify-end">
-              <button
-                className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSaving}
-                type="submit"
-              >
-                {isSaving ? "Saving..." : editingTemplate ? "Update routine template" : "Save routine template"}
-              </button>
-            </div>
-          </form>
+            {templates.length > 0 ? (
+              <ol className="grid gap-3 md:grid-cols-2">
+                {templates.map((template) => (
+                  <li
+                    className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-4"
+                    key={template.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-[#17202a]">{template.name}</p>
+                        <p className="mt-1 text-sm text-[#657381]">
+                          {template.stepCount} step{template.stepCount === 1 ? "" : "s"} ·{" "}
+                          {template.assignedMemberNames.join(", ") || "No children"}
+                        </p>
+                        <p className="mt-1 text-sm text-[#657381]">
+                          {template.daysOfWeek.join(", ")}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                          onClick={() => editTemplate(template)}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965]"
+                          onClick={() => void removeTemplate(template)}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
 
-          {templates.length > 0 ? (
-            <ol className="grid gap-2 md:grid-cols-2">
-              {templates.map((template) => (
-                <li
-                  className={`grid gap-2 border px-3 py-3 ${
-                    editingTemplateId === template.id
-                      ? "border-[#1f6f8b] bg-white"
-                      : "border-[#d7e0e7] bg-[#f8fafc]"
-                  }`}
-                  key={template.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
+                    <ol className="grid gap-2">
+                      {template.steps.map((step) => (
+                        <li
+                          className="grid gap-1 border border-[#d7e0e7] bg-white px-3 py-3 text-sm"
+                          key={step.id}
+                        >
+                          <span className="font-semibold text-[#17202a]">{step.title}</span>
+                          <span className="text-[#657381]">
+                            {formatTimeRange(step.startTime, step.endTime)}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="border border-dashed border-[#cbd5df] bg-white px-3 py-4 text-sm text-[#4c5965]">
+                No household routine templates are saved yet.
+              </p>
+            )}
+
+            {editorMode ? (
+              <div
+                aria-modal="true"
+                className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+                role="dialog"
+              >
+                <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+                  <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
                     <div>
-                      <p className="font-semibold">{template.name}</p>
-                      <p className="mt-1 text-xs text-[#657381]">
-                        {template.stepCount} step{template.stepCount === 1 ? "" : "s"} ·{" "}
-                        {template.assignedMemberNames.join(", ") || "No children"}
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                        {editorMode === "edit" ? "Editing Existing Template" : "Creating New Template"}
+                      </p>
+                      <h3 className="mt-1 text-xl font-semibold text-[#17202a]">
+                        {editorMode === "edit" ? "Edit routine template" : "Create routine template"}
+                      </h3>
+                      <p className="mt-1 max-w-3xl text-sm text-[#4c5965]">
+                        {editorMode === "edit"
+                          ? "Changes here update the recurring routine steps already assigned through this template."
+                          : "Build a reusable routine, then assign those recurring steps to one or more kids."}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        className="border border-[#1f6f8b] bg-white px-3 py-2 text-xs font-semibold text-[#1f6f8b]"
-                        onClick={() => editTemplate(template)}
-                        type="button"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="border border-[#d7e0e7] bg-white px-3 py-2 text-xs font-semibold text-[#4c5965]"
-                        onClick={() => void removeTemplate(template)}
-                        type="button"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <button
+                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+                      onClick={closeEditor}
+                      type="button"
+                    >
+                      Close
+                    </button>
                   </div>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="border border-dashed border-[#cbd5df] bg-white px-3 py-4 text-sm text-[#4c5965]">
-              No household routine templates are saved yet.
-            </p>
-          )}
+
+                  <div className="min-h-0 overflow-y-auto px-5 py-4">
+                    {errorMessage ? (
+                      <p className="mb-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                        {errorMessage}
+                      </p>
+                    ) : null}
+                    {statusMessage ? (
+                      <p className="mb-4 border border-[#b7d7ce] bg-[#f0faf7] px-3 py-2 text-sm text-[#2f6f73]">
+                        {statusMessage}
+                      </p>
+                    ) : null}
+
+                    <form className="grid gap-4" onSubmit={saveRoutineTemplate}>
+                      <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                        <label className="grid gap-1 text-sm">
+                          <span className="font-semibold">Template name</span>
+                          <input
+                            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                            onChange={(event) => setTemplateName(event.target.value)}
+                            value={templateName}
+                          />
+                        </label>
+                        <fieldset className="grid gap-2">
+                          <legend className="text-sm font-semibold">Apply to</legend>
+                          <div className="flex flex-wrap gap-2">
+                            {childMembers.map((member) => (
+                              <label
+                                className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-1 text-sm font-semibold text-[#4c5965]"
+                                key={member.id}
+                              >
+                                <input
+                                  checked={selectedMemberIds.includes(member.id)}
+                                  onChange={() => toggleMember(member.id)}
+                                  type="checkbox"
+                                />
+                                {member.preferredName}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                      </div>
+
+                      <fieldset className="grid gap-2">
+                        <legend className="text-sm font-semibold">Days</legend>
+                        <div className="flex flex-wrap gap-2">
+                          {dayOptions.map((day) => (
+                            <label
+                              className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-1 text-sm font-semibold text-[#4c5965]"
+                              key={day}
+                            >
+                              <input
+                                checked={selectedDays.includes(day)}
+                                onChange={() => toggleDay(day)}
+                                type="checkbox"
+                              />
+                              {day}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+
+                      <div className="grid gap-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                            Steps
+                          </h4>
+                          <button
+                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                            onClick={addStep}
+                            type="button"
+                          >
+                            Add step
+                          </button>
+                        </div>
+                        <div className="grid gap-2">
+                          {steps.map((step) => (
+                            <div className="grid gap-2 md:grid-cols-[1fr_130px_130px_90px]" key={step.id}>
+                              <input
+                                aria-label="Step title"
+                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
+                                onChange={(event) => updateStep(step.id, { title: event.target.value })}
+                                value={step.title}
+                              />
+                              <input
+                                aria-label="Step start"
+                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
+                                onChange={(event) => updateStep(step.id, { startTime: event.target.value })}
+                                type="time"
+                                value={step.startTime}
+                              />
+                              <input
+                                aria-label="Step end"
+                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
+                                onChange={(event) => updateStep(step.id, { endTime: event.target.value })}
+                                type="time"
+                                value={step.endTime}
+                              />
+                              <button
+                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965]"
+                                onClick={() => removeStep(step.id)}
+                                type="button"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                          onClick={closeEditor}
+                          type="button"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isSaving}
+                          type="submit"
+                        >
+                          {isSaving
+                            ? "Saving..."
+                            : editorMode === "edit"
+                              ? "Update routine template"
+                              : "Save routine template"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </>
       ) : (
         <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-4 text-sm text-[#4c5965]">
@@ -800,4 +890,16 @@ function normalizeDaysOfWeek(daysOfWeek: string[] | null | undefined): DayOfWeek
 
 function normalizeTimeForInput(value: string | null) {
   return value?.slice(0, 5) ?? "";
+}
+
+function formatTimeRange(startTime: string, endTime: string) {
+  return `${formatClockTime(startTime)}-${formatClockTime(endTime)}`;
+}
+
+function formatClockTime(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const normalizedHours = hours % 12 || 12;
+
+  return `${normalizedHours}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }

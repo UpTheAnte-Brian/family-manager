@@ -123,6 +123,7 @@ type DashboardResponsibilityItem = {
     | "configured-responsibility"
     | "local"
     | "dated-task"
+    | "open-responsibility"
     | "temporary-routine";
   assignment?: AssignmentWithChore;
   localResponsibility?: LocalResponsibilityItem;
@@ -239,6 +240,18 @@ type RemoteBaselineTemplateLoad = {
 type RemoteBaselineScheduleLoad = {
   events: DashboardEvent[];
 };
+
+type ResponsibilityDraftInput =
+  | ({
+      mode: "weekly";
+    } & Omit<LocalResponsibilityItem, "createdAt" | "id">)
+  | {
+      mode: "open";
+      assigneeId: string;
+      availableFrom: string;
+      category: ResponsibilityCategory;
+      title: string;
+    };
 
 type RemoteRoutineLoad = {
   completions: Record<string, boolean>;
@@ -1382,6 +1395,73 @@ export function ProfileDashboard({
     }));
   }
 
+  async function addDashboardResponsibility(input: ResponsibilityDraftInput) {
+    const title = input.title.trim();
+
+    if (!title) {
+      return false;
+    }
+
+    if (input.mode === "open") {
+      if (isRemoteHouseholdReady && householdId) {
+        const remoteMemberId = remoteMemberIdsByExternalKey[input.assigneeId];
+
+        if (!remoteMemberId) {
+          setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
+          return false;
+        }
+
+        try {
+          await saveRemoteOpenResponsibility({
+            availableFrom: input.availableFrom,
+            category: input.category,
+            householdId,
+            memberId: remoteMemberId,
+            title,
+          });
+          setHouseholdItemSyncVersion((current) => current + 1);
+          setRemoteHouseholdItemError("");
+          return true;
+        } catch (error) {
+          setRemoteHouseholdItemError(
+            error instanceof Error ? error.message : "Could not save responsibility to Supabase.",
+          );
+          return false;
+        }
+      }
+
+      const createdAt = new Date().toISOString();
+
+      setState((current) => ({
+        ...current,
+        localItems: [
+          ...current.localItems,
+          {
+            id: createId(`open-responsibility-${input.assigneeId}-${createdAt}-${title}`),
+            kind: "task",
+            title,
+            assigneeId: input.assigneeId,
+            date: input.availableFrom,
+            createdAt,
+            category: input.category,
+            displayMode: "open-responsibility",
+          },
+        ],
+      }));
+
+      return true;
+    }
+
+    return addLocalResponsibility({
+      assigneeId: input.assigneeId,
+      category: input.category,
+      daysOfWeek: input.daysOfWeek,
+      endTime: input.endTime,
+      startTime: input.startTime,
+      title,
+    });
+  }
+
   async function addLocalResponsibility(input: Omit<LocalResponsibilityItem, "createdAt" | "id">) {
     const title = input.title.trim();
 
@@ -1602,6 +1682,33 @@ export function ProfileDashboard({
         ),
       };
     });
+  }
+
+  async function removeOpenResponsibility(item: DashboardResponsibilityItem) {
+    if (isRemoteHouseholdReady && householdId && item.remoteActionItemId) {
+      try {
+        await deleteRemoteHouseholdActionItem({
+          actionItemId: item.remoteActionItemId,
+          householdId,
+        });
+        setHouseholdItemSyncVersion((current) => current + 1);
+        setRemoteHouseholdItemError("");
+      } catch (error) {
+        setRemoteHouseholdItemError(
+          error instanceof Error ? error.message : "Could not remove responsibility from Supabase.",
+        );
+      }
+      return;
+    }
+
+    if (!item.localTaskId) {
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      localItems: current.localItems.filter((candidate) => candidate.id !== item.localTaskId),
+    }));
   }
 
   async function removeScheduledBaselineEvent(eventId: string) {
@@ -1931,6 +2038,8 @@ export function ProfileDashboard({
                                   onRemove={
                                     item.source === "local"
                                       ? () => removeLocalResponsibility(item.id)
+                                      : item.source === "open-responsibility"
+                                        ? () => void removeOpenResponsibility(item)
                                       : item.source === "temporary-routine" && item.temporaryRoutineId
                                         ? () => void removeTemporaryRoutine(item.temporaryRoutineId!)
                                       : item.source === "routine" && item.id.startsWith("routine-")
@@ -2199,6 +2308,7 @@ export function ProfileDashboard({
       {responsibilityModal ? (
         <ResponsibilityModal
           defaultAssigneeId={selectedMember?.id ?? defaultQuickAddAssignee}
+          defaultDate={displayedDay.date}
           defaultDayOfWeek={displayedDay.dayOfWeek}
           initialResponsibility={
             responsibilityModal.mode === "edit" ? responsibilityModal.responsibility : undefined
@@ -2208,8 +2318,10 @@ export function ProfileDashboard({
           onSave={async (input) => {
             const saved = await (
               responsibilityModal.mode === "edit"
-                ? updateLocalResponsibility(responsibilityModal.responsibility.id, input)
-                : addLocalResponsibility(input)
+                ? input.mode === "weekly"
+                  ? updateLocalResponsibility(responsibilityModal.responsibility.id, input)
+                  : false
+                : addDashboardResponsibility(input)
             );
 
             if (saved) {
@@ -2405,6 +2517,8 @@ function responsibilitySourceLabel(item: DashboardResponsibilityItem) {
       return "Custom";
     case "dated-task":
       return "Today";
+    case "open-responsibility":
+      return "Open";
     case "temporary-routine":
       return "Temporary routine";
   }
@@ -2607,9 +2721,12 @@ function getResponsibilityItems(
     id: item.id,
     title: item.title,
     startTime: "Anytime",
-    endTime: "Today",
-    category: "personal" as const,
-    source: "dated-task" as const,
+    endTime: item.displayMode === "open-responsibility" ? "Open until complete" : "Today",
+    category: item.category ?? ("personal" as const),
+    source:
+      item.displayMode === "open-responsibility"
+        ? ("open-responsibility" as const)
+        : ("dated-task" as const),
     localTaskId: item.remoteActionItemId ? undefined : item.id,
     remoteActionItemId: item.remoteActionItemId,
     completionKey: item.completionKey,
@@ -2845,8 +2962,19 @@ function getVisibleLocalItems(
   date: string,
 ) {
   return items.filter(
-    (item) =>
-      item.date === date && (member.role === "parent" || item.assigneeId === member.id),
+    (item) => {
+      if (member.role !== "parent" && item.assigneeId !== member.id) {
+        return false;
+      }
+
+      if (item.kind === "task" && item.displayMode === "open-responsibility") {
+        const completedOn = item.completedAt?.slice(0, 10);
+
+        return item.date <= date && (!completedOn || date < completedOn);
+      }
+
+      return item.date === date;
+    },
   );
 }
 
@@ -2909,6 +3037,10 @@ async function loadRemoteHouseholdItems(
       return item.metadata.kind === "custom-responsibility" && (item.days_of_week ?? []).includes(dayOfWeek);
     }
 
+    if (item.item_kind === "task" && item.metadata.kind === "open-responsibility" && item.occurrence_date) {
+      return item.occurrence_date <= date;
+    }
+
     if (item.occurrence_date !== date) {
       return false;
     }
@@ -2932,7 +3064,7 @@ async function loadRemoteHouseholdItems(
     throw assignmentsError;
   }
 
-  const { data: completions, error: completionsError } =
+  const { data: completionsOnDate, error: completionsOnDateError } =
     actionItemIds.length === 0
       ? { data: [], error: null }
       : await supabase
@@ -2943,8 +3075,26 @@ async function loadRemoteHouseholdItems(
           .in("action_item_id", actionItemIds)
           .returns<RemoteActionCompletionRow[]>();
 
-  if (completionsError) {
-    throw completionsError;
+  if (completionsOnDateError) {
+    throw completionsOnDateError;
+  }
+
+  const openResponsibilityIds = relevantActionItems
+    .filter((item) => item.item_kind === "task" && item.metadata.kind === "open-responsibility")
+    .map((item) => item.id);
+  const { data: openResponsibilityCompletions, error: openResponsibilityCompletionsError } =
+    openResponsibilityIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_action_item_completions")
+          .select("action_item_id, occurrence_date")
+          .eq("household_id", householdId)
+          .lte("occurrence_date", date)
+          .in("action_item_id", openResponsibilityIds)
+          .returns<RemoteActionCompletionRow[]>();
+
+  if (openResponsibilityCompletionsError) {
+    throw openResponsibilityCompletionsError;
   }
 
   const assignedMemberIdsByActionItemId = new Map<string, string[]>();
@@ -2967,7 +3117,12 @@ async function loadRemoteHouseholdItems(
   }
 
   const completionMap: Record<string, boolean> = {};
-  const completionsByActionItemId = new Set((completions ?? []).map((completion) => completion.action_item_id));
+  const completionsOnDateByActionItemId = new Set(
+    (completionsOnDate ?? []).map((completion) => completion.action_item_id),
+  );
+  const completedOpenResponsibilityIds = new Set(
+    (openResponsibilityCompletions ?? []).map((completion) => completion.action_item_id),
+  );
   const responsibilities: LocalResponsibilityItem[] = [];
   const items: DashboardHouseholdItem[] = [];
 
@@ -2978,6 +3133,10 @@ async function loadRemoteHouseholdItems(
     if (item.item_kind === "task" && item.occurrence_date === null) {
       if (!assigneeId) {
         continue;
+      }
+
+      if (completionsOnDateByActionItemId.has(item.id)) {
+        completionMap[getActionKey(date, assigneeId, item.id)] = true;
       }
 
       responsibilities.push({
@@ -2993,9 +3152,28 @@ async function loadRemoteHouseholdItems(
       continue;
     }
 
+    if (item.item_kind === "task" && item.metadata.kind === "open-responsibility") {
+      if (!assigneeId || completedOpenResponsibilityIds.has(item.id)) {
+        continue;
+      }
+
+      items.push({
+        id: item.id,
+        kind: "task",
+        title: item.title,
+        assigneeId,
+        date: item.occurrence_date ?? date,
+        createdAt: item.created_at,
+        category: normalizeRemoteResponsibilityCategory(item.metadata.category),
+        displayMode: "open-responsibility",
+        remoteActionItemId: item.id,
+      });
+      continue;
+    }
+
     const completionKey = getActionKey(date, assigneeId || "household", item.id);
 
-    if (item.item_kind === "task" && completionsByActionItemId.has(item.id)) {
+    if (item.item_kind === "task" && completionsOnDateByActionItemId.has(item.id)) {
       completionMap[completionKey] = true;
     }
 
@@ -3066,6 +3244,53 @@ async function saveRemoteResponsibility({
 
   if (deleteError) {
     throw deleteError;
+  }
+
+  const { error: assignmentError } = await supabase.from("household_assignments").insert({
+    household_id: householdId,
+    assignable_type: "action_item",
+    assignable_id: item.id,
+    assignee_type: "member",
+    household_member_id: memberId,
+  });
+
+  if (assignmentError) {
+    throw assignmentError;
+  }
+}
+
+async function saveRemoteOpenResponsibility({
+  availableFrom,
+  category,
+  householdId,
+  memberId,
+  title,
+}: {
+  availableFrom: string;
+  category: ResponsibilityCategory;
+  householdId: string;
+  memberId: string;
+  title: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { data: item, error: itemError } = await supabase
+    .from("household_action_items")
+    .insert({
+      household_id: householdId,
+      item_kind: "task",
+      title,
+      source: "manual",
+      occurrence_date: availableFrom,
+      metadata: {
+        kind: "open-responsibility",
+        category,
+      },
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (itemError) {
+    throw itemError;
   }
 
   const { error: assignmentError } = await supabase.from("household_assignments").insert({
@@ -4499,6 +4724,7 @@ function TemporaryRoutineModal({
 
 function ResponsibilityModal({
   defaultAssigneeId,
+  defaultDate,
   defaultDayOfWeek,
   initialResponsibility,
   members,
@@ -4506,11 +4732,12 @@ function ResponsibilityModal({
   onSave,
 }: {
   defaultAssigneeId: string;
+  defaultDate: string;
   defaultDayOfWeek: DayOfWeek;
   initialResponsibility?: LocalResponsibilityItem;
   members: HouseholdMember[];
   onClose: () => void;
-  onSave: (input: Omit<LocalResponsibilityItem, "createdAt" | "id">) => void | Promise<void>;
+  onSave: (input: ResponsibilityDraftInput) => void | Promise<void>;
 }) {
   const [title, setTitle] = useState(initialResponsibility?.title ?? "");
   const [category, setCategory] = useState<ResponsibilityCategory>(
@@ -4524,8 +4751,10 @@ function ResponsibilityModal({
   );
   const [startTime, setStartTime] = useState(initialResponsibility?.startTime ?? "16:00");
   const [endTime, setEndTime] = useState(initialResponsibility?.endTime ?? "16:15");
+  const [scheduleMode, setScheduleMode] = useState<"weekly" | "open">("weekly");
   const [isSaving, setIsSaving] = useState(false);
   const isEditing = Boolean(initialResponsibility);
+  const showsWeeklyFields = isEditing || scheduleMode === "weekly";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4533,7 +4762,19 @@ function ResponsibilityModal({
     setIsSaving(true);
 
     try {
+      if (!showsWeeklyFields) {
+        await onSave({
+          mode: "open",
+          assigneeId,
+          availableFrom: defaultDate,
+          category,
+          title,
+        });
+        return;
+      }
+
       await onSave({
+        mode: "weekly",
         assigneeId,
         category,
         daysOfWeek,
@@ -4567,7 +4808,9 @@ function ResponsibilityModal({
               {isEditing ? "Edit responsibility" : "Add responsibility"}
             </h2>
             <p className="mt-1 text-sm text-[#4c5965]">
-              Choose who owns it, when it appears, and where it is grouped.
+              {showsWeeklyFields
+                ? "Choose who owns it, when it appears, and where it is grouped."
+                : `This will show in Responsibilities starting ${formatDateLabel(defaultDate)} and stay there until it is checked off.`}
             </p>
           </div>
           <button
@@ -4581,6 +4824,42 @@ function ResponsibilityModal({
         </div>
 
         <form className="grid gap-3" onSubmit={submit}>
+          {isEditing ? null : (
+            <fieldset className="grid gap-2 text-sm">
+              <legend className="font-semibold">How it appears</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex items-start gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3">
+                  <input
+                    checked={scheduleMode === "weekly"}
+                    name="responsibility-schedule-mode"
+                    onChange={() => setScheduleMode("weekly")}
+                    type="radio"
+                  />
+                  <span>
+                    <span className="block font-semibold text-[#17202a]">Repeats weekly</span>
+                    <span className="block text-sm text-[#657381]">
+                      Use this for responsibilities that happen on set days and times.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3">
+                  <input
+                    checked={scheduleMode === "open"}
+                    name="responsibility-schedule-mode"
+                    onChange={() => setScheduleMode("open")}
+                    type="radio"
+                  />
+                  <span>
+                    <span className="block font-semibold text-[#17202a]">Open until complete</span>
+                    <span className="block text-sm text-[#657381]">
+                      Use this for things like “Call your Grandma” that can be done any time later.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+          )}
+
           <div className="grid gap-3 lg:grid-cols-[1fr_170px_170px]">
             <label className="grid gap-1 text-sm">
               <span className="font-semibold">Responsibility</span>
@@ -4621,53 +4900,73 @@ function ResponsibilityModal({
             </label>
           </div>
 
-          <fieldset className="grid gap-2 text-sm">
-            <legend className="font-semibold">Days</legend>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-              {dayOptions.map((day) => (
-                <label
-                  className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
-                  key={day}
-                >
-                  <input
-                    checked={daysOfWeek.includes(day)}
-                    onChange={() => toggleDay(day)}
-                    type="checkbox"
-                  />
-                  {day}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          {showsWeeklyFields ? (
+            <>
+              <fieldset className="grid gap-2 text-sm">
+                <legend className="font-semibold">Days</legend>
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                  {dayOptions.map((day) => (
+                    <label
+                      className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
+                      key={day}
+                    >
+                      <input
+                        checked={daysOfWeek.includes(day)}
+                        onChange={() => toggleDay(day)}
+                        type="checkbox"
+                      />
+                      {day}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
 
-          <div className="grid gap-3 sm:grid-cols-[140px_140px_1fr_auto]">
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">Start</span>
-              <input
-                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                onChange={(event) => setStartTime(event.target.value)}
-                type="time"
-                value={startTime}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-semibold">End</span>
-              <input
-                className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                onChange={(event) => setEndTime(event.target.value)}
-                type="time"
-                value={endTime}
-              />
-            </label>
-            <span />
-            <button
-              className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={isSaving || daysOfWeek.length === 0}
-              type="submit"
-            >
-              {isSaving ? "Saving..." : isEditing ? "Save" : "Add"}
-            </button>
-          </div>
+              <div className="grid gap-3 sm:grid-cols-[140px_140px_1fr_auto]">
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">Start</span>
+                  <input
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                    onChange={(event) => setStartTime(event.target.value)}
+                    type="time"
+                    value={startTime}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">End</span>
+                  <input
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                    onChange={(event) => setEndTime(event.target.value)}
+                    type="time"
+                    value={endTime}
+                  />
+                </label>
+                <span />
+                <button
+                  className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isSaving || daysOfWeek.length === 0}
+                  type="submit"
+                >
+                  {isSaving ? "Saving..." : isEditing ? "Save" : "Add"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                  Starts Showing
+                </p>
+                <p className="mt-1 font-semibold text-[#17202a]">{formatDateLabel(defaultDate)}</p>
+              </div>
+              <button
+                className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isSaving}
+                type="submit"
+              >
+                {isSaving ? "Saving..." : "Add"}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

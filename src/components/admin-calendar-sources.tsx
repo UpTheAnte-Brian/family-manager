@@ -65,6 +65,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
   const [previewBySource, setPreviewBySource] = useState<Record<string, CalendarPreviewResult>>({});
   const [applyingSourceId, setApplyingSourceId] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState<string | null>(null);
+  const [previewModalSourceId, setPreviewModalSourceId] = useState<string | null>(null);
 
   useEffect(() => {
     setSources((current) =>
@@ -147,6 +148,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       delete next[sourceId];
       return next;
     });
+    setPreviewModalSourceId((current) => (current === sourceId ? null : current));
   }
 
   function updateSourceSchedule(sourceId: string, updates: Partial<Pick<CalendarSource, "syncMode" | "schedule">>) {
@@ -405,10 +407,18 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
     }
   }
 
+  const previewModalSource = previewModalSourceId
+    ? sources.find((source) => source.id === previewModalSourceId) ?? null
+    : null;
+
   return (
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
       <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-        <h2 className="text-xl font-semibold">Calendar Sources</h2>
+        <h2 className="text-xl font-semibold">Add Calendar Source</h2>
+        <p className="mt-1 text-sm text-[#4c5965]">
+          Use this form to add a new feed. Preview, apply, scheduling, and member assignment happen from the saved
+          source cards on the right.
+        </p>
         <form className="mt-4 grid gap-4" onSubmit={submit}>
           <label className="grid gap-1 text-sm">
             <span className="font-semibold">Label</span>
@@ -613,20 +623,13 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                     <button
                       className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
                       disabled={isPreviewing === source.id}
-                      onClick={() => previewSource(source)}
-                      type="button"
-                    >
-                      {isPreviewing === source.id ? "Previewing..." : "Preview"}
-                    </button>
-                    <button
-                      className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      disabled={!previewBySource[source.id] || applyingSourceId === source.id}
                       onClick={() => {
-                        void applyPreview(source);
+                        setPreviewModalSourceId(source.id);
+                        void previewSource(source);
                       }}
                       type="button"
                     >
-                      {applyingSourceId === source.id ? "Applying..." : "Apply"}
+                      {isPreviewing === source.id ? "Previewing..." : "Preview"}
                     </button>
                     <button
                       className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#33414f]"
@@ -644,33 +647,27 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                     </button>
                   </div>
                 </header>
-
-                {previewBySource[source.id] ? (
-                  <ol className="mt-3 grid gap-2">
-                    {previewBySource[source.id].events.slice(0, previewDisplayLimit).map((event) => (
-                      <li className="grid gap-1 border border-[#d7e0e7] bg-white px-3 py-2 text-sm" key={`${event.sourceId}-${event.sourceUid}-${event.date}-${event.startTime}-${event.title}`}>
-                        <span className="font-semibold">{event.title}</span>
-                        <span className="text-[#4c5965]">
-                          {event.date} · {event.startTime}-{event.endTime} · {event.category}
-                        </span>
-                        {event.teamLabel ? (
-                          <span className="text-xs font-semibold text-[#2f6f73]">{event.teamLabel}</span>
-                        ) : null}
-                        {event.location ? <span className="text-xs text-[#657381]">{event.location}</span> : null}
-                      </li>
-                    ))}
-                    {previewBySource[source.id].events.length > previewDisplayLimit ? (
-                      <li className="border border-dashed border-[#cbd5df] bg-white px-3 py-3 text-sm text-[#4c5965]">
-                        Showing first {previewDisplayLimit} of {previewBySource[source.id].eventCount} events. Apply imports all {previewBySource[source.id].eventCount}.
-                      </li>
-                    ) : null}
-                  </ol>
-                ) : null}
               </article>
             ))
           )}
         </div>
       </section>
+
+      {previewModalSource ? (
+        <CalendarSourcePreviewModal
+          applyingSourceId={applyingSourceId}
+          isPreviewing={isPreviewing}
+          onApply={(source) => {
+            void applyPreview(source);
+          }}
+          onClose={() => setPreviewModalSourceId(null)}
+          onRefresh={(source) => {
+            void previewSource(source);
+          }}
+          preview={previewBySource[previewModalSource.id]}
+          source={previewModalSource}
+        />
+      ) : null}
     </div>
   );
 }
@@ -741,4 +738,129 @@ async function readCalendarPreviewResponse(
       error: text.slice(0, 240),
     };
   }
+}
+
+function CalendarSourcePreviewModal({
+  applyingSourceId,
+  isPreviewing,
+  onApply,
+  onClose,
+  onRefresh,
+  preview,
+  source,
+}: {
+  applyingSourceId: string | null;
+  isPreviewing: string | null;
+  onApply: (source: CalendarSource) => void;
+  onClose: () => void;
+  onRefresh: (source: CalendarSource) => void;
+  preview: CalendarPreviewResult | undefined;
+  source: CalendarSource;
+}) {
+  const isLoadingPreview = isPreviewing === source.id;
+  const isApplyingPreview = applyingSourceId === source.id;
+  const shownEvents = preview?.events.slice(0, previewDisplayLimit) ?? [];
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+              {source.kind} preview
+            </p>
+            <h3 className="mt-1 text-xl font-semibold text-[#17202a]">{source.label}</h3>
+            <p className="mt-1 break-all text-sm text-[#4c5965]">{source.url}</p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          {source.lastSyncMessage ? (
+            <p
+              className={
+                source.lastSyncStatus === "error"
+                  ? "mb-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]"
+                  : "mb-4 border border-[#b8d8c2] bg-[#f3fbf5] px-3 py-2 text-sm text-[#24523b]"
+              }
+            >
+              {source.lastSyncMessage}
+            </p>
+          ) : null}
+
+          {isLoadingPreview && !preview ? (
+            <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-4 text-sm text-[#4c5965]">
+              Fetching calendar events for this source.
+            </p>
+          ) : null}
+
+          {!isLoadingPreview && !preview ? (
+            <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-4 text-sm text-[#4c5965]">
+              Preview this source to inspect the incoming events before applying them to the dashboard feed.
+            </p>
+          ) : null}
+
+          {preview ? (
+            <ol className="grid gap-2">
+              {shownEvents.map((event) => (
+                <li
+                  className="grid gap-1 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm"
+                  key={`${event.sourceId}-${event.sourceUid}-${event.date}-${event.startTime}-${event.title}`}
+                >
+                  <span className="font-semibold">{event.title}</span>
+                  <span className="text-[#4c5965]">
+                    {event.date} · {event.startTime}-{event.endTime} · {event.category}
+                  </span>
+                  {event.teamLabel ? <span className="text-xs font-semibold text-[#2f6f73]">{event.teamLabel}</span> : null}
+                  {event.location ? <span className="text-xs text-[#657381]">{event.location}</span> : null}
+                </li>
+              ))}
+              {preview.events.length > previewDisplayLimit ? (
+                <li className="border border-dashed border-[#cbd5df] bg-white px-3 py-3 text-sm text-[#4c5965]">
+                  Showing first {previewDisplayLimit} of {preview.eventCount} events. Apply imports all{" "}
+                  {preview.eventCount}.
+                </li>
+              ) : null}
+            </ol>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#d7e0e7] px-5 py-4">
+          <p className="text-sm text-[#4c5965]">
+            {preview
+              ? `Apply will replace this source's existing dashboard events with ${preview.eventCount} imported event${preview.eventCount === 1 ? "" : "s"}.`
+              : "Scheduled refresh uses this same saved source configuration after you switch it to scheduled mode."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+              disabled={isLoadingPreview}
+              onClick={() => onRefresh(source)}
+              type="button"
+            >
+              {isLoadingPreview ? "Previewing..." : preview ? "Refresh Preview" : "Preview"}
+            </button>
+            <button
+              className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!preview || isApplyingPreview || isLoadingPreview}
+              onClick={() => onApply(source)}
+              type="button"
+            >
+              {isApplyingPreview ? "Applying..." : "Apply to Dashboard"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

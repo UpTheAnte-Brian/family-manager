@@ -1268,6 +1268,7 @@ function AssignmentEditor({
       chores.find((chore) => chore.id === initialChoreId)?.estimatedMinutes ??
       15,
   );
+  const selectedChore = chores.find((chore) => chore.id === choreId);
 
   function submit() {
     if (!childId || !choreId) {
@@ -1321,6 +1322,17 @@ function AssignmentEditor({
               </option>
             ))}
           </select>
+          <span className="text-xs text-[#657381]">
+            {selectedChore
+              ? [
+                  `${selectedChore.estimatedMinutes} min`,
+                  selectedChore.allowanceAmount ? formatCurrency(selectedChore.allowanceAmount) : null,
+                  selectedChore.requiresAdultCheck ? "adult check" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : ""}
+          </span>
         </label>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
