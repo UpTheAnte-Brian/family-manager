@@ -20,13 +20,19 @@ import {
   isMissingAllowanceEntriesTableError,
 } from "@/lib/allowance/remote";
 import {
+  approveRemoteAllowanceRequest,
+  createRemoteAllowanceRequest,
+  loadRemoteAllowanceRequests,
+  type AllowanceRequest,
+} from "@/lib/allowance/requests";
+import {
   createMorningRoutineAllowanceEntry,
   getMorningRoutineAllowanceAmount,
   getMorningRoutineOccurredAt,
   hasMorningRoutineAllowanceEntry,
   removeMorningRoutineAllowanceEntries,
 } from "@/lib/allowance/morning-routine";
-import { normalizeChoreCategory } from "@/lib/chores/categories";
+import { choreCategories, getChoreCategoryLabel, normalizeChoreCategory } from "@/lib/chores/categories";
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
@@ -335,6 +341,7 @@ export function ProfileDashboard({
   today,
 }: ProfileDashboardProps) {
   const router = useRouter();
+  const childMembers = useMemo(() => members.filter((member) => member.role === "child"), [members]);
   const defaultMemberId = members[0]?.id ?? "";
   const defaultQuickAddAssignee = members[0]?.id ?? "";
   const initialState = useMemo<DashboardState>(
@@ -392,6 +399,7 @@ export function ProfileDashboard({
   const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
   const [remoteRoutineCompletions, setRemoteRoutineCompletions] = useState<Record<string, boolean>>({});
   const [remoteAllowanceEntries, setRemoteAllowanceEntries] = useState<AllowanceEntry[]>([]);
+  const [remoteAllowanceRequests, setRemoteAllowanceRequests] = useState<AllowanceRequest[]>([]);
   const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
   const [remoteMemberConfigsByExternalKey, setRemoteMemberConfigsByExternalKey] = useState<
     Record<string, { morningRoutineAllowanceAmount?: number }>
@@ -401,12 +409,29 @@ export function ProfileDashboard({
   const [remoteHouseholdItemError, setRemoteHouseholdItemError] = useState("");
   const [remoteChoreError, setRemoteChoreError] = useState("");
   const [remoteAllowanceError, setRemoteAllowanceError] = useState("");
+  const [remoteAllowanceRequestError, setRemoteAllowanceRequestError] = useState("");
   const [baselineScheduleSyncVersion, setBaselineScheduleSyncVersion] = useState(0);
   const [householdItemSyncVersion, setHouseholdItemSyncVersion] = useState(0);
   const [temporaryRoutineSyncVersion, setTemporaryRoutineSyncVersion] = useState(0);
   const [routineSyncVersion, setRoutineSyncVersion] = useState(0);
   const [choreSyncVersion, setChoreSyncVersion] = useState(0);
+  const [allowanceRequestSyncVersion, setAllowanceRequestSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
+  const [submittingAllowanceRequest, setSubmittingAllowanceRequest] = useState(false);
+  const [approvingAllowanceRequestId, setApprovingAllowanceRequestId] = useState("");
+  const [allowanceRequestDraft, setAllowanceRequestDraft] = useState<{
+    amount: string;
+    category: string;
+    childId: string;
+    note: string;
+    title: string;
+  }>({
+    amount: "1.00",
+    category: "yard",
+    childId: childMembers[0]?.id ?? "",
+    note: "",
+    title: "",
+  });
   const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
   const [responsibilityModal, setResponsibilityModal] = useState<
     | { mode: "add" }
@@ -425,8 +450,29 @@ export function ProfileDashboard({
   });
   const morningRoutineAllowanceSyncQueueRef = useRef(Promise.resolve());
   const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
+  const isHouseholdAdmin = household?.role === "owner" || household?.role === "parent";
   const selectedMember =
     members.find((member) => member.id === state.selectedMemberId) ?? members[0];
+  const bankRequestChildId =
+    selectedMember.role === "child"
+      ? selectedMember.id
+      : allowanceRequestDraft.childId || childMembers[0]?.id || "";
+  const selectedBankChild =
+    childMembers.find((member) => member.id === bankRequestChildId) ?? childMembers[0] ?? null;
+  const selectedBankChildRemoteMemberId = selectedBankChild
+    ? remoteMemberIdsByExternalKey[selectedBankChild.id]
+    : undefined;
+  const requestedByRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
+  const remoteExternalKeysByMemberId = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(remoteMemberIdsByExternalKey).map(([externalKey, remoteMemberId]) => [
+          remoteMemberId,
+          externalKey,
+        ]),
+      ),
+    [remoteMemberIdsByExternalKey],
+  );
   const effectiveDayTemplates = useMemo(
     () =>
       isRemoteHouseholdReady && remoteBaselineTemplates.length > 0
@@ -547,6 +593,15 @@ export function ProfileDashboard({
   )
     .filter((entry) => entry.childId === selectedMember.id)
     .sort((first, second) => compareStrings(second.occurredAt, first.occurredAt));
+  const visibleAllowanceRequests = remoteAllowanceRequests.filter((request) => {
+    const childExternalKey = remoteExternalKeysByMemberId[request.childRemoteMemberId];
+
+    if (!childExternalKey) {
+      return false;
+    }
+
+    return selectedMember.role === "child" ? childExternalKey === selectedMember.id : true;
+  });
   const selectedMemberMorningRoutineAllowanceAmount = isRemoteHouseholdReady
     ? getMorningRoutineAllowanceAmount(remoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
@@ -880,6 +935,63 @@ export function ProfileDashboard({
       return;
     }
 
+    const scopeChildIds =
+      selectedMember.role === "child" ? [selectedMember.id] : childMembers.map((member) => member.id);
+    const remoteChildIds = scopeChildIds
+      .map((childId) => remoteMemberIdsByExternalKey[childId])
+      .filter((remoteMemberId): remoteMemberId is string => Boolean(remoteMemberId));
+
+    if (remoteChildIds.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadAllowanceRequestsForScope() {
+      try {
+        const requests = await loadRemoteAllowanceRequests({
+          householdId: currentHouseholdId,
+          remoteChildMemberIds: remoteChildIds,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteAllowanceRequests(requests);
+        setRemoteAllowanceRequestError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteAllowanceRequestError(
+          error instanceof Error ? error.message : "Could not load pending bank requests from Supabase.",
+        );
+      }
+    }
+
+    void loadAllowanceRequestsForScope();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    allowanceRequestSyncVersion,
+    childMembers,
+    householdId,
+    householdStatus,
+    remoteMemberIdsByExternalKey,
+    selectedMember.id,
+    selectedMember.role,
+  ]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
     let isActive = true;
     const currentHouseholdId = householdId;
 
@@ -1102,6 +1214,81 @@ export function ProfileDashboard({
           celebrate();
         }
       });
+  }
+
+  async function submitAllowanceRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!isRemoteHouseholdReady || !householdId) {
+      setRemoteAllowanceRequestError("Connect a household in Setup before using approval-based bank requests.");
+      return;
+    }
+
+    if (!selectedBankChild || !selectedBankChildRemoteMemberId) {
+      setRemoteAllowanceRequestError("Open Setup and save household members before creating a bank request.");
+      return;
+    }
+
+    const matchedChore = choreConfig.weeklyChores.find(
+      (chore) => chore.title.trim().toLowerCase() === allowanceRequestDraft.title.trim().toLowerCase(),
+    );
+
+    try {
+      setSubmittingAllowanceRequest(true);
+      const nextRequest = await createRemoteAllowanceRequest({
+        amount: Number(allowanceRequestDraft.amount),
+        category: normalizeChoreCategory(
+          matchedChore?.category ?? allowanceRequestDraft.category,
+        ),
+        childRemoteMemberId: selectedBankChildRemoteMemberId,
+        choreId: matchedChore?.id,
+        choreTitle: allowanceRequestDraft.title,
+        householdId,
+        note: allowanceRequestDraft.note,
+        occurrenceDate: displayedDay.date,
+        requestedByRemoteMemberId,
+      });
+
+      setRemoteAllowanceRequests((current) => [nextRequest, ...current]);
+      setAllowanceRequestDraft((current) => ({
+        ...current,
+        amount: "1.00",
+        note: "",
+        title: "",
+      }));
+      setRemoteAllowanceRequestError("");
+      setAllowanceRequestSyncVersion((current) => current + 1);
+    } catch (error) {
+      setRemoteAllowanceRequestError(
+        error instanceof Error ? error.message : "Could not save the bank request.",
+      );
+    } finally {
+      setSubmittingAllowanceRequest(false);
+    }
+  }
+
+  async function approveAllowanceRequest(request: AllowanceRequest) {
+    if (!isHouseholdAdmin) {
+      setRemoteAllowanceRequestError("Only a household parent can approve a bank request.");
+      return;
+    }
+
+    try {
+      setApprovingAllowanceRequestId(request.id);
+      await approveRemoteAllowanceRequest(request.id);
+      setRemoteAllowanceRequests((current) =>
+        current.filter((candidate) => candidate.id !== request.id),
+      );
+      setRemoteAllowanceRequestError("");
+      setAllowanceRequestSyncVersion((current) => current + 1);
+      setChoreSyncVersion((current) => current + 1);
+    } catch (error) {
+      setRemoteAllowanceRequestError(
+        error instanceof Error ? error.message : "Could not approve the bank request.",
+      );
+    } finally {
+      setApprovingAllowanceRequestId("");
+    }
   }
 
   function selectMember(memberId: string) {
@@ -2181,7 +2368,8 @@ export function ProfileDashboard({
                 <div>
                   <h2 className="text-lg font-semibold">Bank</h2>
                   <p className="mt-1 text-sm text-[#657381]">
-                    Allowance earned from paid chore completions and full morning routine closeout.
+                    Approved credits land in the ledger below. New work can be submitted here and waits for a parent
+                    approval before it is added.
                   </p>
                   {selectedMember.role === "child" && selectedMemberMorningRoutineAllowanceAmount ? (
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
@@ -2202,7 +2390,7 @@ export function ProfileDashboard({
               </div>
               {selectedMember.role !== "child" ? (
                 <p className="mt-4 text-sm text-[#4c5965]">
-                  Allowance tracking is only shown on child profiles.
+                  Switch to a child to view their balance, or submit a new bank request for a child below.
                 </p>
               ) : selectedMemberAllowanceEntries.length > 0 ? (
                 <ol className="mt-4 grid gap-2">
@@ -2226,9 +2414,216 @@ export function ProfileDashboard({
               ) : (
                 <EmptyState text="No allowance has been earned yet." />
               )}
+              <div className="mt-4 border-t border-[#e2e8f0] pt-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Request Credit
+                    </h3>
+                    <p className="mt-1 text-sm text-[#4c5965]">
+                      If the chore title is new, approval will also save it into the chore bank for later use.
+                    </p>
+                  </div>
+                  {isHouseholdAdmin ? (
+                    <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                      Parent approval enabled
+                    </span>
+                  ) : null}
+                </div>
+                {!isRemoteHouseholdReady ? (
+                  <p className="mt-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm text-[#4c5965]">
+                    Connect a household in Setup to submit and approve bank requests.
+                  </p>
+                ) : selectedBankChild ? (
+                  <form className="mt-4 grid gap-3" onSubmit={submitAllowanceRequest}>
+                    {selectedMember.role !== "child" ? (
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold text-[#17202a]">Child</span>
+                        <select
+                          className="border border-[#cbd5df] bg-white px-3 py-2"
+                          onChange={(event) =>
+                            setAllowanceRequestDraft((current) => ({
+                              ...current,
+                              childId: event.target.value,
+                            }))
+                          }
+                          value={bankRequestChildId}
+                        >
+                          {childMembers.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {member.preferredName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.9fr)]">
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold text-[#17202a]">Work</span>
+                        <input
+                          className="border border-[#cbd5df] bg-white px-3 py-2"
+                          onChange={(event) =>
+                            setAllowanceRequestDraft((current) => ({
+                              ...current,
+                              title: event.target.value,
+                            }))
+                          }
+                          placeholder="Lawnwork"
+                          required
+                          value={allowanceRequestDraft.title}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold text-[#17202a]">Amount</span>
+                        <input
+                          className="border border-[#cbd5df] bg-white px-3 py-2"
+                          inputMode="decimal"
+                          min="0.01"
+                          onChange={(event) =>
+                            setAllowanceRequestDraft((current) => ({
+                              ...current,
+                              amount: event.target.value,
+                            }))
+                          }
+                          required
+                          step="0.01"
+                          value={allowanceRequestDraft.amount}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold text-[#17202a]">Category</span>
+                        <select
+                          className="border border-[#cbd5df] bg-white px-3 py-2"
+                          onChange={(event) =>
+                            setAllowanceRequestDraft((current) => ({
+                              ...current,
+                              category: event.target.value,
+                            }))
+                          }
+                          value={allowanceRequestDraft.category}
+                        >
+                          {choreCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-semibold text-[#17202a]">Note</span>
+                      <input
+                        className="border border-[#cbd5df] bg-white px-3 py-2"
+                        onChange={(event) =>
+                          setAllowanceRequestDraft((current) => ({
+                            ...current,
+                            note: event.target.value,
+                          }))
+                        }
+                        placeholder="Optional details"
+                        value={allowanceRequestDraft.note}
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-[#657381]">
+                        Requests stay pending until a household parent approves them.
+                      </p>
+                      <button
+                        className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={submittingAllowanceRequest}
+                        type="submit"
+                      >
+                        {submittingAllowanceRequest ? "Saving request..." : "Save bank request"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="mt-3 text-sm text-[#4c5965]">
+                    Add at least one child in Setup before creating bank requests.
+                  </p>
+                )}
+              </div>
+              <div className="mt-4 border-t border-[#e2e8f0] pt-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Pending Approval
+                    </h3>
+                    <p className="mt-1 text-sm text-[#4c5965]">
+                      {selectedMember.role === "child"
+                        ? "Requests waiting to be added to this bank balance."
+                        : "Pending child bank requests across the household."}
+                    </p>
+                  </div>
+                </div>
+                {visibleAllowanceRequests.length > 0 ? (
+                  <ol className="mt-4 grid gap-2">
+                    {visibleAllowanceRequests.map((request) => {
+                      const requestChildId = remoteExternalKeysByMemberId[request.childRemoteMemberId];
+                      const requestChild =
+                        members.find((member) => member.id === requestChildId) ?? null;
+                      const requestedById = request.requestedByRemoteMemberId
+                        ? remoteExternalKeysByMemberId[request.requestedByRemoteMemberId]
+                        : undefined;
+                      const requestedBy =
+                        members.find((member) => member.id === requestedById) ?? null;
+
+                      return (
+                        <li
+                          className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
+                          key={request.id}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{request.choreTitle}</p>
+                              <p className="mt-1 text-xs text-[#657381]">
+                                {formatDateLabel(request.occurrenceDate)} · {getChoreCategoryLabel(request.category)}
+                                {requestChild && selectedMember.role !== "child"
+                                  ? ` · ${requestChild.preferredName}`
+                                  : ""}
+                                {requestedBy ? ` · entered by ${requestedBy.preferredName}` : ""}
+                              </p>
+                              {request.note ? (
+                                <p className="mt-2 text-xs text-[#4c5965]">{request.note}</p>
+                              ) : null}
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-[#2f6f73]">{formatCurrency(request.amount)}</p>
+                              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#a14a1a]">
+                                Awaiting approval
+                              </p>
+                            </div>
+                          </div>
+                          {isHouseholdAdmin ? (
+                            <div className="flex justify-end">
+                              <button
+                                className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={approvingAllowanceRequestId === request.id}
+                                onClick={() => {
+                                  void approveAllowanceRequest(request);
+                                }}
+                                type="button"
+                              >
+                                {approvingAllowanceRequestId === request.id ? "Approving..." : "Approve"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <EmptyState text="No bank requests are waiting for approval." />
+                )}
+              </div>
               {isRemoteHouseholdReady && remoteAllowanceError ? (
                 <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
                   {remoteAllowanceError}
+                </p>
+              ) : null}
+              {remoteAllowanceRequestError ? (
+                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                  {remoteAllowanceRequestError}
                 </p>
               ) : null}
             </section>
