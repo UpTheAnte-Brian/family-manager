@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  getAppliedCalendarEventSourceUid,
+  isSameAppliedCalendarEvent,
+} from "@/lib/calendar/applied-events";
+import {
   appliedCalendarEventsStorageKey,
   calendarSourcesStorageKey,
 } from "@/lib/calendar/storage";
@@ -516,6 +520,69 @@ export function useCalendarFeed() {
     [cacheRemoteFeed, householdId, householdTimeZone, saveSource, setLocalAppliedEvents, setLocalSources],
   );
 
+  const saveAppliedEventAssignments = useCallback(
+    async (event: AppliedCalendarEvent, assignedMemberIds: string[]) => {
+      const nextAssignedMemberIds = Array.from(new Set(assignedMemberIds));
+      const nextEvent = {
+        ...event,
+        assignedMemberIds: nextAssignedMemberIds,
+      };
+
+      if (!householdId) {
+        setLocalAppliedEvents((current) =>
+          current.map((candidate) => (isSameAppliedCalendarEvent(candidate, event) ? nextEvent : candidate)),
+        );
+        return;
+      }
+
+      const supabase = createBrowserSupabaseClient();
+      const { data: sourceRow, error: sourceError } = await supabase
+        .from("calendar_sources")
+        .select("id")
+        .eq("household_id", householdId)
+        .eq("external_key", event.sourceId)
+        .maybeSingle<{ id: string }>();
+
+      if (sourceError) {
+        throw sourceError;
+      }
+
+      if (!sourceRow) {
+        throw new Error(`Could not find calendar source "${event.sourceId}" while saving assignments.`);
+      }
+
+      const range = toCalendarEventIsoRange(event.date, event.startTime, event.endTime, householdTimeZone);
+      const { data: updatedEventRow, error: updateError } = await supabase
+        .from("calendar_events")
+        .update({
+          metadata: getEventMetadata(nextEvent, range.endDayOffset),
+        })
+        .eq("household_id", householdId)
+        .eq("calendar_source_id", sourceRow.id)
+        .eq("source_event_uid", getAppliedCalendarEventSourceUid(event))
+        .eq("starts_at", range.startsAt)
+        .select("source_event_uid")
+        .maybeSingle<{ source_event_uid: string | null }>();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      if (!updatedEventRow) {
+        throw new Error(`Could not find calendar event "${event.title}" while saving assignments.`);
+      }
+
+      setRemoteAppliedEvents((current) => {
+        const nextAppliedEvents = current.map((candidate) =>
+          isSameAppliedCalendarEvent(candidate, event) ? nextEvent : candidate,
+        );
+        cacheRemoteFeed({ appliedEvents: nextAppliedEvents });
+        return nextAppliedEvents;
+      });
+    },
+    [cacheRemoteFeed, householdId, householdTimeZone, setLocalAppliedEvents],
+  );
+
   return useMemo(
     () => ({
       appliedEvents,
@@ -523,6 +590,7 @@ export function useCalendarFeed() {
       errorMessage,
       refresh,
       removeSource,
+      saveAppliedEventAssignments,
       saveManualEvent,
       saveSource,
       setAppliedEvents,
@@ -538,6 +606,7 @@ export function useCalendarFeed() {
       errorMessage,
       refresh,
       removeSource,
+      saveAppliedEventAssignments,
       saveManualEvent,
       saveSource,
       setAppliedEvents,
@@ -612,7 +681,7 @@ function mapEventToInsert(
   return {
     household_id: householdId,
     calendar_source_id: sourceRowId,
-    source_event_uid: event.sourceUid ?? getFallbackEventUid(event),
+    source_event_uid: getAppliedCalendarEventSourceUid(event),
     title: event.title,
     category: event.category,
     starts_at: range.startsAt,
@@ -621,19 +690,21 @@ function mapEventToInsert(
     location: event.location ?? null,
     status: "active",
     metadata: {
-      appliedAt: event.appliedAt,
-      assignedMemberIds: event.assignedMemberIds,
-      sourceId: event.sourceId,
-      sourceLabel: event.sourceLabel,
-      teamId: event.teamId,
-      teamLabel: event.teamLabel,
-      endDayOffset: range.endDayOffset,
+      ...getEventMetadata(event, range.endDayOffset),
     },
   };
 }
 
-function getFallbackEventUid(event: AppliedCalendarEvent) {
-  return `${event.title}:${event.date}:${event.startTime}:${event.location ?? ""}`;
+function getEventMetadata(event: AppliedCalendarEvent, endDayOffset: number) {
+  return {
+    appliedAt: event.appliedAt,
+    assignedMemberIds: event.assignedMemberIds,
+    sourceId: event.sourceId,
+    sourceLabel: event.sourceLabel,
+    teamId: event.teamId,
+    teamLabel: event.teamLabel,
+    endDayOffset,
+  };
 }
 
 function getOptionalString(value: unknown) {

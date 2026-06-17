@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import { getAppliedCalendarEventAssignmentKey } from "@/lib/calendar/applied-events";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import { type ManualCalendarEventInput, useCalendarFeed } from "@/lib/calendar/supabase-calendar";
 import {
@@ -46,6 +47,7 @@ type CalendarEventRow = {
   teamKey: string;
   teamLabel?: string;
   assignedMemberIds: string[];
+  appliedEvent?: AppliedCalendarEvent;
 };
 
 const emptyAssignmentOverrides: Record<string, string[]> = {};
@@ -77,7 +79,14 @@ const manualEventCategories = [
 ];
 
 export function CalendarOverview({ configuredEvents, members, season }: CalendarOverviewProps) {
-  const { appliedEvents, saveManualEvent, setAppliedEvents, sources: calendarSources, usesSupabase } = useCalendarFeed();
+  const {
+    appliedEvents,
+    saveAppliedEventAssignments,
+    saveManualEvent,
+    setAppliedEvents,
+    sources: calendarSources,
+    usesSupabase,
+  } = useCalendarFeed();
   const [assignmentOverrides, setAssignmentOverrides] = useLocalStorageState<Record<string, string[]>>(
     calendarEventAssignmentsStorageKey,
     emptyAssignmentOverrides,
@@ -164,7 +173,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
           }),
         })),
         ...appliedEvents.map((event): CalendarEventRow => {
-          const appliedEventKey = getAppliedEventKey(event);
+          const appliedEventKey = getAppliedCalendarEventAssignmentKey(event);
           const teamKey = getCalendarEventTeamKey(event);
           const teamLabel = getCalendarEventTeamLabel(event);
 
@@ -182,6 +191,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
             sourceType: "imported",
             teamKey,
             teamLabel,
+            appliedEvent: event,
             assignedMemberIds: getEventAssignedMemberIds({
               assignmentKey: appliedEventKey,
               assignmentOverrides,
@@ -230,23 +240,24 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
     const nextAssignedMemberIds = event.assignedMemberIds.includes(memberId)
       ? event.assignedMemberIds.filter((id) => id !== memberId)
       : [...event.assignedMemberIds, memberId];
+    const previousAssignedMemberIds = event.assignedMemberIds;
 
     setAssignmentOverrides((current) => ({
       ...current,
       [event.assignmentKey]: nextAssignedMemberIds,
     }));
 
-    if (event.appliedEventKey) {
-      setAppliedEvents((current) =>
-        current.map((candidate) =>
-          getAppliedEventKey(candidate) === event.appliedEventKey
-            ? {
-                ...candidate,
-                assignedMemberIds: nextAssignedMemberIds,
-              }
-            : candidate,
-        ),
-      );
+    if (event.appliedEvent) {
+      void saveAppliedEventAssignments(event.appliedEvent, nextAssignedMemberIds).catch((error) => {
+        setAssignmentOverrides((current) => ({
+          ...current,
+          [event.assignmentKey]: previousAssignedMemberIds,
+        }));
+        setManualEventStatus({
+          tone: "error",
+          message: error instanceof Error ? error.message : "Could not save event assignments.",
+        });
+      });
     }
   }
 
@@ -274,7 +285,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
         getCalendarEventTeamKey(event) === teamKey
           ? {
               ...event,
-              assignedMemberIds: assignmentOverrides[getAppliedEventKey(event)] ?? nextAssignedMemberIds,
+              assignedMemberIds: assignmentOverrides[getAppliedCalendarEventAssignmentKey(event)] ?? nextAssignedMemberIds,
             }
           : event,
       ),
@@ -652,10 +663,6 @@ function getConfiguredEventAssignedMemberIds(event: FixedEvent, sources: Calenda
 
 function getConfiguredEventAssignmentKey(event: FixedEvent) {
   return `configured:${event.id}`;
-}
-
-function getAppliedEventKey(event: AppliedCalendarEvent) {
-  return `imported:${event.sourceId}:${event.sourceUid ?? event.title}:${event.date}:${event.startTime}`;
 }
 
 function getConfiguredEventSourceLabel(event: FixedEvent, sources: CalendarSource[]) {

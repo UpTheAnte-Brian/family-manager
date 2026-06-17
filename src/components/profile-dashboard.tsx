@@ -24,6 +24,7 @@ import {
   createRemoteAllowanceRequest,
   loadRemoteAllowanceRequests,
   type AllowanceRequest,
+  updateRemoteAllowanceRequest,
 } from "@/lib/allowance/requests";
 import {
   createMorningRoutineAllowanceEntry,
@@ -36,6 +37,7 @@ import { choreCategories, getChoreCategoryLabel, normalizeChoreCategory } from "
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
+import { getAppliedCalendarEventAssignmentKey } from "@/lib/calendar/applied-events";
 import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
 import {
   calendarEventAssignmentsStorageKey,
@@ -289,6 +291,20 @@ type RemoteAllowanceEntryRow = {
   };
 };
 
+type AllowanceRequestDraftInput = {
+  amount: string;
+  category: string;
+  childId: string;
+  note: string;
+  occurrenceDate: string;
+  title: string;
+};
+
+type AllowanceRequestModalState =
+  | { mode: "create"; draft: AllowanceRequestDraftInput }
+  | { mode: "edit"; draft: AllowanceRequestDraftInput; request: AllowanceRequest }
+  | null;
+
 type DashboardEvent = FixedEvent & {
   assignedMemberIds?: string[];
 };
@@ -417,21 +433,8 @@ export function ProfileDashboard({
   const [choreSyncVersion, setChoreSyncVersion] = useState(0);
   const [allowanceRequestSyncVersion, setAllowanceRequestSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
-  const [submittingAllowanceRequest, setSubmittingAllowanceRequest] = useState(false);
   const [approvingAllowanceRequestId, setApprovingAllowanceRequestId] = useState("");
-  const [allowanceRequestDraft, setAllowanceRequestDraft] = useState<{
-    amount: string;
-    category: string;
-    childId: string;
-    note: string;
-    title: string;
-  }>({
-    amount: "1.00",
-    category: "yard",
-    childId: childMembers[0]?.id ?? "",
-    note: "",
-    title: "",
-  });
+  const [allowanceRequestModal, setAllowanceRequestModal] = useState<AllowanceRequestModalState>(null);
   const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
   const [responsibilityModal, setResponsibilityModal] = useState<
     | { mode: "add" }
@@ -453,15 +456,6 @@ export function ProfileDashboard({
   const isHouseholdAdmin = household?.role === "owner" || household?.role === "parent";
   const selectedMember =
     members.find((member) => member.id === state.selectedMemberId) ?? members[0];
-  const bankRequestChildId =
-    selectedMember.role === "child"
-      ? selectedMember.id
-      : allowanceRequestDraft.childId || childMembers[0]?.id || "";
-  const selectedBankChild =
-    childMembers.find((member) => member.id === bankRequestChildId) ?? childMembers[0] ?? null;
-  const selectedBankChildRemoteMemberId = selectedBankChild
-    ? remoteMemberIdsByExternalKey[selectedBankChild.id]
-    : undefined;
   const requestedByRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
   const remoteExternalKeysByMemberId = useMemo(
     () =>
@@ -511,6 +505,7 @@ export function ProfileDashboard({
   const importedEvents = getAppliedEventsForToday(
     appliedCalendarEvents,
     calendarSources,
+    calendarEventAssignments,
     calendarTeamAssignments,
     displayedDay.date,
   );
@@ -1216,55 +1211,109 @@ export function ProfileDashboard({
       });
   }
 
-  async function submitAllowanceRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function saveAllowanceRequest(
+    input: AllowanceRequestDraftInput,
+    editingRequest?: AllowanceRequest,
+  ) {
     if (!isRemoteHouseholdReady || !householdId) {
       setRemoteAllowanceRequestError("Connect a household in Setup before using approval-based bank requests.");
-      return;
+      throw new Error("Connect a household in Setup before using approval-based bank requests.");
     }
+
+    const targetChildId = input.childId || (selectedMember.role === "child" ? selectedMember.id : childMembers[0]?.id);
+    const selectedBankChild =
+      childMembers.find((member) => member.id === targetChildId) ?? childMembers[0] ?? null;
+    const selectedBankChildRemoteMemberId = selectedBankChild
+      ? remoteMemberIdsByExternalKey[selectedBankChild.id]
+      : undefined;
 
     if (!selectedBankChild || !selectedBankChildRemoteMemberId) {
       setRemoteAllowanceRequestError("Open Setup and save household members before creating a bank request.");
-      return;
+      throw new Error("Open Setup and save household members before creating a bank request.");
     }
 
     const matchedChore = choreConfig.weeklyChores.find(
-      (chore) => chore.title.trim().toLowerCase() === allowanceRequestDraft.title.trim().toLowerCase(),
+      (chore) => chore.title.trim().toLowerCase() === input.title.trim().toLowerCase(),
     );
 
     try {
-      setSubmittingAllowanceRequest(true);
-      const nextRequest = await createRemoteAllowanceRequest({
-        amount: Number(allowanceRequestDraft.amount),
-        category: normalizeChoreCategory(
-          matchedChore?.category ?? allowanceRequestDraft.category,
-        ),
-        childRemoteMemberId: selectedBankChildRemoteMemberId,
-        choreId: matchedChore?.id,
-        choreTitle: allowanceRequestDraft.title,
-        householdId,
-        note: allowanceRequestDraft.note,
-        occurrenceDate: displayedDay.date,
-        requestedByRemoteMemberId,
-      });
+      const nextRequest = editingRequest
+        ? await updateRemoteAllowanceRequest({
+            amount: Number(input.amount),
+            category: normalizeChoreCategory(matchedChore?.category ?? input.category),
+            childRemoteMemberId: selectedBankChildRemoteMemberId,
+            choreId: matchedChore?.id,
+            choreTitle: input.title,
+            householdId,
+            note: input.note,
+            occurrenceDate: input.occurrenceDate,
+            requestId: editingRequest.id,
+          })
+        : await createRemoteAllowanceRequest({
+            amount: Number(input.amount),
+            category: normalizeChoreCategory(matchedChore?.category ?? input.category),
+            childRemoteMemberId: selectedBankChildRemoteMemberId,
+            choreId: matchedChore?.id,
+            choreTitle: input.title,
+            householdId,
+            note: input.note,
+            occurrenceDate: input.occurrenceDate,
+            requestedByRemoteMemberId,
+          });
 
-      setRemoteAllowanceRequests((current) => [nextRequest, ...current]);
-      setAllowanceRequestDraft((current) => ({
-        ...current,
-        amount: "1.00",
-        note: "",
-        title: "",
-      }));
+      setRemoteAllowanceRequests((current) =>
+        editingRequest
+          ? current.map((request) => (request.id === editingRequest.id ? nextRequest : request))
+          : [nextRequest, ...current],
+      );
+      setAllowanceRequestModal(null);
       setRemoteAllowanceRequestError("");
       setAllowanceRequestSyncVersion((current) => current + 1);
     } catch (error) {
-      setRemoteAllowanceRequestError(
-        error instanceof Error ? error.message : "Could not save the bank request.",
-      );
-    } finally {
-      setSubmittingAllowanceRequest(false);
+      const message = error instanceof Error ? error.message : "Could not save the bank request.";
+      setRemoteAllowanceRequestError(message);
+      throw error instanceof Error ? error : new Error(message);
     }
+  }
+
+  function openCreateAllowanceRequestModal() {
+    const defaultChildId = selectedMember.role === "child" ? selectedMember.id : childMembers[0]?.id ?? "";
+
+    setAllowanceRequestModal({
+      mode: "create",
+      draft: {
+        amount: "1.00",
+        category: "yard",
+        childId: defaultChildId,
+        note: "",
+        occurrenceDate: displayedDay.date,
+        title: "",
+      },
+    });
+    setRemoteAllowanceRequestError("");
+  }
+
+  function openEditAllowanceRequestModal(request: AllowanceRequest) {
+    const childId = remoteExternalKeysByMemberId[request.childRemoteMemberId] ?? childMembers[0]?.id ?? "";
+
+    setAllowanceRequestModal({
+      mode: "edit",
+      draft: {
+        amount: request.amount.toFixed(2),
+        category: request.category,
+        childId,
+        note: request.note ?? "",
+        occurrenceDate: request.occurrenceDate,
+        title: request.choreTitle,
+      },
+      request,
+    });
+    setRemoteAllowanceRequestError("");
+  }
+
+  function closeAllowanceRequestModal() {
+    setAllowanceRequestModal(null);
+    setRemoteAllowanceRequestError("");
   }
 
   async function approveAllowanceRequest(request: AllowanceRequest) {
@@ -2434,113 +2483,24 @@ export function ProfileDashboard({
                   <p className="mt-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm text-[#4c5965]">
                     Connect a household in Setup to submit and approve bank requests.
                   </p>
-                ) : selectedBankChild ? (
-                  <form className="mt-4 grid gap-3" onSubmit={submitAllowanceRequest}>
-                    {selectedMember.role !== "child" ? (
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold text-[#17202a]">Child</span>
-                        <select
-                          className="border border-[#cbd5df] bg-white px-3 py-2"
-                          onChange={(event) =>
-                            setAllowanceRequestDraft((current) => ({
-                              ...current,
-                              childId: event.target.value,
-                            }))
-                          }
-                          value={bankRequestChildId}
-                        >
-                          {childMembers.map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {member.preferredName}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                    <div className="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.9fr)]">
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold text-[#17202a]">Work</span>
-                        <input
-                          className="border border-[#cbd5df] bg-white px-3 py-2"
-                          onChange={(event) =>
-                            setAllowanceRequestDraft((current) => ({
-                              ...current,
-                              title: event.target.value,
-                            }))
-                          }
-                          placeholder="Lawnwork"
-                          required
-                          value={allowanceRequestDraft.title}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold text-[#17202a]">Amount</span>
-                        <input
-                          className="border border-[#cbd5df] bg-white px-3 py-2"
-                          inputMode="decimal"
-                          min="0.01"
-                          onChange={(event) =>
-                            setAllowanceRequestDraft((current) => ({
-                              ...current,
-                              amount: event.target.value,
-                            }))
-                          }
-                          required
-                          step="0.01"
-                          value={allowanceRequestDraft.amount}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold text-[#17202a]">Category</span>
-                        <select
-                          className="border border-[#cbd5df] bg-white px-3 py-2"
-                          onChange={(event) =>
-                            setAllowanceRequestDraft((current) => ({
-                              ...current,
-                              category: event.target.value,
-                            }))
-                          }
-                          value={allowanceRequestDraft.category}
-                        >
-                          {choreCategories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-semibold text-[#17202a]">Note</span>
-                      <input
-                        className="border border-[#cbd5df] bg-white px-3 py-2"
-                        onChange={(event) =>
-                          setAllowanceRequestDraft((current) => ({
-                            ...current,
-                            note: event.target.value,
-                          }))
-                        }
-                        placeholder="Optional details"
-                        value={allowanceRequestDraft.note}
-                      />
-                    </label>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs text-[#657381]">
-                        Requests stay pending until a household parent approves them.
-                      </p>
-                      <button
-                        className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={submittingAllowanceRequest}
-                        type="submit"
-                      >
-                        {submittingAllowanceRequest ? "Saving request..." : "Save bank request"}
-                      </button>
-                    </div>
-                  </form>
-                ) : (
+                ) : childMembers.length === 0 ? (
                   <p className="mt-3 text-sm text-[#4c5965]">
                     Add at least one child in Setup before creating bank requests.
                   </p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4">
+                    <p className="max-w-2xl text-sm text-[#4c5965]">
+                      Open the request editor to enter the work, amount, and note. Parents can also
+                      reopen pending requests to fix details before approval.
+                    </p>
+                    <button
+                      className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
+                      onClick={openCreateAllowanceRequestModal}
+                      type="button"
+                    >
+                      New credit request
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="mt-4 border-t border-[#e2e8f0] pt-4">
@@ -2595,7 +2555,15 @@ export function ProfileDashboard({
                             </div>
                           </div>
                           {isHouseholdAdmin ? (
-                            <div className="flex justify-end">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <button
+                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                                disabled={approvingAllowanceRequestId === request.id}
+                                onClick={() => openEditAllowanceRequestModal(request)}
+                                type="button"
+                              >
+                                Edit
+                              </button>
                               <button
                                 className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
                                 disabled={approvingAllowanceRequestId === request.id}
@@ -2751,6 +2719,23 @@ export function ProfileDashboard({
               setTemporaryRoutineModal(false);
             }
           }}
+        />
+      ) : null}
+      {allowanceRequestModal ? (
+        <AllowanceRequestModal
+          childMembers={childMembers}
+          errorMessage={remoteAllowanceRequestError}
+          isEditing={allowanceRequestModal.mode === "edit"}
+          onClose={closeAllowanceRequestModal}
+          onSave={async (input) => {
+            await saveAllowanceRequest(
+              input,
+              allowanceRequestModal.mode === "edit" ? allowanceRequestModal.request : undefined,
+            );
+          }}
+          request={allowanceRequestModal.mode === "edit" ? allowanceRequestModal.request : undefined}
+          showChildPicker={selectedMember.role !== "child"}
+          startingDraft={allowanceRequestModal.draft}
         />
       ) : null}
       {morningRoutineCelebrationKey > 0 ? (
@@ -3265,6 +3250,7 @@ function getReminderItems(
 function getAppliedEventsForToday(
   events: AppliedCalendarEvent[],
   sources: CalendarSource[],
+  assignmentOverrides: Record<string, string[]>,
   teamAssignments: CalendarTeamAssignment[],
   date: string,
 ): DashboardEvent[] {
@@ -3282,6 +3268,7 @@ function getAppliedEventsForToday(
       title: event.title,
       category: event.category,
       assignedMemberIds:
+        assignmentOverrides[getAppliedCalendarEventAssignmentKey(event)] ??
         getCalendarTeamAssignment(teamAssignments, getCalendarEventTeamKey(event))?.assignedMemberIds ??
         event.assignedMemberIds ??
         [],
@@ -5534,6 +5521,235 @@ function DashboardSetupGate({ title }: { title: string }) {
         </Link>
       </section>
     </main>
+  );
+}
+
+function AllowanceRequestModal({
+  childMembers,
+  errorMessage,
+  isEditing,
+  onClose,
+  onSave,
+  request,
+  showChildPicker,
+  startingDraft,
+}: {
+  childMembers: HouseholdMember[];
+  errorMessage: string;
+  isEditing: boolean;
+  onClose: () => void;
+  onSave: (input: AllowanceRequestDraftInput) => Promise<void>;
+  request?: AllowanceRequest;
+  showChildPicker: boolean;
+  startingDraft: AllowanceRequestDraftInput;
+}) {
+  const [draft, setDraft] = useState(startingDraft);
+  const [isSaving, setIsSaving] = useState(false);
+  const selectedChild =
+    childMembers.find((member) => member.id === draft.childId) ?? childMembers[0] ?? null;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+
+    try {
+      await onSave(draft);
+    } catch {
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+              {isEditing ? "Editing Pending Request" : "Creating New Request"}
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-[#17202a]">
+              {isEditing ? "Edit credit request" : "Request bank credit"}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-[#4c5965]">
+              {isEditing
+                ? "Adjust the work, amount, or note before a parent approves the credit."
+                : "Enter the work that was done and the requested dollar amount before it goes to parent approval."}
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          {errorMessage ? (
+            <p className="mb-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+              {errorMessage}
+            </p>
+          ) : null}
+
+          <form className="grid gap-4" onSubmit={submit}>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+              {showChildPicker ? (
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">Child</span>
+                  <select
+                    className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        childId: event.target.value,
+                      }))
+                    }
+                    value={draft.childId}
+                  >
+                    {childMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.preferredName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <div className="grid gap-1 text-sm">
+                  <span className="font-semibold">Child</span>
+                  <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 font-semibold text-[#17202a]">
+                    {selectedChild?.preferredName ?? "Child"}
+                  </div>
+                </div>
+              )}
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Date</span>
+                <input
+                  className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      occurrenceDate: event.target.value,
+                    }))
+                  }
+                  type="date"
+                  value={draft.occurrenceDate}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_170px_200px]">
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Work</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  placeholder="Lawnwork"
+                  required
+                  value={draft.title}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Amount</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#657381]">
+                    $
+                  </span>
+                  <input
+                    className="w-full border border-[#d7e0e7] bg-white py-2 pl-7 pr-3"
+                    inputMode="decimal"
+                    min="0.01"
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        amount: event.target.value,
+                      }))
+                    }
+                    required
+                    step="0.01"
+                    value={draft.amount}
+                  />
+                </div>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Category</span>
+                <select
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      category: event.target.value,
+                    }))
+                  }
+                  value={draft.category}
+                >
+                  {choreCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Note</span>
+              <textarea
+                className="min-h-28 border border-[#d7e0e7] bg-white px-3 py-2"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    note: event.target.value,
+                  }))
+                }
+                placeholder="Optional details"
+                value={draft.note}
+              />
+            </label>
+
+            <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+              {request ? (
+                <p>
+                  This request still needs a parent approval after saving changes. The current
+                  pending amount is <span className="font-semibold text-[#17202a]">{formatCurrency(request.amount)}</span>.
+                </p>
+              ) : (
+                <p>Requests stay pending until a household parent approves them.</p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                onClick={onClose}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isSaving}
+                type="submit"
+              >
+                {isSaving ? "Saving..." : isEditing ? "Update request" : "Save request"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   );
 }
 

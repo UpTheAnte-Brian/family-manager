@@ -37,17 +37,10 @@ type RemoteAllowanceRequestRow = {
   approved_at: string | null;
 };
 
-export async function createRemoteAllowanceRequest({
-  amount,
-  category,
-  childRemoteMemberId,
-  choreId,
-  choreTitle,
-  householdId,
-  note,
-  occurrenceDate,
-  requestedByRemoteMemberId,
-}: {
+const allowanceRequestSelect =
+  "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at";
+
+type SaveAllowanceRequestInput = {
   amount: number;
   category: ChoreCategoryId;
   childRemoteMemberId: string;
@@ -56,45 +49,18 @@ export async function createRemoteAllowanceRequest({
   householdId: string;
   note?: string;
   occurrenceDate: string;
+  requestId?: string;
   requestedByRemoteMemberId?: string;
-}) {
-  const supabase = createBrowserSupabaseClient();
-  const normalizedAmount = normalizeCurrencyAmount(amount);
+};
 
-  if (!normalizedAmount) {
-    throw new Error("Enter an amount greater than $0.00.");
-  }
+export async function createRemoteAllowanceRequest(input: Omit<SaveAllowanceRequestInput, "requestId">) {
+  return saveRemoteAllowanceRequestRow(input);
+}
 
-  const trimmedTitle = choreTitle.trim();
-
-  if (!trimmedTitle) {
-    throw new Error("Enter the work that should be credited.");
-  }
-
-  const { data, error } = await supabase
-    .from("allowance_request_entries")
-    .insert({
-      household_id: householdId,
-      household_member_id: childRemoteMemberId,
-      requested_by_member_id: requestedByRemoteMemberId ?? null,
-      chore_id: choreId ?? null,
-      chore_title: trimmedTitle,
-      category_id: category,
-      requested_amount_cents: toAllowanceCents(normalizedAmount),
-      estimated_minutes: 20,
-      occurrence_date: occurrenceDate,
-      note: note?.trim() || null,
-    })
-    .select(
-      "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at",
-    )
-    .single<RemoteAllowanceRequestRow>();
-
-  if (error) {
-    throw error;
-  }
-
-  return mapRemoteAllowanceRequest(data);
+export async function updateRemoteAllowanceRequest(
+  input: Omit<SaveAllowanceRequestInput, "requestedByRemoteMemberId"> & { requestId: string },
+) {
+  return saveRemoteAllowanceRequestRow(input);
 }
 
 export async function loadRemoteAllowanceRequests({
@@ -111,9 +77,7 @@ export async function loadRemoteAllowanceRequests({
   const supabase = createBrowserSupabaseClient();
   const { data, error } = await supabase
     .from("allowance_request_entries")
-    .select(
-      "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at",
-    )
+    .select(allowanceRequestSelect)
     .eq("household_id", householdId)
     .in("household_member_id", remoteChildMemberIds)
     .eq("status", "pending")
@@ -138,6 +102,60 @@ export async function approveRemoteAllowanceRequest(requestId: string) {
   }
 
   return data;
+}
+
+async function saveRemoteAllowanceRequestRow({
+  amount,
+  category,
+  childRemoteMemberId,
+  choreId,
+  choreTitle,
+  householdId,
+  note,
+  occurrenceDate,
+  requestId,
+  requestedByRemoteMemberId,
+}: SaveAllowanceRequestInput) {
+  const supabase = createBrowserSupabaseClient();
+  const normalizedAmount = normalizeCurrencyAmount(amount);
+
+  if (!normalizedAmount) {
+    throw new Error("Enter an amount greater than $0.00.");
+  }
+
+  const trimmedTitle = choreTitle.trim();
+
+  if (!trimmedTitle) {
+    throw new Error("Enter the work that should be credited.");
+  }
+
+  const row = {
+    household_id: householdId,
+    household_member_id: childRemoteMemberId,
+    ...(requestId ? {} : { requested_by_member_id: requestedByRemoteMemberId ?? null }),
+    chore_id: choreId ?? null,
+    chore_title: trimmedTitle,
+    category_id: category,
+    requested_amount_cents: toAllowanceCents(normalizedAmount),
+    estimated_minutes: 20,
+    occurrence_date: occurrenceDate,
+    note: note?.trim() || null,
+  };
+  const query = requestId
+    ? supabase
+        .from("allowance_request_entries")
+        .update(row)
+        .eq("household_id", householdId)
+        .eq("id", requestId)
+        .eq("status", "pending")
+    : supabase.from("allowance_request_entries").insert(row);
+  const { data, error } = await query.select(allowanceRequestSelect).single<RemoteAllowanceRequestRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapRemoteAllowanceRequest(data);
 }
 
 function mapRemoteAllowanceRequest(row: RemoteAllowanceRequestRow): AllowanceRequest {
