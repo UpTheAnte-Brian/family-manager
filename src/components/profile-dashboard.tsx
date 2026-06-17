@@ -33,6 +33,7 @@ import {
   hasMorningRoutineAllowanceEntry,
   removeMorningRoutineAllowanceEntries,
 } from "@/lib/allowance/morning-routine";
+import { planMorningRoutineSync } from "@/lib/allowance/morning-routine-sync";
 import { choreCategories, getChoreCategoryLabel, normalizeChoreCategory } from "@/lib/chores/categories";
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
@@ -1037,58 +1038,37 @@ export function ProfileDashboard({
     );
     const previousProgress = morningRoutineProgressRef.current;
 
-    if (previousProgress.contextKey !== contextKey) {
-      morningRoutineProgressRef.current = {
-        contextKey,
-        isComplete: isMorningRoutineComplete,
-      };
-
-      if (isMorningRoutineComplete) {
-        setCollapsedResponsibilityCategories((current) => ({
-          ...current,
-          "morning-routine": true,
-        }));
-      }
-
-      return;
-    }
-
-    if (previousProgress.isComplete === isMorningRoutineComplete) {
-      return;
-    }
-
-    morningRoutineProgressRef.current = {
+    const syncPlan = planMorningRoutineSync({
       contextKey,
       isComplete: isMorningRoutineComplete,
-    };
+      previousProgress,
+    });
 
-    if (isMorningRoutineComplete) {
+    morningRoutineProgressRef.current = syncPlan.nextProgress;
+
+    if (syncPlan.shouldCollapseCategory) {
       setCollapsedResponsibilityCategories((current) => ({
         ...current,
         "morning-routine": true,
       }));
-      queueMorningRoutineAllowanceSync({
-        childId: selectedMember.id,
-        completionDate: displayedDay.date,
-        contextKey,
-        occurredAt: getMorningRoutineOccurredAt(displayedDay.date, morningRoutineItems),
-        rewardAmount: selectedMemberMorningRoutineAllowanceAmount,
-        shouldAward: true,
-      });
-      return;
+    } else if (syncPlan.shouldSyncAllowance) {
+      setCollapsedResponsibilityCategories((current) => ({
+        ...current,
+        "morning-routine": false,
+      }));
     }
 
-    setCollapsedResponsibilityCategories((current) => ({
-      ...current,
-      "morning-routine": false,
-    }));
+    if (!syncPlan.shouldSyncAllowance) {
+      return;
+    }
     queueMorningRoutineAllowanceSync({
       childId: selectedMember.id,
       completionDate: displayedDay.date,
       contextKey,
       occurredAt: getMorningRoutineOccurredAt(displayedDay.date, morningRoutineItems),
       rewardAmount: selectedMemberMorningRoutineAllowanceAmount,
-      shouldAward: false,
+      shouldAward: syncPlan.shouldAwardAllowance,
+      shouldCelebrate: syncPlan.shouldCelebrate,
     });
   }, [
     dashboardStateForView,
@@ -1105,6 +1085,7 @@ export function ProfileDashboard({
     occurredAt,
     rewardAmount,
     shouldAward,
+    shouldCelebrate,
   }: {
     childId: string;
     completionDate: string;
@@ -1112,6 +1093,7 @@ export function ProfileDashboard({
     occurredAt: string;
     rewardAmount: number | undefined;
     shouldAward: boolean;
+    shouldCelebrate: boolean;
   }) {
     morningRoutineAllowanceSyncQueueRef.current = morningRoutineAllowanceSyncQueueRef.current
       .catch(() => undefined)
@@ -1170,7 +1152,7 @@ export function ProfileDashboard({
             return;
           }
 
-          if (shouldAward) {
+          if (shouldCelebrate) {
             celebrate();
           }
 
@@ -1205,7 +1187,7 @@ export function ProfileDashboard({
             : current;
         });
 
-        if (shouldAward) {
+        if (shouldCelebrate) {
           celebrate();
         }
       });

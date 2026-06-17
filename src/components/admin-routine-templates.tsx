@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { starterMorningRoutineTemplate } from "@/lib/routines/defaults";
+import {
+  planRoutineTemplateSync,
+  type ExistingRoutineTemplateStepInstance,
+  type PlannedRoutineTemplateStepInstance,
+  type RoutineTemplateStepDraft as RoutineStepDraft,
+} from "@/lib/routines/template-sync";
 import type { DayOfWeek, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -51,13 +57,6 @@ type RoutineTemplateSummary = {
   actionItemIds: string[];
   daysOfWeek: DayOfWeek[];
   steps: RoutineStepDraft[];
-};
-
-type RoutineStepDraft = {
-  id: string;
-  title: string;
-  startTime: string;
-  endTime: string;
 };
 
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
@@ -736,26 +735,54 @@ async function createRoutineTemplate({
   templateId?: string;
   templateName: string;
 }) {
-  const supabase = createBrowserSupabaseClient();
-  const rows = memberIds.flatMap((memberId) =>
-    steps.map((step) => ({
-      household_id: householdId,
-      item_kind: "routine",
-      title: step.title,
-      source: "manual",
-      days_of_week: daysOfWeek,
-      start_time: step.startTime,
-      end_time: step.endTime,
-      metadata: {
-        kind: "routine-template-step",
-        routineTemplateId: templateId,
-        routineTemplateName: templateName,
+  await createRoutineTemplateActionItems({
+    entries: memberIds.flatMap((memberId) =>
+      steps.map((step) => ({
+        daysOfWeek,
+        endTime: step.endTime,
+        memberId,
+        startTime: step.startTime,
         stepId: step.id,
-        assignedRemoteMemberId: memberId,
-        category: "morning-routine",
-      },
-    })),
-  );
+        templateName,
+        title: step.title,
+      })),
+    ),
+    householdId,
+    templateId,
+  });
+}
+
+async function createRoutineTemplateActionItems({
+  entries,
+  householdId,
+  templateId,
+}: {
+  entries: PlannedRoutineTemplateStepInstance[];
+  householdId: string;
+  templateId: string;
+}) {
+  if (entries.length === 0) {
+    return;
+  }
+
+  const supabase = createBrowserSupabaseClient();
+  const rows = entries.map((entry) => ({
+    household_id: householdId,
+    item_kind: "routine",
+    title: entry.title,
+    source: "manual",
+    days_of_week: entry.daysOfWeek,
+    start_time: entry.startTime,
+    end_time: entry.endTime,
+    metadata: {
+      kind: "routine-template-step",
+      routineTemplateId: templateId,
+      routineTemplateName: entry.templateName,
+      stepId: entry.stepId,
+      assignedRemoteMemberId: entry.memberId,
+      category: "morning-routine",
+    },
+  }));
 
   const { data: actionItems, error: actionItemsError } = await supabase
     .from("household_action_items")
@@ -807,14 +834,101 @@ async function updateRoutineTemplate({
   templateId: string;
   templateName: string;
 }) {
-  await deleteRoutineTemplate({ actionItemIds, householdId });
-  await createRoutineTemplate({
+  const supabase = createBrowserSupabaseClient();
+  const { data: actionItems, error: actionItemsError } = await supabase
+    .from("household_action_items")
+    .select("id, title, days_of_week, start_time, end_time, metadata")
+    .eq("household_id", householdId)
+    .in("id", actionItemIds)
+    .returns<RoutineTemplateActionItemRow[]>();
+
+  if (actionItemsError) {
+    throw actionItemsError;
+  }
+
+  const { data: assignments, error: assignmentsError } =
+    actionItemIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("household_assignments")
+          .select("assignable_id, household_member_id")
+          .eq("household_id", householdId)
+          .eq("assignable_type", "action_item")
+          .in("assignable_id", actionItemIds)
+          .returns<RoutineTemplateAssignmentRow[]>();
+
+  if (assignmentsError) {
+    throw assignmentsError;
+  }
+
+  const memberIdByActionItemId = new Map(
+    (assignments ?? [])
+      .filter((assignment) => assignment.household_member_id)
+      .map((assignment) => [assignment.assignable_id, assignment.household_member_id!]),
+  );
+  const existing = (actionItems ?? []).flatMap((item) => {
+    const memberId = item.metadata.assignedRemoteMemberId ?? memberIdByActionItemId.get(item.id);
+    const stepId = item.metadata.stepId;
+
+    if (!memberId || !stepId) {
+      return [];
+    }
+
+    return [
+      {
+        actionItemId: item.id,
+        daysOfWeek: normalizeDaysOfWeek(item.days_of_week),
+        endTime: normalizeTimeForInput(item.end_time),
+        memberId,
+        startTime: normalizeTimeForInput(item.start_time),
+        stepId,
+        templateName: item.metadata.routineTemplateName ?? templateName,
+        title: item.title,
+      } satisfies ExistingRoutineTemplateStepInstance,
+    ];
+  });
+  const syncPlan = planRoutineTemplateSync({
     daysOfWeek,
-    householdId,
+    existing,
     memberIds,
     steps,
-    templateId,
     templateName,
+  });
+
+  for (const item of syncPlan.update) {
+    const { error } = await supabase
+      .from("household_action_items")
+      .update({
+        title: item.title,
+        days_of_week: item.daysOfWeek,
+        start_time: item.startTime,
+        end_time: item.endTime,
+        metadata: {
+          kind: "routine-template-step",
+          routineTemplateId: templateId,
+          routineTemplateName: item.templateName,
+          stepId: item.stepId,
+          assignedRemoteMemberId: item.memberId,
+          category: "morning-routine",
+        },
+      })
+      .eq("household_id", householdId)
+      .eq("id", item.actionItemId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  await createRoutineTemplateActionItems({
+    entries: syncPlan.create,
+    householdId,
+    templateId,
+  });
+
+  await deleteRoutineTemplate({
+    actionItemIds: syncPlan.removeActionItemIds,
+    householdId,
   });
 }
 
