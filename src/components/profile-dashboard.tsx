@@ -10,6 +10,11 @@ import {
   type AllowanceEntryDraftInput,
 } from "@/lib/allowance/entries";
 import {
+  getAllowanceRequestKindLabel,
+  getSignedAllowanceRequestAmount,
+  type AllowanceRequestKind,
+} from "@/lib/allowance/request-kind";
+import {
   allowanceStorageKey,
   createChoreAllowanceEntry,
   formatCurrency,
@@ -305,6 +310,7 @@ type AllowanceRequestDraftInput = {
   amount: string;
   category: string;
   childId: string;
+  kind: AllowanceRequestKind;
   note: string;
   occurrenceDate: string;
   title: string;
@@ -1243,30 +1249,37 @@ export function ProfileDashboard({
       throw new Error("Open Setup and save household members before creating a bank request.");
     }
 
-    const matchedChore = choreConfig.weeklyChores.find(
-      (chore) => chore.title.trim().toLowerCase() === input.title.trim().toLowerCase(),
-    );
+    const matchedChore =
+      input.kind === "credit"
+        ? choreConfig.weeklyChores.find(
+            (chore) => chore.title.trim().toLowerCase() === input.title.trim().toLowerCase(),
+          )
+        : undefined;
+    const requestCategory =
+      input.kind === "credit" ? normalizeChoreCategory(matchedChore?.category ?? input.category) : undefined;
 
     try {
       const nextRequest = editingRequest
         ? await updateRemoteAllowanceRequest({
             amount: Number(input.amount),
-            category: normalizeChoreCategory(matchedChore?.category ?? input.category),
+            category: requestCategory,
             childRemoteMemberId: selectedBankChildRemoteMemberId,
             choreId: matchedChore?.id,
             choreTitle: input.title,
             householdId,
+            kind: input.kind,
             note: input.note,
             occurrenceDate: input.occurrenceDate,
             requestId: editingRequest.id,
           })
         : await createRemoteAllowanceRequest({
             amount: Number(input.amount),
-            category: normalizeChoreCategory(matchedChore?.category ?? input.category),
+            category: requestCategory,
             childRemoteMemberId: selectedBankChildRemoteMemberId,
             choreId: matchedChore?.id,
             choreTitle: input.title,
             householdId,
+            kind: input.kind,
             note: input.note,
             occurrenceDate: input.occurrenceDate,
             requestedByRemoteMemberId,
@@ -1287,7 +1300,7 @@ export function ProfileDashboard({
     }
   }
 
-  function openCreateAllowanceRequestModal() {
+  function openCreateAllowanceRequestModal(kind: AllowanceRequestKind) {
     const defaultChildId = selectedMember.role === "child" ? selectedMember.id : childMembers[0]?.id ?? "";
 
     setAllowanceRequestModal({
@@ -1296,6 +1309,7 @@ export function ProfileDashboard({
         amount: "1.00",
         category: "yard",
         childId: defaultChildId,
+        kind,
         note: "",
         occurrenceDate: displayedDay.date,
         title: "",
@@ -1311,8 +1325,9 @@ export function ProfileDashboard({
       mode: "edit",
       draft: {
         amount: request.amount.toFixed(2),
-        category: request.category,
+        category: request.category ?? "yard",
         childId,
+        kind: request.kind,
         note: request.note ?? "",
         occurrenceDate: request.occurrenceDate,
         title: request.choreTitle,
@@ -2493,8 +2508,8 @@ export function ProfileDashboard({
                 <div>
                   <h2 className="text-lg font-semibold">Bank</h2>
                   <p className="mt-1 text-sm text-[#657381]">
-                    Approved credits land in the ledger below. New work can be submitted here and waits for a parent
-                    approval before it is added.
+                    Approved credits and debits land in the ledger below. New bank requests wait for a parent approval
+                    before they change the balance.
                   </p>
                   {selectedMember.role === "child" && selectedMemberMorningRoutineAllowanceAmount ? (
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
@@ -2533,7 +2548,11 @@ export function ProfileDashboard({
                           <p className="mt-2 text-xs text-[#4c5965]">{entry.note}</p>
                         ) : null}
                       </div>
-                      <span className="font-semibold text-[#2f6f73]">
+                      <span
+                        className={`font-semibold ${
+                          entry.amount < 0 ? "text-[#8a3b12]" : "text-[#2f6f73]"
+                        }`}
+                      >
                         {formatCurrency(entry.amount)}
                       </span>
                       {isAllowanceApprovalMode ? (
@@ -2557,10 +2576,10 @@ export function ProfileDashboard({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                      Request Credit
+                      Bank Requests
                     </h3>
                     <p className="mt-1 text-sm text-[#4c5965]">
-                      If the chore title is new, approval will also save it into the chore bank for later use.
+                      Submit credits for earned work or debits when cash is taken out of the bank.
                     </p>
                   </div>
                   {isAllowanceApprovalMode ? (
@@ -2580,16 +2599,25 @@ export function ProfileDashboard({
                 ) : (
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4">
                     <p className="max-w-2xl text-sm text-[#4c5965]">
-                      Open the request editor to enter the work, amount, and note. Parents can also
+                      Open a request to add money into the bank or debit it back out. Parents can also
                       reopen pending requests to fix details before approval.
                     </p>
-                    <button
-                      className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
-                      onClick={openCreateAllowanceRequestModal}
-                      type="button"
-                    >
-                      New credit request
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
+                        onClick={() => openCreateAllowanceRequestModal("credit")}
+                        type="button"
+                      >
+                        New credit request
+                      </button>
+                      <button
+                        className="border border-[#8a3b12] bg-white px-4 py-2 text-sm font-semibold text-[#8a3b12]"
+                        onClick={() => openCreateAllowanceRequestModal("debit")}
+                        type="button"
+                      >
+                        New debit request
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2627,7 +2655,10 @@ export function ProfileDashboard({
                             <div>
                               <p className="font-semibold">{request.choreTitle}</p>
                               <p className="mt-1 text-xs text-[#657381]">
-                                {formatDateLabel(request.occurrenceDate)} · {getChoreCategoryLabel(request.category)}
+                                {formatDateLabel(request.occurrenceDate)} · {getAllowanceRequestKindLabel(request.kind)}
+                                {request.kind === "credit" && request.category
+                                  ? ` · ${getChoreCategoryLabel(request.category)}`
+                                  : ""}
                                 {requestChild && selectedMember.role !== "child"
                                   ? ` · ${requestChild.preferredName}`
                                   : ""}
@@ -2638,7 +2669,13 @@ export function ProfileDashboard({
                               ) : null}
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-[#2f6f73]">{formatCurrency(request.amount)}</p>
+                              <p
+                                className={`font-semibold ${
+                                  request.kind === "debit" ? "text-[#8a3b12]" : "text-[#2f6f73]"
+                                }`}
+                              >
+                                {formatCurrency(getSignedAllowanceRequestAmount(request.amount, request.kind))}
+                              </p>
                               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#a14a1a]">
                                 Awaiting approval
                               </p>
@@ -5657,6 +5694,8 @@ function AllowanceRequestModal({
   const [isSaving, setIsSaving] = useState(false);
   const selectedChild =
     childMembers.find((member) => member.id === draft.childId) ?? childMembers[0] ?? null;
+  const kindLabel = getAllowanceRequestKindLabel(draft.kind).toLowerCase();
+  const signedPendingAmount = request ? getSignedAllowanceRequestAmount(request.amount, request.kind) : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5684,12 +5723,14 @@ function AllowanceRequestModal({
               {isEditing ? "Editing Pending Request" : "Creating New Request"}
             </p>
             <h2 className="mt-1 text-xl font-semibold text-[#17202a]">
-              {isEditing ? "Edit credit request" : "Request bank credit"}
+              {isEditing ? `Edit ${kindLabel} request` : `Request bank ${kindLabel}`}
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-[#4c5965]">
               {isEditing
-                ? "Adjust the work, amount, or note before a parent approves the credit."
-                : "Enter the work that was done and the requested dollar amount before it goes to parent approval."}
+                ? `Adjust the details before a parent approves this ${kindLabel} request.`
+                : draft.kind === "debit"
+                  ? "Enter what money was given out and the requested amount before it goes to parent approval."
+                  : "Enter the work that was done and the requested dollar amount before it goes to parent approval."}
             </p>
           </div>
           <button
@@ -5710,7 +5751,7 @@ function AllowanceRequestModal({
           ) : null}
 
           <form className="grid gap-4" onSubmit={submit}>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
               {showChildPicker ? (
                 <label className="grid gap-1 text-sm">
                   <span className="font-semibold">Child</span>
@@ -5740,6 +5781,22 @@ function AllowanceRequestModal({
                 </div>
               )}
               <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Type</span>
+                <select
+                  className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      kind: event.target.value as AllowanceRequestKind,
+                    }))
+                  }
+                  value={draft.kind}
+                >
+                  <option value="credit">Credit</option>
+                  <option value="debit">Debit</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
                 <span className="font-semibold">Date</span>
                 <input
                   className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
@@ -5755,9 +5812,15 @@ function AllowanceRequestModal({
               </label>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_170px_200px]">
+            <div
+              className={`grid gap-3 ${
+                draft.kind === "credit"
+                  ? "lg:grid-cols-[minmax(0,1.5fr)_170px_200px]"
+                  : "lg:grid-cols-[minmax(0,1.5fr)_170px]"
+              }`}
+            >
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Work</span>
+                <span className="font-semibold">{draft.kind === "debit" ? "Reason" : "Work"}</span>
                 <input
                   className="border border-[#d7e0e7] bg-white px-3 py-2"
                   onChange={(event) =>
@@ -5766,7 +5829,7 @@ function AllowanceRequestModal({
                       title: event.target.value,
                     }))
                   }
-                  placeholder="Lawnwork"
+                  placeholder={draft.kind === "debit" ? "Cash from mom" : "Lawnwork"}
                   required
                   value={draft.title}
                 />
@@ -5789,29 +5852,31 @@ function AllowanceRequestModal({
                     }
                     required
                     step="0.01"
-                    value={draft.amount}
-                  />
-                </div>
+                  value={draft.amount}
+                />
+              </div>
               </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Category</span>
-                <select
-                  className="border border-[#d7e0e7] bg-white px-3 py-2"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      category: event.target.value,
-                    }))
-                  }
-                  value={draft.category}
-                >
-                  {choreCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {draft.kind === "credit" ? (
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">Category</span>
+                  <select
+                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        category: event.target.value,
+                      }))
+                    }
+                    value={draft.category}
+                  >
+                    {choreCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
 
             <label className="grid gap-1 text-sm">
@@ -5833,7 +5898,10 @@ function AllowanceRequestModal({
               {request ? (
                 <p>
                   This request still needs a parent approval after saving changes. The current
-                  pending amount is <span className="font-semibold text-[#17202a]">{formatCurrency(request.amount)}</span>.
+                  pending amount is{" "}
+                  <span className="font-semibold text-[#17202a]">
+                    {formatCurrency(signedPendingAmount ?? request.amount)}
+                  </span>.
                 </p>
               ) : (
                 <p>Requests stay pending until a household parent approves them.</p>

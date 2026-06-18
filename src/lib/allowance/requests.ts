@@ -1,4 +1,5 @@
 import { fromAllowanceCents, normalizeCurrencyAmount, toAllowanceCents } from "@/lib/allowance/storage";
+import type { AllowanceRequestKind } from "@/lib/allowance/request-kind";
 import { normalizeChoreCategory, type ChoreCategoryId } from "@/lib/chores/categories";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -10,7 +11,8 @@ export type AllowanceRequest = {
   choreId?: string;
   allowanceEntryId?: string;
   choreTitle: string;
-  category: ChoreCategoryId;
+  category?: ChoreCategoryId;
+  kind: AllowanceRequestKind;
   amount: number;
   occurrenceDate: string;
   note?: string;
@@ -26,6 +28,7 @@ type RemoteAllowanceRequestRow = {
   approved_by_member_id: string | null;
   chore_id: string | null;
   allowance_entry_id: string | null;
+  request_kind: AllowanceRequestKind;
   chore_title: string;
   category_id: string | null;
   requested_amount_cents: number;
@@ -38,15 +41,16 @@ type RemoteAllowanceRequestRow = {
 };
 
 const allowanceRequestSelect =
-  "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at";
+  "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, request_kind, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at";
 
 type SaveAllowanceRequestInput = {
   amount: number;
-  category: ChoreCategoryId;
+  category?: ChoreCategoryId;
   childRemoteMemberId: string;
   choreId?: string;
   choreTitle: string;
   householdId: string;
+  kind: AllowanceRequestKind;
   note?: string;
   occurrenceDate: string;
   requestId?: string;
@@ -111,6 +115,7 @@ async function saveRemoteAllowanceRequestRow({
   choreId,
   choreTitle,
   householdId,
+  kind,
   note,
   occurrenceDate,
   requestId,
@@ -126,18 +131,19 @@ async function saveRemoteAllowanceRequestRow({
   const trimmedTitle = choreTitle.trim();
 
   if (!trimmedTitle) {
-    throw new Error("Enter the work that should be credited.");
+    throw new Error(kind === "debit" ? "Enter the reason for the debit." : "Enter the work that should be credited.");
   }
 
   const row = {
     household_id: householdId,
     household_member_id: childRemoteMemberId,
     ...(requestId ? {} : { requested_by_member_id: requestedByRemoteMemberId ?? null }),
-    chore_id: choreId ?? null,
+    chore_id: kind === "credit" ? (choreId ?? null) : null,
+    request_kind: kind,
     chore_title: trimmedTitle,
-    category_id: category,
+    category_id: kind === "credit" ? (category ?? null) : null,
     requested_amount_cents: toAllowanceCents(normalizedAmount),
-    estimated_minutes: 20,
+    estimated_minutes: kind === "credit" ? 20 : null,
     occurrence_date: occurrenceDate,
     note: note?.trim() || null,
   };
@@ -167,7 +173,8 @@ function mapRemoteAllowanceRequest(row: RemoteAllowanceRequestRow): AllowanceReq
     choreId: row.chore_id ?? undefined,
     allowanceEntryId: row.allowance_entry_id ?? undefined,
     choreTitle: row.chore_title,
-    category: normalizeChoreCategory(row.category_id ?? undefined),
+    kind: row.request_kind,
+    category: row.request_kind === "credit" ? normalizeChoreCategory(row.category_id ?? undefined) : undefined,
     amount: fromAllowanceCents(row.requested_amount_cents),
     occurrenceDate: row.occurrence_date,
     note: row.note ?? undefined,
