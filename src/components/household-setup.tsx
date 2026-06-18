@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import { normalizeCurrencyAmount } from "@/lib/allowance/storage";
+import { AdminActivitySponsorships } from "@/components/admin-activity-sponsorships";
 import { AdminBaselineTemplates } from "@/components/admin-baseline-templates";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
@@ -821,6 +822,27 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   title="Calendar imports"
                 >
                   <AdminCalendarSources members={adminMembers} />
+                </WorkflowStep>
+
+                <WorkflowStep
+                  complete={false}
+                  disabled={!hasMembers || !selectedHouseholdId}
+                  index={8}
+                  isOpen={openStep === 8}
+                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 8 : 0)}
+                  summary={
+                    !selectedHouseholdId
+                      ? "Select a household before configuring activity challenges."
+                      : !isHouseholdAdmin
+                        ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage activity sponsorships.`
+                        : "Optional challenge amounts for tracked activities."
+                  }
+                  title="Activity sponsorships"
+                >
+                  <AdminActivitySponsorships
+                    householdId={selectedHouseholdId}
+                    isHouseholdAdmin={isHouseholdAdmin}
+                  />
                 </WorkflowStep>
               </>
             ) : null}

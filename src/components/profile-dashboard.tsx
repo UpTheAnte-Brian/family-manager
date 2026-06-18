@@ -4,6 +4,19 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DashboardActivityTracker } from "@/components/dashboard-activity-tracker";
+import {
+  findMatchingActivityDefinition,
+  isMissingActivityTablesError,
+  loadRemoteActivityDefinitions,
+  loadRemoteActivityEntries,
+  mergeActivityDefinition,
+  mergeActivityEntry,
+  upsertRemoteActivityDefinition,
+  upsertRemoteActivityEntry,
+} from "@/lib/activities/remote";
+import { getActivityWeekWindow } from "@/lib/activities/summary";
+import type { ActivityDefinition, ActivityEntry } from "@/lib/activities/types";
 import {
   applyAllowanceEntryDraft,
   canRenameAllowanceEntry,
@@ -435,6 +448,8 @@ export function ProfileDashboard({
   const [remoteHouseholdItemCompletions, setRemoteHouseholdItemCompletions] = useState<Record<string, boolean>>({});
   const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
   const [remoteRoutineCompletions, setRemoteRoutineCompletions] = useState<Record<string, boolean>>({});
+  const [remoteActivityDefinitions, setRemoteActivityDefinitions] = useState<ActivityDefinition[]>([]);
+  const [remoteActivityEntries, setRemoteActivityEntries] = useState<ActivityEntry[]>([]);
   const [remoteAllowanceEntries, setRemoteAllowanceEntries] = useState<AllowanceEntry[]>([]);
   const [remoteAllowanceRequests, setRemoteAllowanceRequests] = useState<AllowanceRequest[]>([]);
   const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
@@ -445,6 +460,7 @@ export function ProfileDashboard({
   const [remoteBaselineError, setRemoteBaselineError] = useState("");
   const [remoteHouseholdItemError, setRemoteHouseholdItemError] = useState("");
   const [remoteChoreError, setRemoteChoreError] = useState("");
+  const [remoteActivityError, setRemoteActivityError] = useState("");
   const [remoteAllowanceError, setRemoteAllowanceError] = useState("");
   const [allowanceEntryError, setAllowanceEntryError] = useState("");
   const [remoteAllowanceRequestError, setRemoteAllowanceRequestError] = useState("");
@@ -483,6 +499,7 @@ export function ProfileDashboard({
     selectedMemberRole: selectedMember.role,
   });
   const requestedByRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
+  const selectedRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
   const remoteExternalKeysByMemberId = useMemo(
     () =>
       Object.fromEntries(
@@ -627,6 +644,9 @@ export function ProfileDashboard({
     ? getMorningRoutineAllowanceAmount(remoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
   const allowanceBalance = getAllowanceBalance(selectedMemberAllowanceEntries, selectedMember.id);
+  const selectedMemberActivityEntries = remoteActivityEntries.filter(
+    (entry) => entry.memberId === selectedMember.id,
+  );
   const remoteSyncErrors = isRemoteHouseholdReady
     ? [
         remoteTemporaryRoutineError,
@@ -912,6 +932,95 @@ export function ProfileDashboard({
       isActive = false;
     };
   }, [displayedDay.date, displayedDay.dayOfWeek, householdId, householdItemSyncVersion, householdStatus]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadActivities() {
+      try {
+        const activityDefinitions = await loadRemoteActivityDefinitions(currentHouseholdId);
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteActivityDefinitions(activityDefinitions);
+        setRemoteActivityError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteActivityDefinitions([]);
+        setRemoteActivityError(
+          isMissingActivityTablesError(error)
+            ? "Run the latest Supabase migration to enable activity tracking."
+            : error instanceof Error
+              ? error.message
+              : "Could not load activity tracking options from Supabase.",
+        );
+      }
+    }
+
+    void loadActivities();
+
+    return () => {
+      isActive = false;
+    };
+  }, [householdId, householdStatus]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready" || !selectedRemoteMemberId) {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+    const { currentWeekEnd, previousWeekStart } = getActivityWeekWindow(displayedDay.date);
+
+    async function loadActivityEntriesForSelectedMember() {
+      try {
+        const activityEntries = await loadRemoteActivityEntries({
+          endDate: currentWeekEnd,
+          householdId: currentHouseholdId,
+          householdMemberId: selectedRemoteMemberId,
+          memberId: selectedMember.id,
+          startDate: previousWeekStart,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteActivityEntries(activityEntries);
+        setRemoteActivityError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteActivityEntries([]);
+        setRemoteActivityError(
+          isMissingActivityTablesError(error)
+            ? "Run the latest Supabase migration to enable activity tracking."
+            : error instanceof Error
+              ? error.message
+              : "Could not load activity counts from Supabase.",
+        );
+      }
+    }
+
+    void loadActivityEntriesForSelectedMember();
+
+    return () => {
+      isActive = false;
+    };
+  }, [displayedDay.date, householdId, householdStatus, selectedMember.id, selectedRemoteMemberId]);
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready" || selectedMember.role !== "child") {
@@ -2185,6 +2294,52 @@ export function ProfileDashboard({
     }));
   }
 
+  async function saveActivityCount({
+    activityId,
+    quantity,
+    title,
+    unitLabel,
+  }: {
+    activityId?: string;
+    quantity: number;
+    title: string;
+    unitLabel: string;
+  }) {
+    if (!isRemoteHouseholdReady || !householdId || !selectedRemoteMemberId) {
+      throw new Error("Open Setup and save household members before tracking activities.");
+    }
+
+    const existingActivity =
+      (activityId ? remoteActivityDefinitions.find((activity) => activity.id === activityId) : undefined) ??
+      findMatchingActivityDefinition(remoteActivityDefinitions, title);
+    const resolvedActivity =
+      existingActivity && existingActivity.status === "active"
+        ? existingActivity
+        : await upsertRemoteActivityDefinition({
+            householdId,
+            title,
+            unitLabel,
+          });
+    const savedEntry = await upsertRemoteActivityEntry({
+      activityId: resolvedActivity.id,
+      date: displayedDay.date,
+      householdId,
+      householdMemberId: selectedRemoteMemberId,
+      memberId: selectedMember.id,
+      quantity,
+    });
+
+    setRemoteActivityDefinitions((current) => mergeActivityDefinition(current, resolvedActivity));
+    setRemoteActivityEntries((current) =>
+      savedEntry
+        ? mergeActivityEntry(current, savedEntry)
+        : current.filter(
+            (entry) => !(entry.activityId === resolvedActivity.id && entry.date === displayedDay.date),
+          ),
+    );
+    setRemoteActivityError("");
+  }
+
   if (householdStatus === "loading") {
     return <DashboardSetupGate title="Checking household setup" />;
   }
@@ -2415,6 +2570,16 @@ export function ProfileDashboard({
               ) : (
                 <EmptyState text="No responsibility is scheduled for this profile on this date." />
               )}
+              <DashboardActivityTracker
+                activities={remoteActivityDefinitions}
+                entries={selectedMemberActivityEntries}
+                errorMessage={remoteActivityError}
+                isTodaySelected={isTodaySelected}
+                isRemoteReady={isRemoteHouseholdReady}
+                onSaveActivityCount={saveActivityCount}
+                selectedDate={displayedDay.date}
+                selectedDateLabel={formatDateLabel(displayedDay.date)}
+              />
             </Panel>
           </div>
 
