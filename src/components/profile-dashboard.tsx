@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  applyAllowanceEntryDraft,
+  canRenameAllowanceEntry,
+  type AllowanceEntryDraftInput,
+} from "@/lib/allowance/entries";
 import {
   allowanceStorageKey,
   createChoreAllowanceEntry,
@@ -16,9 +21,12 @@ import {
 } from "@/lib/allowance/storage";
 import {
   createRemoteMorningRoutineAllowanceEntry,
+  deleteRemoteAllowanceEntry,
   deleteRemoteMorningRoutineAllowanceEntry,
   isMissingAllowanceEntriesTableError,
+  updateRemoteAllowanceEntry,
 } from "@/lib/allowance/remote";
+import { canApproveAllowanceRequests } from "@/lib/allowance/approval";
 import {
   approveRemoteAllowanceRequest,
   createRemoteAllowanceRequest,
@@ -283,6 +291,7 @@ type RemoteAllowanceEntryRow = {
   entry_type: string;
   occurred_at: string;
   metadata: {
+    allowanceRequestId?: string;
     assignmentTemplateId?: string;
     choreTitle?: string;
     label?: string;
@@ -305,6 +314,11 @@ type AllowanceRequestModalState =
   | { mode: "create"; draft: AllowanceRequestDraftInput }
   | { mode: "edit"; draft: AllowanceRequestDraftInput; request: AllowanceRequest }
   | null;
+
+type AllowanceEntryModalState = {
+  draft: AllowanceEntryDraftInput;
+  entry: AllowanceEntry;
+} | null;
 
 type DashboardEvent = FixedEvent & {
   assignedMemberIds?: string[];
@@ -426,6 +440,7 @@ export function ProfileDashboard({
   const [remoteHouseholdItemError, setRemoteHouseholdItemError] = useState("");
   const [remoteChoreError, setRemoteChoreError] = useState("");
   const [remoteAllowanceError, setRemoteAllowanceError] = useState("");
+  const [allowanceEntryError, setAllowanceEntryError] = useState("");
   const [remoteAllowanceRequestError, setRemoteAllowanceRequestError] = useState("");
   const [baselineScheduleSyncVersion, setBaselineScheduleSyncVersion] = useState(0);
   const [householdItemSyncVersion, setHouseholdItemSyncVersion] = useState(0);
@@ -435,6 +450,7 @@ export function ProfileDashboard({
   const [allowanceRequestSyncVersion, setAllowanceRequestSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
   const [approvingAllowanceRequestId, setApprovingAllowanceRequestId] = useState("");
+  const [allowanceEntryModal, setAllowanceEntryModal] = useState<AllowanceEntryModalState>(null);
   const [allowanceRequestModal, setAllowanceRequestModal] = useState<AllowanceRequestModalState>(null);
   const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
   const [responsibilityModal, setResponsibilityModal] = useState<
@@ -454,9 +470,12 @@ export function ProfileDashboard({
   });
   const morningRoutineAllowanceSyncQueueRef = useRef(Promise.resolve());
   const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
-  const isHouseholdAdmin = household?.role === "owner" || household?.role === "parent";
   const selectedMember =
     members.find((member) => member.id === state.selectedMemberId) ?? members[0];
+  const isAllowanceApprovalMode = canApproveAllowanceRequests({
+    householdRole: household?.role,
+    selectedMemberRole: selectedMember.role,
+  });
   const requestedByRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
   const remoteExternalKeysByMemberId = useMemo(
     () =>
@@ -602,6 +621,14 @@ export function ProfileDashboard({
     ? getMorningRoutineAllowanceAmount(remoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
   const allowanceBalance = getAllowanceBalance(selectedMemberAllowanceEntries, selectedMember.id);
+  const remoteSyncErrors = isRemoteHouseholdReady
+    ? [
+        remoteTemporaryRoutineError,
+        remoteBaselineError,
+        remoteHouseholdItemError,
+        remoteChoreError,
+      ].filter((message): message is string => Boolean(message))
+    : [];
   const isPastSelectedDate = displayedDay.date < today.date;
   const isTodaySelected = displayedDay.date === today.date;
   const groupedResponsibilityItems = groupResponsibilitiesByCategory(responsibilityItems);
@@ -1020,6 +1047,123 @@ export function ProfileDashboard({
     };
   }, [displayedDay.date, displayedDay.dayOfWeek, householdId, householdStatus, routineSyncVersion]);
 
+  const queueMorningRoutineAllowanceSync = useEffectEvent(
+    ({
+      childId,
+      completionDate,
+      contextKey,
+      occurredAt,
+      rewardAmount,
+      shouldAward,
+      shouldCelebrate,
+    }: {
+      childId: string;
+      completionDate: string;
+      contextKey: string;
+      occurredAt: string;
+      rewardAmount: number | undefined;
+      shouldAward: boolean;
+      shouldCelebrate: boolean;
+    }) => {
+      morningRoutineAllowanceSyncQueueRef.current = morningRoutineAllowanceSyncQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (selectedMember.role !== "child") {
+            return;
+          }
+
+          const celebrate = () => {
+            if (contextKey === `${displayedDay.date}:${selectedMember.id}`) {
+              setMorningRoutineCelebrationKey((current) => current + 1);
+            }
+          };
+
+          if (isRemoteHouseholdReady && householdId) {
+            const remoteMemberId = remoteMemberIdsByExternalKey[childId];
+
+            if (!remoteMemberId) {
+              if (shouldAward && rewardAmount) {
+                setRemoteAllowanceError("Open Setup and save household members before tracking allowance.");
+              }
+              return;
+            }
+
+            try {
+              if (!shouldAward || !rewardAmount) {
+                await deleteRemoteMorningRoutineAllowanceEntry({
+                  completionDate,
+                  householdId,
+                  householdMemberId: remoteMemberId,
+                });
+                setRemoteAllowanceEntries((current) =>
+                  removeMorningRoutineAllowanceEntries(current, childId, completionDate),
+                );
+                setRemoteAllowanceError("");
+              } else {
+                const entry = await createRemoteMorningRoutineAllowanceEntry({
+                  amount: rewardAmount,
+                  childId,
+                  completionDate,
+                  householdId,
+                  householdMemberId: remoteMemberId,
+                  occurredAt,
+                });
+
+                setRemoteAllowanceEntries((current) => {
+                  const withoutExisting = removeMorningRoutineAllowanceEntries(current, childId, completionDate);
+                  return [...withoutExisting, entry];
+                });
+                setRemoteAllowanceError("");
+              }
+            } catch (error) {
+              setRemoteAllowanceError(
+                error instanceof Error ? error.message : "Could not update morning routine allowance.",
+              );
+              return;
+            }
+
+            if (shouldCelebrate) {
+              celebrate();
+            }
+
+            return;
+          }
+
+          setAllowanceState((current) => {
+            const nextEntries = removeMorningRoutineAllowanceEntries(current.entries, childId, completionDate);
+
+            if (!shouldAward || !rewardAmount) {
+              return {
+                entries: nextEntries,
+              };
+            }
+
+            if (hasMorningRoutineAllowanceEntry(current.entries, childId, completionDate)) {
+              return current;
+            }
+
+            const entry = createMorningRoutineAllowanceEntry({
+              amount: rewardAmount,
+              childId,
+              completionDate,
+              id: createId(`morning-routine-${childId}-${completionDate}`),
+              occurredAt,
+            });
+
+            return entry
+              ? {
+                  entries: [...nextEntries, entry],
+                }
+              : current;
+          });
+
+          if (shouldCelebrate) {
+            celebrate();
+          }
+        });
+    },
+  );
+
   useEffect(() => {
     const morningRoutineItems =
       groupedResponsibilityItems.find(([category]) => category === "morning-routine")?.[1] ?? [];
@@ -1077,121 +1221,6 @@ export function ProfileDashboard({
     selectedMember.id,
     selectedMemberMorningRoutineAllowanceAmount,
   ]);
-
-  function queueMorningRoutineAllowanceSync({
-    childId,
-    completionDate,
-    contextKey,
-    occurredAt,
-    rewardAmount,
-    shouldAward,
-    shouldCelebrate,
-  }: {
-    childId: string;
-    completionDate: string;
-    contextKey: string;
-    occurredAt: string;
-    rewardAmount: number | undefined;
-    shouldAward: boolean;
-    shouldCelebrate: boolean;
-  }) {
-    morningRoutineAllowanceSyncQueueRef.current = morningRoutineAllowanceSyncQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (selectedMember.role !== "child") {
-          return;
-        }
-
-        const celebrate = () => {
-          if (contextKey === `${displayedDay.date}:${selectedMember.id}`) {
-            setMorningRoutineCelebrationKey((current) => current + 1);
-          }
-        };
-
-        if (isRemoteHouseholdReady && householdId) {
-          const remoteMemberId = remoteMemberIdsByExternalKey[childId];
-
-          if (!remoteMemberId) {
-            if (shouldAward && rewardAmount) {
-              setRemoteAllowanceError("Open Setup and save household members before tracking allowance.");
-            }
-            return;
-          }
-
-          try {
-            if (!shouldAward || !rewardAmount) {
-              await deleteRemoteMorningRoutineAllowanceEntry({
-                completionDate,
-                householdId,
-                householdMemberId: remoteMemberId,
-              });
-              setRemoteAllowanceEntries((current) =>
-                removeMorningRoutineAllowanceEntries(current, childId, completionDate),
-              );
-              setRemoteAllowanceError("");
-            } else {
-              const entry = await createRemoteMorningRoutineAllowanceEntry({
-                amount: rewardAmount,
-                childId,
-                completionDate,
-                householdId,
-                householdMemberId: remoteMemberId,
-                occurredAt,
-              });
-
-              setRemoteAllowanceEntries((current) => {
-                const withoutExisting = removeMorningRoutineAllowanceEntries(current, childId, completionDate);
-                return [...withoutExisting, entry];
-              });
-              setRemoteAllowanceError("");
-            }
-          } catch (error) {
-            setRemoteAllowanceError(
-              error instanceof Error ? error.message : "Could not update morning routine allowance.",
-            );
-            return;
-          }
-
-          if (shouldCelebrate) {
-            celebrate();
-          }
-
-          return;
-        }
-
-        setAllowanceState((current) => {
-          const nextEntries = removeMorningRoutineAllowanceEntries(current.entries, childId, completionDate);
-
-          if (!shouldAward || !rewardAmount) {
-            return {
-              entries: nextEntries,
-            };
-          }
-
-          if (hasMorningRoutineAllowanceEntry(current.entries, childId, completionDate)) {
-            return current;
-          }
-
-          const entry = createMorningRoutineAllowanceEntry({
-            amount: rewardAmount,
-            childId,
-            completionDate,
-            id: createId(`morning-routine-${childId}-${completionDate}`),
-            occurredAt,
-          });
-
-          return entry
-            ? {
-                entries: [...nextEntries, entry],
-              }
-            : current;
-        });
-
-        if (shouldCelebrate) {
-          celebrate();
-        }
-      });
-  }
 
   async function saveAllowanceRequest(
     input: AllowanceRequestDraftInput,
@@ -1293,14 +1322,94 @@ export function ProfileDashboard({
     setRemoteAllowanceRequestError("");
   }
 
+  function openAllowanceEntryModal(entry: AllowanceEntry) {
+    setAllowanceEntryModal({
+      draft: {
+        amount: entry.amount.toFixed(2),
+        note: entry.note ?? "",
+        title: entry.choreTitle ?? entry.label ?? "",
+      },
+      entry,
+    });
+    setAllowanceEntryError("");
+  }
+
+  function closeAllowanceEntryModal() {
+    setAllowanceEntryModal(null);
+    setAllowanceEntryError("");
+  }
+
   function closeAllowanceRequestModal() {
     setAllowanceRequestModal(null);
     setRemoteAllowanceRequestError("");
   }
 
+  async function saveAllowanceEntry(draft: AllowanceEntryDraftInput, entry: AllowanceEntry) {
+    if (!isAllowanceApprovalMode) {
+      const message = "Switch to a parent profile before editing a bank entry.";
+      setAllowanceEntryError(message);
+      throw new Error(message);
+    }
+
+    try {
+      const nextEntry = applyAllowanceEntryDraft(entry, draft);
+
+      if (isRemoteHouseholdReady && householdId) {
+        const updatedEntry = await updateRemoteAllowanceEntry({
+          currentEntry: entry,
+          draft,
+          householdId,
+        });
+        setRemoteAllowanceEntries((current) =>
+          current.map((candidate) => (candidate.id === updatedEntry.id ? updatedEntry : candidate)),
+        );
+      } else {
+        setAllowanceState((current) => ({
+          entries: current.entries.map((candidate) => (candidate.id === entry.id ? nextEntry : candidate)),
+        }));
+      }
+
+      setAllowanceEntryError("");
+      closeAllowanceEntryModal();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not update the bank entry.";
+      setAllowanceEntryError(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
+  async function removeAllowanceEntry(entry: AllowanceEntry) {
+    if (!isAllowanceApprovalMode) {
+      const message = "Switch to a parent profile before deleting a bank entry.";
+      setAllowanceEntryError(message);
+      throw new Error(message);
+    }
+
+    try {
+      if (isRemoteHouseholdReady && householdId) {
+        await deleteRemoteAllowanceEntry({
+          entryId: entry.id,
+          householdId,
+        });
+        setRemoteAllowanceEntries((current) => current.filter((candidate) => candidate.id !== entry.id));
+      } else {
+        setAllowanceState((current) => ({
+          entries: current.entries.filter((candidate) => candidate.id !== entry.id),
+        }));
+      }
+
+      setAllowanceEntryError("");
+      closeAllowanceEntryModal();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not delete the bank entry.";
+      setAllowanceEntryError(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
   async function approveAllowanceRequest(request: AllowanceRequest) {
-    if (!isHouseholdAdmin) {
-      setRemoteAllowanceRequestError("Only a household parent can approve a bank request.");
+    if (!isAllowanceApprovalMode) {
+      setRemoteAllowanceRequestError("Switch to a parent profile before approving a bank request.");
       return;
     }
 
@@ -2239,6 +2348,7 @@ export function ProfileDashboard({
                                   checked={checked}
                                   isPastDue={isPastSelectedDate && !checked}
                                   key={item.id}
+                                  lateStatus={item.source === "open-responsibility" ? "carryover" : "missed"}
                                   meta={formatTimeRange(item.startTime, item.endTime)}
                                   onChange={() =>
                                     item.source === "routine"
@@ -2357,42 +2467,26 @@ export function ProfileDashboard({
                 <Fact label="Day schedule" value={String(scheduleEvents.length)} />
                 <Fact label="Schedule blocks" value={String(displayedDay.baseline.blocks.length)} />
               </dl>
+              {remoteSyncErrors.length > 0 ? (
+                <div className="mt-4 border-t border-[#e2e8f0] pt-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8a3b12]">
+                    Sync issues
+                  </h3>
+                  <ul className="mt-3 grid gap-2">
+                    {remoteSyncErrors.map((message, index) => (
+                      <li
+                        className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]"
+                        key={`${message}-${index}`}
+                      >
+                        {message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
 
             <BirthdayCountdownPanel member={selectedMember} referenceDate={displayedDay.date} />
-
-            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-              <h2 className="text-lg font-semibold">Operating Mode</h2>
-              <ul className="mt-3 space-y-2 text-sm text-[#4c5965]">
-                <li>Manual profile switching is active.</li>
-                <li>
-                  Temporary routines sync through Supabase when a household is connected.
-                </li>
-                <li>
-                  Local browser storage is only used as a fallback when no household is connected.
-                </li>
-              </ul>
-              {isRemoteHouseholdReady && remoteTemporaryRoutineError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {remoteTemporaryRoutineError}
-                </p>
-              ) : null}
-              {isRemoteHouseholdReady && remoteBaselineError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {remoteBaselineError}
-                </p>
-              ) : null}
-              {isRemoteHouseholdReady && remoteHouseholdItemError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {remoteHouseholdItemError}
-                </p>
-              ) : null}
-              {isRemoteHouseholdReady && remoteChoreError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {remoteChoreError}
-                </p>
-              ) : null}
-            </section>
 
             <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
@@ -2435,10 +2529,24 @@ export function ProfileDashboard({
                         <p className="mt-1 text-xs text-[#657381]">
                           {formatDateLabel(entry.occurredAt.slice(0, 10))}
                         </p>
+                        {entry.note ? (
+                          <p className="mt-2 text-xs text-[#4c5965]">{entry.note}</p>
+                        ) : null}
                       </div>
                       <span className="font-semibold text-[#2f6f73]">
                         {formatCurrency(entry.amount)}
                       </span>
+                      {isAllowanceApprovalMode ? (
+                        <div className="sm:col-span-2 flex justify-end">
+                          <button
+                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                            onClick={() => openAllowanceEntryModal(entry)}
+                            type="button"
+                          >
+                            Edit or delete
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ol>
@@ -2455,7 +2563,7 @@ export function ProfileDashboard({
                       If the chore title is new, approval will also save it into the chore bank for later use.
                     </p>
                   </div>
-                  {isHouseholdAdmin ? (
+                  {isAllowanceApprovalMode ? (
                     <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
                       Parent approval enabled
                     </span>
@@ -2536,7 +2644,7 @@ export function ProfileDashboard({
                               </p>
                             </div>
                           </div>
-                          {isHouseholdAdmin ? (
+                          {isAllowanceApprovalMode ? (
                             <div className="flex flex-wrap justify-end gap-2">
                               <button
                                 className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
@@ -2569,6 +2677,11 @@ export function ProfileDashboard({
               {isRemoteHouseholdReady && remoteAllowanceError ? (
                 <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
                   {remoteAllowanceError}
+                </p>
+              ) : null}
+              {allowanceEntryError ? (
+                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                  {allowanceEntryError}
                 </p>
               ) : null}
               {remoteAllowanceRequestError ? (
@@ -2718,6 +2831,20 @@ export function ProfileDashboard({
           request={allowanceRequestModal.mode === "edit" ? allowanceRequestModal.request : undefined}
           showChildPicker={selectedMember.role !== "child"}
           startingDraft={allowanceRequestModal.draft}
+        />
+      ) : null}
+      {allowanceEntryModal ? (
+        <AllowanceEntryModal
+          entry={allowanceEntryModal.entry}
+          errorMessage={allowanceEntryError}
+          onClose={closeAllowanceEntryModal}
+          onDelete={async () => {
+            await removeAllowanceEntry(allowanceEntryModal.entry);
+          }}
+          onSave={async (input) => {
+            await saveAllowanceEntry(input, allowanceEntryModal.entry);
+          }}
+          startingDraft={allowanceEntryModal.draft}
         />
       ) : null}
       {morningRoutineCelebrationKey > 0 ? (
@@ -4342,6 +4469,7 @@ async function loadRemoteAllowanceEntries({
           ? "manual-adjustment"
           : "chore-completion",
     occurredAt: entry.occurred_at,
+    allowanceRequestId: entry.metadata.allowanceRequestId,
     assignmentTemplateId: entry.metadata.assignmentTemplateId,
     choreCompletionId: entry.chore_completion_id ?? undefined,
     choreId: entry.chore_id ?? undefined,
@@ -5735,6 +5863,193 @@ function AllowanceRequestModal({
   );
 }
 
+function AllowanceEntryModal({
+  entry,
+  errorMessage,
+  onClose,
+  onDelete,
+  onSave,
+  startingDraft,
+}: {
+  entry: AllowanceEntry;
+  errorMessage: string;
+  onClose: () => void;
+  onDelete: () => void | Promise<void>;
+  onSave: (input: AllowanceEntryDraftInput) => void | Promise<void>;
+  startingDraft: AllowanceEntryDraftInput;
+}) {
+  const [draft, setDraft] = useState(startingDraft);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const canRename = canRenameAllowanceEntry(entry);
+  const sourceDescription =
+    entry.source === "manual-adjustment"
+      ? "This changes the parent-approved credit shown in the bank."
+      : "This changes only this one credit entry. It does not update the chore template or morning routine default.";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+
+    try {
+      await onSave(draft);
+    } catch {
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this bank entry? This only removes this one credit.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await onDelete();
+    } catch {
+      return;
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+              Parent Bank Controls
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-[#17202a]">Edit bank entry</h2>
+            <p className="mt-1 max-w-3xl text-sm text-[#4c5965]">{sourceDescription}</p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isDeleting || isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          {errorMessage ? (
+            <p className="mb-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+              {errorMessage}
+            </p>
+          ) : null}
+
+          <form className="grid gap-4" onSubmit={submit}>
+            {canRename ? (
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Work</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  required
+                  value={draft.title}
+                />
+              </label>
+            ) : (
+              <div className="grid gap-1 text-sm">
+                <span className="font-semibold">Work</span>
+                <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 font-semibold text-[#17202a]">
+                  {entry.choreTitle ?? entry.label ?? "Allowance credit"}
+                </div>
+              </div>
+            )}
+
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Amount</span>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#657381]">
+                  $
+                </span>
+                <input
+                  className="w-full border border-[#d7e0e7] bg-white py-2 pl-7 pr-3"
+                  inputMode="decimal"
+                  min="0.01"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      amount: event.target.value,
+                    }))
+                  }
+                  required
+                  step="0.01"
+                  value={draft.amount}
+                />
+              </div>
+            </label>
+
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Note</span>
+              <textarea
+                className="min-h-28 border border-[#d7e0e7] bg-white px-3 py-2"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    note: event.target.value,
+                  }))
+                }
+                placeholder="Optional details"
+                value={draft.note}
+              />
+            </label>
+
+            <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+              <p>{sourceDescription}</p>
+            </div>
+
+            <div className="flex flex-wrap justify-between gap-2">
+              <button
+                className="border border-[#dc546a] bg-white px-3 py-2 text-sm font-semibold text-[#b03046] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isDeleting || isSaving}
+                onClick={() => {
+                  void handleDelete();
+                }}
+                type="button"
+              >
+                {isDeleting ? "Deleting..." : "Delete entry"}
+              </button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  onClick={onClose}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isDeleting || isSaving}
+                  type="submit"
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BirthdayCountdownPanel({
   member,
   referenceDate,
@@ -5787,6 +6102,7 @@ function Checklist({ children }: Readonly<{ children: React.ReactNode }>) {
 function ChecklistItem({
   checked,
   isPastDue = false,
+  lateStatus = "missed",
   meta,
   onChange,
   onEdit,
@@ -5797,6 +6113,7 @@ function ChecklistItem({
 }: {
   checked: boolean;
   isPastDue?: boolean;
+  lateStatus?: "carryover" | "missed";
   meta: string;
   onChange: () => void;
   onEdit?: () => void;
@@ -5808,8 +6125,15 @@ function ChecklistItem({
   const itemClass = checked
     ? "border-[#b7d8c3] bg-[#f1faf3]"
     : isPastDue
-      ? "border-[#e0b9a7] bg-[#fff4ed]"
+      ? lateStatus === "carryover"
+        ? "border-[#c8d1dc] bg-[#f4f7fa]"
+        : "border-[#e0b9a7] bg-[#fff4ed]"
       : "border-[#d7e0e7] bg-[#f8fafc]";
+  const lateBadgeClass =
+    lateStatus === "carryover"
+      ? "border-[#c8d1dc] text-[#526474]"
+      : "border-[#e0b9a7] text-[#8a3f2f]";
+  const lateBadgeLabel = lateStatus === "carryover" ? "Still open" : "Missed";
 
   return (
     <li>
@@ -5828,8 +6152,8 @@ function ChecklistItem({
         </label>
         <span className="grid justify-items-end gap-2">
           {isPastDue ? (
-            <span className="border border-[#e0b9a7] bg-white px-2 py-1 text-xs font-semibold text-[#8a3f2f]">
-              Missed
+            <span className={`border bg-white px-2 py-1 text-xs font-semibold ${lateBadgeClass}`}>
+              {lateBadgeLabel}
             </span>
           ) : null}
           {onEdit ? (

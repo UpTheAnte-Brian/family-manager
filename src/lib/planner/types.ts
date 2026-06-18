@@ -108,6 +108,7 @@ export type AllowanceEntry = {
   amount: number;
   source: "chore-completion" | "manual-adjustment" | "morning-routine-completion";
   occurredAt: string;
+  allowanceRequestId?: string;
   choreCompletionId?: string;
   choreId?: string;
   assignmentTemplateId?: string;

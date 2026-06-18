@@ -3,6 +3,7 @@ import {
   morningRoutineAllowanceEntryType,
   morningRoutineAllowanceLabel,
 } from "@/lib/allowance/morning-routine";
+import { applyAllowanceEntryDraft, type AllowanceEntryDraftInput } from "@/lib/allowance/entries";
 import { fromAllowanceCents, toAllowanceCents } from "@/lib/allowance/storage";
 import type { AllowanceEntry } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -39,6 +40,7 @@ type RemoteAllowanceEntryRow = {
   entry_type: string;
   occurred_at: string;
   metadata: {
+    allowanceRequestId?: string;
     assignmentTemplateId?: string;
     choreTitle?: string;
     label?: string;
@@ -138,6 +140,56 @@ export async function deleteRemoteMorningRoutineAllowanceEntry({
   }
 }
 
+export async function updateRemoteAllowanceEntry({
+  currentEntry,
+  draft,
+  householdId,
+}: {
+  currentEntry: AllowanceEntry;
+  draft: AllowanceEntryDraftInput;
+  householdId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const nextEntry = applyAllowanceEntryDraft(currentEntry, draft);
+  const { data, error } = await supabase
+    .from("allowance_entries")
+    .update({
+      amount_cents: toAllowanceCents(nextEntry.amount),
+      metadata: buildRemoteAllowanceMetadata(nextEntry),
+    })
+    .eq("household_id", householdId)
+    .eq("id", currentEntry.id)
+    .select(
+      "id, household_member_id, amount_cents, chore_completion_id, chore_id, entry_type, occurred_at, metadata",
+    )
+    .single<RemoteAllowanceEntryRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapRemoteAllowanceEntry(data, currentEntry.childId);
+}
+
+export async function deleteRemoteAllowanceEntry({
+  entryId,
+  householdId,
+}: {
+  entryId: string;
+  householdId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase
+    .from("allowance_entries")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("id", entryId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function findRemoteMorningRoutineAllowanceEntry({
   childId,
   completionDate,
@@ -183,6 +235,7 @@ function mapRemoteAllowanceEntry(entry: RemoteAllowanceEntryRow, childId: string
     amount: fromAllowanceCents(entry.amount_cents),
     source,
     occurredAt: entry.occurred_at,
+    allowanceRequestId: entry.metadata.allowanceRequestId,
     assignmentTemplateId: entry.metadata.assignmentTemplateId,
     choreCompletionId: entry.chore_completion_id ?? undefined,
     choreId: entry.chore_id ?? undefined,
@@ -191,5 +244,17 @@ function mapRemoteAllowanceEntry(entry: RemoteAllowanceEntryRow, childId: string
     note: entry.metadata.note,
     routineCategory: entry.metadata.routineCategory,
     routineCompletionDate: entry.metadata.routineCompletionDate,
+  };
+}
+
+function buildRemoteAllowanceMetadata(entry: AllowanceEntry) {
+  return {
+    ...(entry.allowanceRequestId ? { allowanceRequestId: entry.allowanceRequestId } : {}),
+    ...(entry.assignmentTemplateId ? { assignmentTemplateId: entry.assignmentTemplateId } : {}),
+    ...(entry.choreTitle ? { choreTitle: entry.choreTitle } : {}),
+    ...(entry.label ? { label: entry.label } : {}),
+    ...(entry.note ? { note: entry.note } : {}),
+    ...(entry.routineCategory ? { routineCategory: entry.routineCategory } : {}),
+    ...(entry.routineCompletionDate ? { routineCompletionDate: entry.routineCompletionDate } : {}),
   };
 }
