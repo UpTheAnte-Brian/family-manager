@@ -205,12 +205,15 @@ type RemoteHouseholdMemberConfigRow = {
 
 type RemoteChoreRow = {
   id: string;
+  external_key: string | null;
   title: string;
   category_id: string;
   metadata: {
     allowanceAmount?: number;
+    definitionOfDone?: string;
     eligibleAssigneeIds?: string[];
     estimatedMinutes?: number;
+    moneyTalk?: string;
     requiresAdultCheck?: boolean;
   };
 };
@@ -321,8 +324,11 @@ type RemoteAllowanceEntryRow = {
 
 type AllowanceRequestDraftInput = {
   amount: string;
+  assignmentTemplateId?: string;
   category: string;
   childId: string;
+  choreCompletionId?: string;
+  choreId?: string;
   kind: AllowanceRequestKind;
   note: string;
   occurrenceDate: string;
@@ -1360,7 +1366,10 @@ export function ProfileDashboard({
 
     const matchedChore =
       input.kind === "credit"
-        ? choreConfig.weeklyChores.find(
+        ? (input.choreId
+            ? choreConfig.weeklyChores.find((chore) => chore.id === input.choreId)
+            : undefined) ??
+          choreConfig.weeklyChores.find(
             (chore) => chore.title.trim().toLowerCase() === input.title.trim().toLowerCase(),
           )
         : undefined;
@@ -1371,9 +1380,11 @@ export function ProfileDashboard({
       const nextRequest = editingRequest
         ? await updateRemoteAllowanceRequest({
             amount: Number(input.amount),
+            assignmentTemplateId: input.assignmentTemplateId,
             category: requestCategory,
             childRemoteMemberId: selectedBankChildRemoteMemberId,
             choreId: matchedChore?.id,
+            choreCompletionId: input.choreCompletionId,
             choreTitle: input.title,
             householdId,
             kind: input.kind,
@@ -1383,9 +1394,11 @@ export function ProfileDashboard({
           })
         : await createRemoteAllowanceRequest({
             amount: Number(input.amount),
+            assignmentTemplateId: input.assignmentTemplateId,
             category: requestCategory,
             childRemoteMemberId: selectedBankChildRemoteMemberId,
             choreId: matchedChore?.id,
+            choreCompletionId: input.choreCompletionId,
             choreTitle: input.title,
             householdId,
             kind: input.kind,
@@ -1416,8 +1429,11 @@ export function ProfileDashboard({
       mode: "create",
       draft: {
         amount: "1.00",
+        assignmentTemplateId: undefined,
         category: "yard",
         childId: defaultChildId,
+        choreCompletionId: undefined,
+        choreId: undefined,
         kind,
         note: "",
         occurrenceDate: displayedDay.date,
@@ -1434,8 +1450,11 @@ export function ProfileDashboard({
       mode: "edit",
       draft: {
         amount: request.amount.toFixed(2),
+        assignmentTemplateId: request.assignmentTemplateId,
         category: request.category ?? "yard",
         childId,
+        choreCompletionId: request.choreCompletionId,
+        choreId: request.choreId,
         kind: request.kind,
         note: request.note ?? "",
         occurrenceDate: request.occurrenceDate,
@@ -1465,6 +1484,34 @@ export function ProfileDashboard({
 
   function closeAllowanceRequestModal() {
     setAllowanceRequestModal(null);
+    setRemoteAllowanceRequestError("");
+  }
+
+  function openCompletedChoreAllowanceRequest(
+    assignment: AssignmentWithChore,
+    completion: ChoreCompletion,
+  ) {
+    const amount = getChoreAllowanceAmount(assignment.chore);
+
+    if (!amount) {
+      return;
+    }
+
+    setAllowanceRequestModal({
+      mode: "create",
+      draft: {
+        amount: amount.toFixed(2),
+        assignmentTemplateId: assignment.id,
+        category: assignment.chore?.category ?? "yard",
+        childId: assignment.childId,
+        choreCompletionId: completion.id,
+        choreId: assignment.choreId,
+        kind: "credit",
+        note: "",
+        occurrenceDate: displayedDay.date,
+        title: assignment.chore?.title ?? "",
+      },
+    });
     setRemoteAllowanceRequestError("");
   }
 
@@ -1690,7 +1737,7 @@ export function ProfileDashboard({
         const createdCompletion = await createRemoteChoreCompletion({
           assignment,
           chore: assignment.chore,
-          earnsAllowance: selectedMember.role === "child",
+          earnsAllowance: selectedMember.role !== "child",
           householdId,
           occurrenceDate: displayedDay.date,
           remoteMemberId,
@@ -2512,10 +2559,25 @@ export function ProfileDashboard({
                               );
                               const editableResponsibility =
                                 item.source === "local" ? item.localResponsibility : undefined;
+                              const choreAllowanceState = item.assignment
+                                ? getChoreAllowanceRequestState({
+                                    allowanceEntries: selectedMemberAllowanceEntries,
+                                    assignment: item.assignment,
+                                    date: displayedDay.date,
+                                    remoteMemberId: selectedRemoteMemberId,
+                                    requests: visibleAllowanceRequests,
+                                    selectedMemberRole: selectedMember.role,
+                                    state: dashboardStateForView,
+                                  })
+                                : { status: "hidden" as const };
+                              const choreSupportText = item.assignment
+                                ? getChoreSupportText(item.assignment.chore)
+                                : undefined;
 
                               return (
                                 <ChecklistItem
                                   checked={checked}
+                                  detail={choreSupportText}
                                   isPastDue={isPastSelectedDate && !checked}
                                   key={item.id}
                                   lateStatus={item.source === "open-responsibility" ? "carryover" : "missed"}
@@ -2552,6 +2614,31 @@ export function ProfileDashboard({
                                             responsibility: editableResponsibility,
                                           })
                                       : undefined
+                                  }
+                                  secondaryAction={
+                                    choreAllowanceState.status === "available" &&
+                                    choreAllowanceState.completion ? (
+                                      <button
+                                        className="border border-[#1f6f8b] bg-white px-2 py-1 text-xs font-semibold text-[#1f6f8b]"
+                                        onClick={() =>
+                                          openCompletedChoreAllowanceRequest(
+                                            item.assignment!,
+                                            choreAllowanceState.completion!,
+                                          )
+                                        }
+                                        type="button"
+                                      >
+                                        Request bank credit
+                                      </button>
+                                    ) : choreAllowanceState.status === "pending" ? (
+                                      <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                                        Bank request pending
+                                      </span>
+                                    ) : choreAllowanceState.status === "approved" ? (
+                                      <span className="border border-[#b7d8c3] bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                                        Bank credit logged
+                                      </span>
+                                    ) : undefined
                                   }
                                   sourceLabel={responsibilitySourceLabel(item)}
                                   title={item.title}
@@ -3334,6 +3421,90 @@ function getAssignments(
       ...assignment,
       chore: choresById.get(assignment.choreId),
     }));
+}
+
+function getChoreSupportText(chore?: WeeklyChore) {
+  if (!chore) {
+    return undefined;
+  }
+
+  const details = [
+    chore.definitionOfDone ? `Definition of done: ${chore.definitionOfDone}` : null,
+    chore.moneyTalk ? `Money talk: ${chore.moneyTalk}` : null,
+  ].filter((detail): detail is string => Boolean(detail));
+
+  return details.length > 0 ? details.join(" ") : undefined;
+}
+
+function getChoreAllowanceRequestState({
+  allowanceEntries,
+  assignment,
+  date,
+  remoteMemberId,
+  requests,
+  selectedMemberRole,
+  state,
+}: {
+  allowanceEntries: AllowanceEntry[];
+  assignment: AssignmentWithChore;
+  date: string;
+  remoteMemberId?: string;
+  requests: AllowanceRequest[];
+  selectedMemberRole: HouseholdMember["role"];
+  state: DashboardState;
+}) {
+  if (
+    selectedMemberRole !== "child" ||
+    !remoteMemberId ||
+    !getChoreAllowanceAmount(assignment.chore)
+  ) {
+    return { status: "hidden" as const };
+  }
+
+  const completion = state.choreCompletions.find(
+    (candidate) =>
+      candidate.assignmentTemplateId === assignment.id &&
+      candidate.childId === assignment.childId &&
+      candidate.completedAt.startsWith(date),
+  );
+
+  if (!completion) {
+    return { status: "hidden" as const };
+  }
+
+  if (allowanceEntries.some((entry) => entry.choreCompletionId === completion.id)) {
+    return {
+      completion,
+      status: "approved" as const,
+    };
+  }
+
+  const pendingRequest = requests.find(
+    (request) =>
+      request.childRemoteMemberId === remoteMemberId &&
+      request.kind === "credit" &&
+      (
+        request.choreCompletionId === completion.id ||
+        (
+          !request.choreCompletionId &&
+          request.choreId === assignment.choreId &&
+          request.occurrenceDate === date
+        )
+      ),
+  );
+
+  if (pendingRequest) {
+    return {
+      completion,
+      request: pendingRequest,
+      status: "pending" as const,
+    };
+  }
+
+  return {
+    completion,
+    status: "available" as const,
+  };
 }
 
 function getResponsibilityItems(
@@ -4505,7 +4676,7 @@ async function loadRemoteDashboardChoreState(
 
   const { data: chores, error: choresError } = await supabase
     .from("chores")
-    .select("id, title, category_id, metadata")
+    .select("id, external_key, title, category_id, metadata")
     .eq("household_id", householdId)
     .eq("chore_kind", "weekly")
     .eq("status", "active")
@@ -4517,10 +4688,13 @@ async function loadRemoteDashboardChoreState(
 
   const weeklyChores = (chores ?? []).map((chore) => ({
     id: chore.id,
+    externalKey: chore.external_key ?? undefined,
     title: chore.title,
     category: normalizeChoreCategory(chore.category_id),
     estimatedMinutes: chore.metadata.estimatedMinutes ?? 10,
+    definitionOfDone: chore.metadata.definitionOfDone,
     eligibleAssigneeIds: chore.metadata.eligibleAssigneeIds ?? [],
+    moneyTalk: chore.metadata.moneyTalk,
     requiresAdultCheck: chore.metadata.requiresAdultCheck,
     allowanceAmount: normalizeCurrencyAmount(chore.metadata.allowanceAmount),
   }));
@@ -6314,23 +6488,27 @@ function Checklist({ children }: Readonly<{ children: React.ReactNode }>) {
 
 function ChecklistItem({
   checked,
+  detail,
   isPastDue = false,
   lateStatus = "missed",
   meta,
   onChange,
   onEdit,
   onRemove,
+  secondaryAction,
   sourceLabel,
   title,
   valueLabel,
 }: {
   checked: boolean;
+  detail?: string;
   isPastDue?: boolean;
   lateStatus?: "carryover" | "missed";
   meta: string;
   onChange: () => void;
   onEdit?: () => void;
   onRemove?: () => void;
+  secondaryAction?: React.ReactNode;
   sourceLabel: string;
   title: string;
   valueLabel?: string;
@@ -6361,6 +6539,11 @@ function ChecklistItem({
               {meta} · {sourceLabel}
               {valueLabel ? ` · ${valueLabel}` : ""}
             </span>
+            {detail ? (
+              <span className="mt-2 block text-xs text-[#4c5965]">
+                {detail}
+              </span>
+            ) : null}
           </span>
         </label>
         <span className="grid justify-items-end gap-2">
@@ -6369,6 +6552,7 @@ function ChecklistItem({
               {lateBadgeLabel}
             </span>
           ) : null}
+          {secondaryAction}
           {onEdit ? (
             <button
               className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#1f6f8b]"

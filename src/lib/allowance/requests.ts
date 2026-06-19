@@ -9,6 +9,8 @@ export type AllowanceRequest = {
   requestedByRemoteMemberId?: string;
   approvedByRemoteMemberId?: string;
   choreId?: string;
+  assignmentTemplateId?: string;
+  choreCompletionId?: string;
   allowanceEntryId?: string;
   choreTitle: string;
   category?: ChoreCategoryId;
@@ -38,16 +40,22 @@ type RemoteAllowanceRequestRow = {
   status: "pending" | "approved" | "rejected";
   requested_at: string;
   approved_at: string | null;
+  metadata: {
+    assignmentTemplateId?: string;
+    choreCompletionId?: string;
+  } | null;
 };
 
 const allowanceRequestSelect =
-  "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, request_kind, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at";
+  "id, household_member_id, requested_by_member_id, approved_by_member_id, chore_id, allowance_entry_id, request_kind, chore_title, category_id, requested_amount_cents, estimated_minutes, occurrence_date, note, status, requested_at, approved_at, metadata";
 
 type SaveAllowanceRequestInput = {
   amount: number;
+  assignmentTemplateId?: string;
   category?: ChoreCategoryId;
   childRemoteMemberId: string;
   choreId?: string;
+  choreCompletionId?: string;
   choreTitle: string;
   householdId: string;
   kind: AllowanceRequestKind;
@@ -110,9 +118,11 @@ export async function approveRemoteAllowanceRequest(requestId: string) {
 
 async function saveRemoteAllowanceRequestRow({
   amount,
+  assignmentTemplateId,
   category,
   childRemoteMemberId,
   choreId,
+  choreCompletionId,
   choreTitle,
   householdId,
   kind,
@@ -146,6 +156,13 @@ async function saveRemoteAllowanceRequestRow({
     estimated_minutes: kind === "credit" ? 20 : null,
     occurrence_date: occurrenceDate,
     note: note?.trim() || null,
+    metadata:
+      kind === "credit"
+        ? {
+            ...(assignmentTemplateId ? { assignmentTemplateId } : {}),
+            ...(choreCompletionId ? { choreCompletionId } : {}),
+          }
+        : {},
   };
   const query = requestId
     ? supabase
@@ -171,6 +188,8 @@ function mapRemoteAllowanceRequest(row: RemoteAllowanceRequestRow): AllowanceReq
     requestedByRemoteMemberId: row.requested_by_member_id ?? undefined,
     approvedByRemoteMemberId: row.approved_by_member_id ?? undefined,
     choreId: row.chore_id ?? undefined,
+    assignmentTemplateId: row.metadata?.assignmentTemplateId ?? undefined,
+    choreCompletionId: row.metadata?.choreCompletionId ?? undefined,
     allowanceEntryId: row.allowance_entry_id ?? undefined,
     choreTitle: row.chore_title,
     kind: row.request_kind,

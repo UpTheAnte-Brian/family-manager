@@ -51,8 +51,10 @@ type RemoteChoreRow = {
   category_id: string;
   metadata: {
     allowanceAmount?: number;
+    definitionOfDone?: string;
     eligibleAssigneeIds?: string[];
     estimatedMinutes?: number;
+    moneyTalk?: string;
     requiresAdultCheck?: boolean;
   };
 };
@@ -117,7 +119,9 @@ const warehouseSeedChores: WeeklyChore[] = [
     title: "Pick rocks out of the grass",
     category: "yard",
     estimatedMinutes: 20,
+    definitionOfDone: "Bucket with the rocks in it and the total count.",
     eligibleAssigneeIds: [],
+    moneyTalk: "2 cents / rock. No cheating.",
     requiresAdultCheck: true,
   },
   {
@@ -266,6 +270,13 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const selectedChoreAssignments = assignments.filter(
     (assignment) => assignment.choreId === selectedChore?.id,
   );
+  const selectedChoreMembers = selectedChore
+    ? getEligibleMembersForChore(
+        selectedChore,
+        assignableMembers,
+        selectedChoreAssignments.map((assignment) => assignment.childId),
+      )
+    : [];
   const todaysAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
   const scheduledChoreIds = new Set(effectiveState.weeklyAssignmentTemplates.map((assignment) => assignment.choreId));
   const backlogChores = effectiveState.weeklyChores.filter((chore) => !scheduledChoreIds.has(chore.id));
@@ -394,14 +405,20 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   async function upsertAssignment(assignment: WeeklyChoreAssignmentTemplate) {
     if (isRemoteHouseholdReady && householdId) {
       await runRemoteAction(async () => {
-        await saveRemoteChoreAssignment({
-          assignment,
+        const savedChore = await ensureRemoteChore(householdId, choresById, assignment.choreId);
+        const savedAssignment = await saveRemoteChoreAssignment({
+          assignment: {
+            ...assignment,
+            choreId: savedChore.id,
+          },
           householdId,
           remoteMemberId: getRemoteMemberId(remoteMembers, assignment.childId),
         });
-        setSelectedChoreId(assignment.choreId);
+        setSelectedChoreId(savedAssignment.choreId);
         setAssignmentModal(null);
-        return "Assignment saved to Supabase.";
+        return isUuid(assignment.choreId)
+          ? "Assignment saved to Supabase."
+          : "Chore and assignment saved to Supabase.";
       });
       return;
     }
@@ -572,6 +589,23 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                     </p>
                   </div>
 
+                  {selectedChore.definitionOfDone || selectedChore.moneyTalk ? (
+                    <div className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
+                      {selectedChore.definitionOfDone ? (
+                        <div>
+                          <p className="font-semibold text-[#17202a]">Definition of done</p>
+                          <p className="mt-1 text-[#4c5965]">{selectedChore.definitionOfDone}</p>
+                        </div>
+                      ) : null}
+                      {selectedChore.moneyTalk ? (
+                        <div>
+                          <p className="font-semibold text-[#17202a]">Money talk</p>
+                          <p className="mt-1 text-[#4c5965]">{selectedChore.moneyTalk}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <section className="grid gap-2">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
@@ -592,7 +626,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                       </button>
                     </div>
                     <div className="grid gap-2">
-                      {assignableMembers.map((child) => {
+                      {selectedChoreMembers.map((child) => {
                         const childAssignments = selectedChoreAssignments.filter(
                           (assignment) => assignment.childId === child.id,
                         );
@@ -758,6 +792,11 @@ function ChoreTile({
 }) {
   const todayAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
   const completedToday = todayAssignments.filter((assignment) => assignment.isComplete).length;
+  const visibleMembers = getEligibleMembersForChore(
+    chore,
+    childMembers,
+    assignments.map((assignment) => assignment.childId),
+  );
 
   return (
     <article
@@ -784,7 +823,7 @@ function ChoreTile({
           />
         </div>
         <div className="mt-4 grid gap-2">
-          {childMembers.map((child) => {
+          {visibleMembers.map((child) => {
             const childAssignments = assignments.filter((assignment) => assignment.childId === child.id);
             const dayAssignment = childAssignments.find(
               (assignment) => assignment.dayOfWeek === selectedDay,
@@ -894,10 +933,12 @@ function ChoreEditor({
   const [allowanceAmount, setAllowanceAmount] = useState(
     chore?.allowanceAmount ? String(chore.allowanceAmount) : "",
   );
+  const [definitionOfDone, setDefinitionOfDone] = useState(chore?.definitionOfDone ?? "");
   const [requiresAdultCheck, setRequiresAdultCheck] = useState(Boolean(chore?.requiresAdultCheck));
   const [eligibleAssigneeIds, setEligibleAssigneeIds] = useState<string[]>(
     chore?.eligibleAssigneeIds.length ? chore.eligibleAssigneeIds : childMembers.map((child) => child.id),
   );
+  const [moneyTalk, setMoneyTalk] = useState(chore?.moneyTalk ?? "");
 
   function submit() {
     const trimmedTitle = title.trim();
@@ -908,12 +949,15 @@ function ChoreEditor({
 
     onSave({
       id: chore?.id ?? createId(trimmedTitle),
+      externalKey: chore?.externalKey,
       title: trimmedTitle,
       category,
       estimatedMinutes: Number(estimatedMinutes) || 10,
       eligibleAssigneeIds,
       requiresAdultCheck,
       allowanceAmount: normalizeCurrencyAmount(allowanceAmount),
+      definitionOfDone: definitionOfDone.trim() || undefined,
+      moneyTalk: moneyTalk.trim() || undefined,
     });
   }
 
@@ -965,6 +1009,24 @@ function ChoreEditor({
           step="0.01"
           type="number"
           value={allowanceAmount}
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        <span className="font-semibold">Definition of done</span>
+        <textarea
+          className="min-h-24 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+          onChange={(event) => setDefinitionOfDone(event.target.value)}
+          placeholder="What proves the chore is actually finished?"
+          value={definitionOfDone}
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        <span className="font-semibold">Money talk</span>
+        <input
+          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+          onChange={(event) => setMoneyTalk(event.target.value)}
+          placeholder="2 cents / rock. No cheating."
+          value={moneyTalk}
         />
       </label>
       <fieldset className="grid gap-2 text-sm">
@@ -1046,6 +1108,7 @@ function AssignmentEditor({
       15,
   );
   const selectedChore = chores.find((chore) => chore.id === choreId);
+  const availableAssignees = getEligibleMembersForChore(selectedChore, childMembers, [childId]);
 
   function submit() {
     if (!childId || !choreId) {
@@ -1072,7 +1135,7 @@ function AssignmentEditor({
             onChange={(event) => setChildId(event.target.value)}
             value={childId}
           >
-            {childMembers.map((child) => (
+            {availableAssignees.map((child) => (
               <option key={child.id} value={child.id}>
                 {child.preferredName}
               </option>
@@ -1496,10 +1559,13 @@ async function loadRemoteRoutineChores(
 function mapRemoteChore(chore: RemoteChoreRow): WeeklyChore {
   return {
     id: chore.id,
+    externalKey: chore.external_key ?? undefined,
     title: chore.title,
     category: normalizeChoreCategory(chore.category_id),
     estimatedMinutes: chore.metadata.estimatedMinutes ?? 10,
+    definitionOfDone: chore.metadata.definitionOfDone,
     eligibleAssigneeIds: chore.metadata.eligibleAssigneeIds ?? [],
+    moneyTalk: chore.metadata.moneyTalk,
     requiresAdultCheck: chore.metadata.requiresAdultCheck,
     allowanceAmount: normalizeCurrencyAmount(chore.metadata.allowanceAmount),
   };
@@ -1507,23 +1573,31 @@ function mapRemoteChore(chore: RemoteChoreRow): WeeklyChore {
 
 async function saveRemoteChore(householdId: string, chore: WeeklyChore) {
   const supabase = createBrowserSupabaseClient();
+  const externalKey = chore.externalKey ?? (isUuid(chore.id) ? null : chore.id);
+  const targetChoreId = isUuid(chore.id)
+    ? chore.id
+    : externalKey
+      ? await findRemoteChoreIdByExternalKey(supabase, householdId, externalKey)
+      : null;
   const row = {
     household_id: householdId,
-    external_key: isUuid(chore.id) ? null : chore.id,
+    external_key: externalKey,
     title: chore.title,
     chore_kind: "weekly",
     status: "active",
     category_id: chore.category,
     metadata: {
       estimatedMinutes: chore.estimatedMinutes,
+      definitionOfDone: chore.definitionOfDone ?? null,
       eligibleAssigneeIds: chore.eligibleAssigneeIds,
+      moneyTalk: chore.moneyTalk ?? null,
       requiresAdultCheck: chore.requiresAdultCheck ?? false,
       allowanceAmount: chore.allowanceAmount ?? null,
     },
   };
 
-  const query = isUuid(chore.id)
-    ? supabase.from("chores").update(row).eq("household_id", householdId).eq("id", chore.id)
+  const query = targetChoreId
+    ? supabase.from("chores").update(row).eq("household_id", householdId).eq("id", targetChoreId)
     : supabase.from("chores").insert(row);
   const { data, error } = await query.select("id, external_key, title, category_id, metadata").single<RemoteChoreRow>();
 
@@ -1561,7 +1635,9 @@ async function saveRemoteChoreAssignment({
         .eq("household_id", householdId)
         .eq("id", assignment.id)
     : supabase.from("chore_assignment_templates").insert(row);
-  const { data: template, error: templateError } = await query.select("id").single<{ id: string }>();
+  const { data: template, error: templateError } = await query
+    .select("id, chore_id, day_of_week, metadata")
+    .single<RemoteAssignmentTemplateRow>();
 
   if (templateError) {
     throw templateError;
@@ -1589,6 +1665,15 @@ async function saveRemoteChoreAssignment({
   if (assignmentError) {
     throw assignmentError;
   }
+
+  return {
+    id: template.id,
+    childId: assignment.childId,
+    choreId: template.chore_id,
+    dayOfWeek: template.day_of_week,
+    startTime: template.metadata.startTime ?? assignment.startTime,
+    endTime: template.metadata.endTime ?? assignment.endTime,
+  };
 }
 
 function getRemoteMemberId(remoteMembers: RemoteMemberRow[], externalKey: string) {
@@ -1614,17 +1699,88 @@ function mergeChoreSeeds(
   seedChores: WeeklyChore[],
   childMembers: HouseholdMember[],
 ) {
-  const configuredIds = new Set(configuredChores.map((chore) => chore.id));
   const childIds = childMembers.map((child) => child.id);
+  const seedById = new Map(seedChores.map((chore) => [chore.id, chore]));
+  const mergedConfigured = configuredChores.map((chore) => {
+    const seed = seedById.get(chore.externalKey ?? chore.id);
+
+    return {
+      ...chore,
+      definitionOfDone: chore.definitionOfDone ?? seed?.definitionOfDone,
+      eligibleAssigneeIds:
+        chore.eligibleAssigneeIds.length > 0
+          ? chore.eligibleAssigneeIds
+          : seed?.eligibleAssigneeIds.length
+            ? seed.eligibleAssigneeIds
+            : childIds,
+      moneyTalk: chore.moneyTalk ?? seed?.moneyTalk,
+    };
+  });
+  const configuredKeys = new Set(
+    mergedConfigured.flatMap((chore) =>
+      [chore.id, chore.externalKey].filter((value): value is string => Boolean(value)),
+    ),
+  );
   const normalizedSeeds = seedChores
-    .filter((chore) => !configuredIds.has(chore.id))
+    .filter((chore) => !configuredKeys.has(chore.id))
     .map((chore) => ({
       ...chore,
       eligibleAssigneeIds:
         chore.eligibleAssigneeIds.length > 0 ? chore.eligibleAssigneeIds : childIds,
     }));
 
-  return [...configuredChores, ...normalizedSeeds];
+  return [...mergedConfigured, ...normalizedSeeds];
+}
+
+async function ensureRemoteChore(
+  householdId: string,
+  choresById: Map<string, WeeklyChore>,
+  choreId: string,
+) {
+  const chore = choresById.get(choreId);
+
+  if (!chore) {
+    throw new Error("Pick a valid chore before saving the assignment.");
+  }
+
+  return isUuid(chore.id) ? chore : saveRemoteChore(householdId, chore);
+}
+
+async function findRemoteChoreIdByExternalKey(
+  supabase: ReturnType<typeof createBrowserSupabaseClient>,
+  householdId: string,
+  externalKey: string,
+) {
+  const { data, error } = await supabase
+    .from("chores")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("external_key", externalKey)
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.id ?? null;
+}
+
+function getEligibleMembersForChore(
+  chore: WeeklyChore | undefined,
+  members: HouseholdMember[],
+  includedMemberIds: string[] = [],
+) {
+  const eligibleIds = new Set(
+    chore?.eligibleAssigneeIds.length
+      ? chore.eligibleAssigneeIds
+      : members.map((member) => member.id),
+  );
+
+  for (const memberId of includedMemberIds) {
+    eligibleIds.add(memberId);
+  }
+
+  return members.filter((member) => eligibleIds.has(member.id));
 }
 
 function getDurationMinutes(startTime: string, endTime: string) {

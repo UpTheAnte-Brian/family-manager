@@ -75,12 +75,15 @@ export type RoutineChore = {
 
 export type WeeklyChore = {
   id: string;
+  externalKey?: string;
   title: string;
   category: ChoreCategoryId;
   estimatedMinutes: number;
   eligibleAssigneeIds: string[];
   requiresAdultCheck?: boolean;
   allowanceAmount?: number;
+  definitionOfDone?: string;
+  moneyTalk?: string;
 };
 
 export type WeeklyChoreAssignmentTemplate = {
