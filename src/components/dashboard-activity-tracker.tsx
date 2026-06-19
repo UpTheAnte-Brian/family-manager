@@ -91,6 +91,10 @@ export function DashboardActivityTracker({
       )
     : undefined;
   const isCustomSelection = effectiveActivitySelection === "custom";
+  const selectedUnitLabel =
+    selectedExistingActivity?.unitLabel ?? selectedSuggestion?.unitLabel ?? customUnitLabel;
+  const numberInputClassName =
+    "w-full min-w-0 border border-[#d7e0e7] bg-white px-3 py-2 pr-10";
 
   async function submitNewActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -239,9 +243,9 @@ export function DashboardActivityTracker({
         </div>
       ) : null}
 
-      <form className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-4" onSubmit={submitNewActivity}>
-        <div className="grid gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
+      <form className="mt-4 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3" onSubmit={submitNewActivity}>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
               <span className="font-semibold">Activity</span>
               <select
@@ -274,54 +278,41 @@ export function DashboardActivityTracker({
               </select>
             </label>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {isCustomSelection ? (
-                <>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-semibold">Name</span>
-                    <input
-                      className="border border-[#d7e0e7] bg-white px-3 py-2"
-                      onChange={(event) => setCustomTitle(event.target.value)}
-                      placeholder="Stickhandling"
-                      value={customTitle}
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-semibold">Unit</span>
-                    <input
-                      className="border border-[#d7e0e7] bg-white px-3 py-2"
-                      onChange={(event) => setCustomUnitLabel(event.target.value)}
-                      placeholder="minutes"
-                      value={customUnitLabel}
-                    />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <div className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                      Unit
-                    </p>
-                    <p className="mt-1 font-semibold text-[#17202a]">
-                      {selectedExistingActivity?.unitLabel ?? selectedSuggestion?.unitLabel}
-                    </p>
-                  </div>
-                  <div className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                      Log for
-                    </p>
-                    <p className="mt-1 font-semibold text-[#17202a]">{selectedDateLabel}</p>
-                  </div>
-                </>
-              )}
-            </div>
+            {isCustomSelection ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">Name</span>
+                  <input
+                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                    onChange={(event) => setCustomTitle(event.target.value)}
+                    placeholder="Stickhandling"
+                    value={customTitle}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">Unit</span>
+                  <input
+                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                    onChange={(event) => setCustomUnitLabel(event.target.value)}
+                    placeholder="minutes"
+                    value={customUnitLabel}
+                  />
+                </label>
+              </div>
+            ) : (
+              <p className="text-xs text-[#657381]">
+                Logs for <span className="font-semibold text-[#17202a]">{selectedDateLabel}</span>
+                {" · "}
+                unit <span className="font-semibold text-[#17202a]">{selectedUnitLabel}</span>
+              </p>
+            )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[140px_auto] sm:items-end">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,160px)_auto] sm:items-end lg:justify-self-end">
             <label className="grid gap-1 text-sm">
               <span className="font-semibold">Count</span>
               <input
-                className="border border-[#d7e0e7] bg-white px-3 py-2"
+                className={numberInputClassName}
                 min="0"
                 onChange={(event) => setNewQuantity(event.target.value)}
                 step="1"
@@ -330,7 +321,7 @@ export function DashboardActivityTracker({
               />
             </label>
             <button
-              className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:justify-self-start"
+              className="min-w-[110px] border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:justify-self-start"
               disabled={!isRemoteReady || isCreating}
               type="submit"
             >
@@ -382,7 +373,7 @@ export function DashboardActivityTracker({
                     </p>
                   </div>
                   <form
-                    className="grid gap-2 sm:grid-cols-[130px_auto]"
+                    className="grid gap-3 sm:grid-cols-[minmax(0,150px)_auto] sm:items-end"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void saveExistingActivity(summary.activity);
@@ -393,7 +384,7 @@ export function DashboardActivityTracker({
                         {isTodaySelected ? "Today" : "Selected day"}
                       </span>
                       <input
-                        className="border border-[#d7e0e7] bg-white px-3 py-2"
+                        className={numberInputClassName}
                         min="0"
                         onChange={(event) =>
                           setQuantityDrafts((current) => ({
@@ -407,7 +398,7 @@ export function DashboardActivityTracker({
                       />
                     </label>
                     <button
-                      className="self-end border border-[#d7e0e7] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="min-w-[88px] self-end border border-[#d7e0e7] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={rowPending || isUnchanged || !Number.isFinite(draftQuantity) || draftQuantity < 0}
                       type="submit"
                     >

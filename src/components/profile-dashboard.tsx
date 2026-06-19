@@ -2350,7 +2350,7 @@ export function ProfileDashboard({
 
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
-      <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
+      <section className="sticky top-0 z-30 border-b border-[#cbd5df] bg-[rgba(248,250,252,0.96)] shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:px-8 lg:px-10">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
@@ -2638,34 +2638,20 @@ export function ProfileDashboard({
           </div>
 
           <div className="grid gap-5 xl:col-span-2 xl:grid-cols-[1fr_1fr]">
-            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-              <h2 className="text-lg font-semibold">Selected Day</h2>
-              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                <Fact label="Date" value={`${displayedDay.date} (${displayedDay.dayOfWeek})`} />
-                <Fact label="Day type" value={dayTypeLabel} />
-                <Fact label="Baseline" value={displayedDay.baseline.label} />
-                <Fact label="Day schedule" value={String(scheduleEvents.length)} />
-                <Fact label="Schedule blocks" value={String(displayedDay.baseline.blocks.length)} />
-              </dl>
-              {remoteSyncErrors.length > 0 ? (
-                <div className="mt-4 border-t border-[#e2e8f0] pt-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#8a3b12]">
-                    Sync issues
-                  </h3>
-                  <ul className="mt-3 grid gap-2">
-                    {remoteSyncErrors.map((message, index) => (
-                      <li
-                        className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]"
-                        key={`${message}-${index}`}
-                      >
-                        {message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </section>
-
+            {remoteSyncErrors.length > 0 ? (
+              <Panel title="Sync Issues">
+                <ul className="grid gap-2">
+                  {remoteSyncErrors.map((message, index) => (
+                    <li
+                      className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]"
+                      key={`${message}-${index}`}
+                    >
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
+            ) : null}
             <BirthdayCountdownPanel member={selectedMember} referenceDate={displayedDay.date} />
 
             <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
@@ -5808,15 +5794,6 @@ function formatPlural(value: number, singular: string) {
 
 function isClockTime(value: string) {
   return /^\d{2}:\d{2}$/.test(value);
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="font-semibold text-[#17202a]">{label}</dt>
-      <dd className="mt-1 text-[#4c5965]">{value}</dd>
-    </div>
-  );
 }
 
 function DashboardSetupGate({ title }: { title: string }) {
