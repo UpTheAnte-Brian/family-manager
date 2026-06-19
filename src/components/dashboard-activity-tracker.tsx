@@ -240,97 +240,103 @@ export function DashboardActivityTracker({
       ) : null}
 
       <form className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-4" onSubmit={submitNewActivity}>
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_120px_auto]">
-          <label className="grid gap-1 text-sm">
-            <span className="font-semibold">Activity</span>
-            <select
-              className="border border-[#d7e0e7] bg-white px-3 py-2"
-              onChange={(event) => setActivitySelection(event.target.value)}
-              value={effectiveActivitySelection}
-            >
-              {activeActivities.length > 0 ? (
-                <optgroup label="Existing">
-                  {activeActivities.map((activity) => (
-                    <option key={activity.id} value={getExistingActivityOptionValue(activity.id)}>
-                      {activity.title}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {availableSuggestions.length > 0 ? (
-                <optgroup label="Suggested">
-                  {availableSuggestions.map((suggestion) => (
-                    <option
-                      key={suggestion.title}
-                      value={getSuggestionOptionValue(suggestion.title)}
-                    >
-                      {suggestion.title}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              <option value="custom">Custom activity</option>
-            </select>
-          </label>
+        <div className="grid gap-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Activity</span>
+              <select
+                className="border border-[#d7e0e7] bg-white px-3 py-2"
+                onChange={(event) => setActivitySelection(event.target.value)}
+                value={effectiveActivitySelection}
+              >
+                {activeActivities.length > 0 ? (
+                  <optgroup label="Existing">
+                    {activeActivities.map((activity) => (
+                      <option key={activity.id} value={getExistingActivityOptionValue(activity.id)}>
+                        {activity.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {availableSuggestions.length > 0 ? (
+                  <optgroup label="Suggested">
+                    {availableSuggestions.map((suggestion) => (
+                      <option
+                        key={suggestion.title}
+                        value={getSuggestionOptionValue(suggestion.title)}
+                      >
+                        {suggestion.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                <option value="custom">Custom activity</option>
+              </select>
+            </label>
 
-          {isCustomSelection ? (
-            <>
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Name</span>
-                <input
-                  className="border border-[#d7e0e7] bg-white px-3 py-2"
-                  onChange={(event) => setCustomTitle(event.target.value)}
-                  placeholder="Stickhandling"
-                  value={customTitle}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Unit</span>
-                <input
-                  className="border border-[#d7e0e7] bg-white px-3 py-2"
-                  onChange={(event) => setCustomUnitLabel(event.target.value)}
-                  placeholder="minutes"
-                  value={customUnitLabel}
-                />
-              </label>
-            </>
-          ) : (
-            <div className="grid gap-3 lg:col-span-2 lg:grid-cols-[1fr_160px]">
-              <div className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm">
-                <p className="font-semibold text-[#17202a]">
-                  {selectedExistingActivity?.title ?? selectedSuggestion?.title}
-                </p>
-                <p className="mt-1 text-xs text-[#657381]">
-                  Unit: {selectedExistingActivity?.unitLabel ?? selectedSuggestion?.unitLabel}
-                </p>
-              </div>
-              <div className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                  Log for
-                </p>
-                <p className="mt-1 font-semibold text-[#17202a]">{selectedDateLabel}</p>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {isCustomSelection ? (
+                <>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-semibold">Name</span>
+                    <input
+                      className="border border-[#d7e0e7] bg-white px-3 py-2"
+                      onChange={(event) => setCustomTitle(event.target.value)}
+                      placeholder="Stickhandling"
+                      value={customTitle}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-semibold">Unit</span>
+                    <input
+                      className="border border-[#d7e0e7] bg-white px-3 py-2"
+                      onChange={(event) => setCustomUnitLabel(event.target.value)}
+                      placeholder="minutes"
+                      value={customUnitLabel}
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <div className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Unit
+                    </p>
+                    <p className="mt-1 font-semibold text-[#17202a]">
+                      {selectedExistingActivity?.unitLabel ?? selectedSuggestion?.unitLabel}
+                    </p>
+                  </div>
+                  <div className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Log for
+                    </p>
+                    <p className="mt-1 font-semibold text-[#17202a]">{selectedDateLabel}</p>
+                  </div>
+                </>
+              )}
             </div>
-          )}
+          </div>
 
-          <label className="grid gap-1 text-sm">
-            <span className="font-semibold">Count</span>
-            <input
-              className="border border-[#d7e0e7] bg-white px-3 py-2"
-              min="0"
-              onChange={(event) => setNewQuantity(event.target.value)}
-              step="1"
-              type="number"
-              value={newQuantity}
-            />
-          </label>
-          <button
-            className="self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!isRemoteReady || isCreating}
-            type="submit"
-          >
-            {isCreating ? "Saving..." : "Save count"}
-          </button>
+          <div className="grid gap-3 sm:grid-cols-[140px_auto] sm:items-end">
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Count</span>
+              <input
+                className="border border-[#d7e0e7] bg-white px-3 py-2"
+                min="0"
+                onChange={(event) => setNewQuantity(event.target.value)}
+                step="1"
+                type="number"
+                value={newQuantity}
+              />
+            </label>
+            <button
+              className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:justify-self-start"
+              disabled={!isRemoteReady || isCreating}
+              type="submit"
+            >
+              {isCreating ? "Saving..." : "Save count"}
+            </button>
+          </div>
         </div>
       </form>
 

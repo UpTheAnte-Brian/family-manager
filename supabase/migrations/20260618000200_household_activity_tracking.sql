@@ -9,6 +9,7 @@ create table public.household_activity_definitions (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  unique (household_id, id),
   unique (household_id, title_key)
 );
 
