@@ -2570,6 +2570,9 @@ export function ProfileDashboard({
               ) : (
                 <EmptyState text="No responsibility is scheduled for this profile on this date." />
               )}
+            </Panel>
+
+            <Panel title="Activity Tracker">
               <DashboardActivityTracker
                 activities={remoteActivityDefinitions}
                 entries={selectedMemberActivityEntries}

@@ -174,20 +174,13 @@ export function DashboardActivityTracker({
   }
 
   return (
-    <div className="mt-5 border-t border-[#e2e8f0] pt-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-            Activity Tracker
-          </h3>
-          <p className="mt-1 text-sm text-[#4c5965]">
-            Log daily counts for workouts, shots, reading, hydration, or any custom activity.
-          </p>
-        </div>
-      </div>
+    <div className="grid gap-4">
+      <p className="text-sm text-[#4c5965]">
+        Log daily counts for workouts, shots, reading, hydration, or any custom activity.
+      </p>
 
       {sponsoredSummaries.length > 0 ? (
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           {sponsoredSummaries.map((summary) => (
             <article
               className="border border-[#d7d49d] bg-[#fffef2] px-4 py-4 shadow-sm"
@@ -243,7 +236,7 @@ export function DashboardActivityTracker({
         </div>
       ) : null}
 
-      <form className="mt-4 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3" onSubmit={submitNewActivity}>
+      <form className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3" onSubmit={submitNewActivity}>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
@@ -332,7 +325,7 @@ export function DashboardActivityTracker({
       </form>
 
       {summaries.length > 0 ? (
-        <ol className="mt-4 grid gap-2">
+        <ol className="grid gap-2">
           {summaries.map((summary) => {
             const rowPending = savingActivityId === summary.activity.id;
             const draftValue =
@@ -411,13 +404,13 @@ export function DashboardActivityTracker({
           })}
         </ol>
       ) : (
-        <p className="mt-4 border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-4 text-sm text-[#4c5965]">
+        <p className="border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-4 text-sm text-[#4c5965]">
           No activities have been tracked yet. Use the form above to add the first one.
         </p>
       )}
 
       {errorMessage || localError ? (
-        <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+        <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
           {localError || errorMessage}
         </p>
       ) : null}
