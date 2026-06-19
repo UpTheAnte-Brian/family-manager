@@ -18,6 +18,7 @@ import {
 } from "@/lib/chores/categories";
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
+import { ConsolePageHeader } from "@/components/console-page-header";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -182,7 +183,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     effectiveState.weeklyChores[0]?.id ?? initialState.weeklyChores[0]?.id ?? "",
   );
   const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
-  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [assignmentModal, setAssignmentModal] = useState<
     | { mode: "add"; choreId?: string; childId?: string; dayOfWeek?: DayOfWeek }
     | { mode: "edit"; assignmentId: string }
@@ -391,35 +391,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     setEditingChoreId(null);
   }
 
-  async function upsertRoutineChore(routineChore: RoutineChore) {
-    if (isRemoteHouseholdReady && householdId) {
-      await runRemoteAction(async () => {
-        await saveRemoteRoutineStep({
-          householdId,
-          remoteMembers,
-          routineChore,
-        });
-        setEditingRoutineId(null);
-        return "Routine step saved to Supabase.";
-      });
-      return;
-    }
-
-    setState((current) => {
-      const exists = current.routineChores.some((candidate) => candidate.id === routineChore.id);
-
-      return {
-        ...current,
-        routineChores: exists
-          ? current.routineChores.map((candidate) =>
-              candidate.id === routineChore.id ? routineChore : candidate,
-            )
-          : [...current.routineChores, routineChore],
-      };
-    });
-    setEditingRoutineId(null);
-  }
-
   async function upsertAssignment(assignment: WeeklyChoreAssignmentTemplate) {
     if (isRemoteHouseholdReady && householdId) {
       await runRemoteAction(async () => {
@@ -468,42 +439,23 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
 
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
-      <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-5 sm:px-8 lg:px-10">
-          <div className="flex flex-wrap gap-4">
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/">
-              Dashboard
-            </Link>
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
-              Calendar
-            </Link>
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
-              Admin setup
-            </Link>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                Household work board
-              </p>
-              <h1 className="mt-2 text-4xl font-semibold tracking-normal sm:text-5xl">Chores</h1>
-              <p className="mt-3 max-w-3xl text-base leading-7 text-[#4c5965]">
-                Schedule repeat work, keep a warehouse of productive odd jobs, and track each kid&apos;s
-                completion separately even when siblings share the same chore.
-              </p>
-            </div>
-            <label className="grid gap-1 text-sm font-semibold text-[#4c5965]">
-              Date
-              <input
-                className="border border-[#cbd5df] bg-white px-3 py-2 text-[#17202a]"
-                onChange={(event) => setSelectedDate(event.target.value)}
-                type="date"
-                value={selectedDate}
-              />
-            </label>
-          </div>
-        </div>
-      </section>
+      <ConsolePageHeader
+        activePage="chores"
+        aside={
+          <label className="grid gap-1 text-sm font-semibold text-[#4c5965]">
+            Date
+            <input
+              className="border border-[#cbd5df] bg-white px-3 py-2 text-[#17202a]"
+              onChange={(event) => setSelectedDate(event.target.value)}
+              type="date"
+              value={selectedDate}
+            />
+          </label>
+        }
+        description="Schedule repeat work, keep a warehouse of productive odd jobs, and track each kid's completion separately even when siblings share the same chore."
+        eyebrow="Household work board"
+        title="Chores"
+      />
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
         {remoteErrorMessage ? (
@@ -720,35 +672,31 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
 
             <Panel
               action={
-                <button
+                <Link
                   className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
-                  onClick={() => setEditingRoutineId("new")}
-                  type="button"
+                  href="/admin"
                 >
-                  Add step
-                </button>
+                  Manage in Admin
+                </Link>
               }
               title="Morning Routine"
             >
-              <ul className="grid gap-2">
-                {effectiveState.routineChores.map((chore) => (
-                  <RoutineChoreRow
-                    chore={chore}
-                    childMembers={childMembers}
-                    key={chore.id}
-                    onEdit={() => setEditingRoutineId(chore.id)}
-                  />
-                ))}
-              </ul>
-              {isRemoteHouseholdReady ? (
-                <p className="mt-3 border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
-                  Reusable defaults live in{" "}
-                  <Link className="font-semibold text-[#1f6f8b] underline" href="/admin">
-                    Admin setup
-                  </Link>
-                  . This panel shows the routine steps currently saved for the household.
-                </p>
-              ) : null}
+              {effectiveState.routineChores.length > 0 ? (
+                <ul className="grid gap-2">
+                  {effectiveState.routineChores.map((chore) => (
+                    <RoutineChoreRow chore={chore} childMembers={childMembers} key={chore.id} />
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState text="No routine steps are saved for this household yet." />
+              )}
+              <p className="mt-3 border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+                Routine templates are managed in{" "}
+                <Link className="font-semibold text-[#1f6f8b] underline" href="/admin">
+                  Admin setup
+                </Link>
+                . This preview is read-only so the dashboard and setup flow keep a single source of truth.
+              </p>
             </Panel>
           </aside>
         </div>
@@ -783,19 +731,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           defaultDayOfWeek={assignmentModal.mode === "add" ? assignmentModal.dayOfWeek : undefined}
           onCancel={() => setAssignmentModal(null)}
           onSave={(assignment) => void upsertAssignment(assignment)}
-        />
-      ) : null}
-
-      {editingRoutineId ? (
-        <RoutineChoreEditor
-          childMembers={childMembers}
-          onCancel={() => setEditingRoutineId(null)}
-          onSave={(routineChore) => void upsertRoutineChore(routineChore)}
-          routineChore={
-            editingRoutineId === "new"
-              ? undefined
-              : effectiveState.routineChores.find((chore) => chore.id === editingRoutineId)
-          }
         />
       ) : null}
     </main>
@@ -1069,164 +1004,6 @@ function ChoreEditor({
   );
 }
 
-function RoutineChoreEditor({
-  childMembers,
-  onCancel,
-  onSave,
-  routineChore,
-}: {
-  childMembers: HouseholdMember[];
-  onCancel: () => void;
-  onSave: (routineChore: RoutineChore) => void;
-  routineChore?: RoutineChore;
-}) {
-  const [title, setTitle] = useState(routineChore?.title ?? "");
-  const [defaultAssigneeIds, setDefaultAssigneeIds] = useState<string[]>(
-    routineChore?.defaultAssigneeIds ?? childMembers.map((child) => child.id),
-  );
-  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>(
-    routineChore?.schedule.daysOfWeek ?? ["MO", "TU", "WE", "TH", "FR"],
-  );
-  const [startTime, setStartTime] = useState(routineChore?.schedule.startTime ?? "08:30");
-  const [endTime, setEndTime] = useState(routineChore?.schedule.endTime ?? "08:40");
-  const [category, setCategory] = useState<ChoreCategoryId>(
-    normalizeChoreCategory(routineChore?.category),
-  );
-  const [countsTowardWeeklyTarget, setCountsTowardWeeklyTarget] = useState(
-    routineChore?.countsTowardWeeklyTarget ?? false,
-  );
-
-  function submit() {
-    const trimmedTitle = title.trim();
-
-    if (!trimmedTitle || daysOfWeek.length === 0 || defaultAssigneeIds.length === 0) {
-      return;
-    }
-
-    onSave({
-      id: routineChore?.id ?? createId(`routine-${trimmedTitle}`),
-      title: trimmedTitle,
-      category,
-      defaultAssigneeIds,
-      schedule: {
-        daysOfWeek,
-        startTime,
-        endTime,
-      },
-      countsTowardWeeklyTarget,
-    });
-  }
-
-  function toggleDay(day: DayOfWeek) {
-    setDaysOfWeek((current) =>
-      current.includes(day)
-        ? current.filter((candidate) => candidate !== day)
-        : [...current, day],
-    );
-  }
-
-  function toggleAssignee(childId: string) {
-    setDefaultAssigneeIds((current) =>
-      current.includes(childId)
-        ? current.filter((candidate) => candidate !== childId)
-        : [...current, childId],
-    );
-  }
-
-  return (
-    <EditorShell onCancel={onCancel} title={routineChore ? "Edit routine step" : "Add routine step"}>
-      <label className="grid gap-1 text-sm">
-        <span className="font-semibold">Step</span>
-        <input
-          className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Make bed, pack lunch, brush hair..."
-          value={title}
-        />
-      </label>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">
-          <span className="font-semibold">Category</span>
-          <select
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setCategory(event.target.value as ChoreCategoryId)}
-            value={category}
-          >
-            {choreCategories.map((categoryOption) => (
-              <option key={categoryOption.id} value={categoryOption.id}>
-                {categoryOption.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="font-semibold">Start</span>
-          <input
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setStartTime(event.target.value)}
-            type="time"
-            value={startTime}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="font-semibold">End</span>
-          <input
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-            onChange={(event) => setEndTime(event.target.value)}
-            type="time"
-            value={endTime}
-          />
-        </label>
-      </div>
-
-      <fieldset className="grid gap-2 text-sm">
-        <legend className="font-semibold">Days</legend>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          {dayOptions.map((day) => (
-            <label
-              className="flex items-center justify-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-2 text-xs font-semibold"
-              key={day}
-            >
-              <input checked={daysOfWeek.includes(day)} onChange={() => toggleDay(day)} type="checkbox" />
-              {dayLabels[day]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset className="grid gap-2 text-sm">
-        <legend className="font-semibold">Household members</legend>
-        <div className="flex flex-wrap gap-2">
-          {childMembers.map((child) => (
-            <label
-              className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-              key={child.id}
-            >
-              <input
-                checked={defaultAssigneeIds.includes(child.id)}
-                onChange={() => toggleAssignee(child.id)}
-                type="checkbox"
-              />
-              {child.preferredName}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <label className="flex items-center gap-2 text-sm font-semibold">
-        <input
-          checked={countsTowardWeeklyTarget}
-          onChange={(event) => setCountsTowardWeeklyTarget(event.target.checked)}
-          type="checkbox"
-        />
-        Counts toward weekly chore target
-      </label>
-      <EditorActions onCancel={onCancel} onSave={submit} />
-    </EditorShell>
-  );
-}
-
 function AssignmentEditor({
   assignment,
   childMembers,
@@ -1465,11 +1242,9 @@ function EditorActions({ onCancel, onSave }: { onCancel: () => void; onSave: () 
 function RoutineChoreRow({
   chore,
   childMembers,
-  onEdit,
 }: {
   chore: RoutineChore;
   childMembers: HouseholdMember[];
-  onEdit: () => void;
 }) {
   const assignedKids = chore.defaultAssigneeIds
     .map((id) => childMembers.find((child) => child.id === id)?.preferredName)
@@ -1477,20 +1252,13 @@ function RoutineChoreRow({
     .join(", ");
 
   return (
-    <li className="flex items-start justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
+    <li className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
       <div>
         <p className="font-semibold">{chore.title}</p>
         <p className="mt-1 text-xs text-[#657381]">
           {formatTimeRange(chore.schedule.startTime, chore.schedule.endTime)} · {assignedKids}
         </p>
       </div>
-      <button
-        className="border border-[#d7e0e7] bg-white px-2 py-1 text-xs font-semibold text-[#1f6f8b]"
-        onClick={onEdit}
-        type="button"
-      >
-        Edit
-      </button>
     </li>
   );
 }
@@ -1817,78 +1585,6 @@ async function saveRemoteChoreAssignment({
     assignee_type: "member",
     household_member_id: remoteMemberId,
   });
-
-  if (assignmentError) {
-    throw assignmentError;
-  }
-}
-
-async function saveRemoteRoutineStep({
-  householdId,
-  remoteMembers,
-  routineChore,
-}: {
-  householdId: string;
-  remoteMembers: RemoteMemberRow[];
-  routineChore: RoutineChore;
-}) {
-  const supabase = createBrowserSupabaseClient();
-  const row = {
-    household_id: householdId,
-    item_kind: "routine",
-    title: routineChore.title,
-    source: "manual",
-    days_of_week: routineChore.schedule.daysOfWeek,
-    start_time: routineChore.schedule.startTime,
-    end_time: routineChore.schedule.endTime,
-    metadata: {
-      category: routineChore.category,
-      countsTowardWeeklyTarget: routineChore.countsTowardWeeklyTarget,
-      kind: "routine-template-step",
-      stepId: isUuid(routineChore.id) ? routineChore.id : routineChore.id,
-    },
-  };
-  const query = isUuid(routineChore.id)
-    ? supabase
-        .from("household_action_items")
-        .update(row)
-        .eq("household_id", householdId)
-        .eq("id", routineChore.id)
-    : supabase.from("household_action_items").insert(row);
-  const { data: item, error: itemError } = await query.select("id").single<{ id: string }>();
-
-  if (itemError) {
-    throw itemError;
-  }
-
-  const remoteMemberIdByExternalKey = new Map(remoteMembers.map((member) => [member.external_key, member.id]));
-  const assignmentRows = routineChore.defaultAssigneeIds
-    .map((memberId) => remoteMemberIdByExternalKey.get(memberId))
-    .filter((memberId): memberId is string => Boolean(memberId))
-    .map((memberId) => ({
-      household_id: householdId,
-      assignable_type: "action_item",
-      assignable_id: item.id,
-      assignee_type: "member",
-      household_member_id: memberId,
-    }));
-
-  const { error: deleteError } = await supabase
-    .from("household_assignments")
-    .delete()
-    .eq("household_id", householdId)
-    .eq("assignable_type", "action_item")
-    .eq("assignable_id", item.id);
-
-  if (deleteError) {
-    throw deleteError;
-  }
-
-  if (assignmentRows.length === 0) {
-    return;
-  }
-
-  const { error: assignmentError } = await supabase.from("household_assignments").insert(assignmentRows);
 
   if (assignmentError) {
     throw assignmentError;

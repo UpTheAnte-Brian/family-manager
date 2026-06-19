@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import Link from "next/link";
+import { ConsolePageHeader } from "@/components/console-page-header";
 import { getAppliedCalendarEventAssignmentKey } from "@/lib/calendar/applied-events";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import { type ManualCalendarEventInput, useCalendarFeed } from "@/lib/calendar/supabase-calendar";
@@ -318,31 +318,12 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
 
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
-      <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-6 sm:px-8 lg:px-10">
-          <div className="flex flex-wrap gap-4">
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/">
-              Back to dashboard
-            </Link>
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
-              Admin setup
-            </Link>
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
-              Chores
-            </Link>
-          </div>
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-              Calendar
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-normal sm:text-5xl">
-              Household calendar
-            </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-[#4c5965]">
-              View configured schedule events, connected calendar imports, and app-only household events.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
+      <ConsolePageHeader
+        activePage="calendar"
+        description="View configured schedule events, connected calendar imports, and app-only household events."
+        eyebrow="Calendar"
+        footer={
+          <>
             <button
               className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
               onClick={() => setManualEventModal(true)}
@@ -359,9 +340,10 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
                 {manualEventStatus.message}
               </p>
             ) : null}
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        title="Household calendar"
+      />
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
         <section className="grid gap-3 border border-[#cbd5df] bg-white p-4 shadow-sm xl:grid-cols-[1fr_170px_170px_220px_220px_180px]">

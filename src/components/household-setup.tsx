@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import { normalizeCurrencyAmount } from "@/lib/allowance/storage";
 import { AdminActivitySponsorships } from "@/components/admin-activity-sponsorships";
 import { AdminBaselineTemplates } from "@/components/admin-baseline-templates";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
+import { ConsolePageHeader } from "@/components/console-page-header";
 import type { DayTemplate, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
 import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
@@ -528,39 +528,18 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
-      <section className="border-b border-[#cbd5df] bg-[#f8fafc]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-6 sm:px-8 lg:px-10">
-          <div className="flex flex-wrap gap-4">
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/">
-              Dashboard
-            </Link>
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/calendar">
-              Calendar
-            </Link>
-            <Link className="text-sm font-semibold text-[#1f6f8b]" href="/chores">
-              Chores
-            </Link>
+      <ConsolePageHeader
+        activePage="admin"
+        aside={
+          <div className="border border-[#cbd5df] bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#657381]">Progress</p>
+            <p className="mt-1 text-2xl font-semibold">{setupProgress}/3</p>
           </div>
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                Household setup
-              </p>
-              <h1 className="mt-3 text-4xl font-semibold tracking-normal sm:text-5xl">
-                Setup workflow
-              </h1>
-              <p className="mt-3 max-w-3xl text-base leading-7 text-[#4c5965]">
-                Finish the pieces that make this device-backed family dashboard durable across
-                devices.
-              </p>
-            </div>
-            <div className="border border-[#cbd5df] bg-white px-4 py-3 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#657381]">Progress</p>
-              <p className="mt-1 text-2xl font-semibold">{setupProgress}/3</p>
-            </div>
-          </div>
-        </div>
-      </section>
+        }
+        description="Finish the pieces that make this device-backed family dashboard durable across devices."
+        eyebrow="Household setup"
+        title="Setup workflow"
+      />
 
       <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:px-10">
         {!isConfigured ? (
