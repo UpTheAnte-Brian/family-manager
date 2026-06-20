@@ -20,6 +20,18 @@ This file tracks useful features that are intentionally deferred so they do not 
   - Tasks can exist independently from daily routines, chores, reminders, and calendar events.
   - The dashboard can surface open tasks without making them look overdue simply because a day changed.
 
+### Seasonal Home Maintenance Track
+
+- Goal: Find a more creative and visible way to incorporate basic home maintenance into the household system without making it feel like a generic chore list.
+- Examples:
+  - Replace furnace filters.
+  - Check water softener salt, filters, or other recurring water-system needs.
+  - Surface seasonal checks such as smoke-detector batteries, HVAC service, or water-heater upkeep.
+- Desired behavior:
+  - The app can group these as home-maintenance prompts, seasonal checklists, or milestone-based reminders instead of ordinary daily chores.
+  - Parents can decide whether an item is a reminder, a dated task, or a recurring seasonal responsibility.
+  - The dashboard should make infrequent maintenance feel timely and intentional rather than overdue for months at a time.
+
 ### Count-Based Daily Habits
 
 - Goal: Track daily quantities for good behaviors instead of only checkoffs.

@@ -38,6 +38,7 @@ export type LocalResponsibilityItem = {
   id: string;
   title: string;
   category?: ResponsibilityCategory;
+  configuredSourceId?: string;
   assigneeId: string;
   daysOfWeek: DayOfWeek[];
   startTime: string;

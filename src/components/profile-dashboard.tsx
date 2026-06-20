@@ -120,9 +120,7 @@ type ProfileDashboardProps = {
   allowance: PlannerData["allowance"];
   dayTemplates: DayTemplate[];
   fixedEvents: FixedEvent[];
-  members: HouseholdMember[];
   chores: PlannerData["chores"];
-  configuredResponsibilities: LocalResponsibilityItem[];
   season: PlannerData["season"];
   today: TodayContext;
 };
@@ -169,12 +167,28 @@ type DashboardResponsibilityItem = {
   allowanceAmount?: number;
 };
 
+type ResponsibilityModalState =
+  | { mode: "add" }
+  | { mode: "edit"; responsibility: LocalResponsibilityItem }
+  | { mode: "edit-configured"; responsibility: LocalResponsibilityItem };
+
+type ManualScheduleEventDraftInput = {
+  assignedMemberIds: string[];
+  category: string;
+  endTime: string;
+  locationNote: string;
+  startTime: string;
+  title: string;
+};
+
 type RemoteTemporaryRoutineMetadata = {
   baselineBlockId?: string;
   baselineTemplateId?: string;
   baselineTemplateName?: string;
   kind?: string;
   category?: string;
+  configuredSourceId?: string;
+  locationNote?: string;
   noiseLevel?: "low" | "medium" | "high" | "variable";
   location?: ScheduleBlock["location"];
   routineTemplateId?: string;
@@ -188,16 +202,26 @@ type RemoteTemporaryRoutineMetadata = {
 };
 
 type RemoteHouseholdMemberRow = {
+  birth_date?: string | null;
+  display_name?: string | null;
   id: string;
   external_key: string;
+  preferred_name?: string;
+  relationship?: string | null;
+  role?: "parent" | "child";
   metadata?: {
     morningRoutineAllowanceAmount?: number;
   };
 };
 
 type RemoteHouseholdMemberConfigRow = {
+  birth_date: string | null;
+  display_name: string | null;
   id: string;
   external_key: string;
+  preferred_name: string;
+  relationship: string | null;
+  role: "parent" | "child";
   metadata: {
     morningRoutineAllowanceAmount?: number;
   };
@@ -389,20 +413,15 @@ const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "F
 export function ProfileDashboard({
   allowance,
   chores,
-  configuredResponsibilities,
   dayTemplates,
   fixedEvents,
-  members,
   season,
   today,
 }: ProfileDashboardProps) {
   const router = useRouter();
-  const childMembers = useMemo(() => members.filter((member) => member.role === "child"), [members]);
-  const defaultMemberId = members[0]?.id ?? "";
-  const defaultQuickAddAssignee = members[0]?.id ?? "";
   const initialState = useMemo<DashboardState>(
     () => ({
-      selectedMemberId: defaultMemberId,
+      selectedMemberId: "",
       routineCompletions: {},
       actionCompletions: {},
       choreCompletions: chores.completions,
@@ -412,7 +431,7 @@ export function ProfileDashboard({
       localScheduleEvents: [],
       localTemporaryRoutines: [],
     }),
-    [chores.completions, defaultMemberId],
+    [chores.completions],
   );
   const [state, setState] = useLocalStorageState(storageKey, initialState);
   const fallbackChoreConfig = useMemo<ChoreStorageState>(
@@ -445,6 +464,8 @@ export function ProfileDashboard({
     [],
   );
   const { household, households, selectHousehold, status: householdStatus } = useCurrentHousehold();
+  const [remoteMembers, setRemoteMembers] = useState<HouseholdMember[]>([]);
+  const [remoteMemberDataHouseholdId, setRemoteMemberDataHouseholdId] = useState("");
   const [remoteTemporaryRoutines, setRemoteTemporaryRoutines] = useState<LocalTemporaryRoutineItem[]>([]);
   const [remoteBaselineTemplates, setRemoteBaselineTemplates] = useState<DayTemplate[]>([]);
   const [remoteBaselineScheduleEvents, setRemoteBaselineScheduleEvents] = useState<DashboardEvent[]>([]);
@@ -481,11 +502,8 @@ export function ProfileDashboard({
   const [allowanceEntryModal, setAllowanceEntryModal] = useState<AllowanceEntryModalState>(null);
   const [allowanceRequestModal, setAllowanceRequestModal] = useState<AllowanceRequestModalState>(null);
   const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
-  const [responsibilityModal, setResponsibilityModal] = useState<
-    | { mode: "add" }
-    | { mode: "edit"; responsibility: LocalResponsibilityItem }
-    | null
-  >(null);
+  const [responsibilityModal, setResponsibilityModal] = useState<ResponsibilityModalState | null>(null);
+  const [manualScheduleEventModal, setManualScheduleEventModal] = useState(false);
   const [baselineScheduleModal, setBaselineScheduleModal] = useState<ScheduleBlock[] | null>(null);
   const [selectedBaselineBlockIds, setSelectedBaselineBlockIds] = useState<string[]>([]);
   const [temporaryRoutineModal, setTemporaryRoutineModal] = useState(false);
@@ -498,23 +516,60 @@ export function ProfileDashboard({
   });
   const morningRoutineAllowanceSyncQueueRef = useRef(Promise.resolve());
   const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(household?.householdId);
-  const selectedMember =
-    members.find((member) => member.id === state.selectedMemberId) ?? members[0];
+  const householdId = household?.householdId;
+  const hasLoadedRemoteMembersForCurrentHousehold =
+    Boolean(householdId) && remoteMemberDataHouseholdId === householdId;
+  const activeRemoteMemberIdsByExternalKey = useMemo(
+    () =>
+      isRemoteHouseholdReady && hasLoadedRemoteMembersForCurrentHousehold
+        ? remoteMemberIdsByExternalKey
+        : {},
+    [
+      hasLoadedRemoteMembersForCurrentHousehold,
+      isRemoteHouseholdReady,
+      remoteMemberIdsByExternalKey,
+    ],
+  );
+  const activeRemoteMemberConfigsByExternalKey = useMemo(
+    () =>
+      isRemoteHouseholdReady && hasLoadedRemoteMembersForCurrentHousehold
+        ? remoteMemberConfigsByExternalKey
+        : {},
+    [
+      hasLoadedRemoteMembersForCurrentHousehold,
+      isRemoteHouseholdReady,
+      remoteMemberConfigsByExternalKey,
+    ],
+  );
+  const members = useMemo(
+    () =>
+      isRemoteHouseholdReady && hasLoadedRemoteMembersForCurrentHousehold ? remoteMembers : [],
+    [hasLoadedRemoteMembersForCurrentHousehold, isRemoteHouseholdReady, remoteMembers],
+  );
+  const childMembers = useMemo(() => members.filter((member) => member.role === "child"), [members]);
+  const defaultQuickAddAssignee = members[0]?.id ?? "";
+  const selectedMember = members.find((member) => member.id === state.selectedMemberId) ?? members[0] ?? {
+    id: "",
+    preferredName: "",
+    displayName: "",
+    role: "parent" as const,
+    relationship: "mom" as const,
+  };
   const isAllowanceApprovalMode = canApproveAllowanceRequests({
     householdRole: household?.role,
     selectedMemberRole: selectedMember.role,
   });
-  const requestedByRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
-  const selectedRemoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
+  const requestedByRemoteMemberId = activeRemoteMemberIdsByExternalKey[selectedMember.id];
+  const selectedRemoteMemberId = activeRemoteMemberIdsByExternalKey[selectedMember.id];
   const remoteExternalKeysByMemberId = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(remoteMemberIdsByExternalKey).map(([externalKey, remoteMemberId]) => [
+        Object.entries(activeRemoteMemberIdsByExternalKey).map(([externalKey, remoteMemberId]) => [
           remoteMemberId,
           externalKey,
         ]),
       ),
-    [remoteMemberIdsByExternalKey],
+    [activeRemoteMemberIdsByExternalKey],
   );
   const effectiveDayTemplates = useMemo(
     () =>
@@ -616,7 +671,6 @@ export function ProfileDashboard({
   const responsibilityItems = getResponsibilityItems(
     routineItems,
     assignments,
-    configuredResponsibilities,
     isRemoteHouseholdReady ? [...remoteResponsibilities, ...state.localResponsibilities] : state.localResponsibilities,
     temporaryRoutines,
     localTasks,
@@ -647,7 +701,7 @@ export function ProfileDashboard({
     return selectedMember.role === "child" ? childExternalKey === selectedMember.id : true;
   });
   const selectedMemberMorningRoutineAllowanceAmount = isRemoteHouseholdReady
-    ? getMorningRoutineAllowanceAmount(remoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
+    ? getMorningRoutineAllowanceAmount(activeRemoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
   const allowanceBalance = getAllowanceBalance(selectedMemberAllowanceEntries, selectedMember.id);
   const selectedMemberActivityEntries = remoteActivityEntries.filter(
@@ -667,7 +721,6 @@ export function ProfileDashboard({
   const selectedBaselineBlocks = displayedDay.baseline.blocks.filter((block) =>
     selectedBaselineBlockIds.includes(block.id),
   );
-  const householdId = household?.householdId;
 
   useEffect(() => {
     if (householdStatus === "signed-out" || householdStatus === "unconfigured") {
@@ -688,9 +741,10 @@ export function ProfileDashboard({
         const supabase = createBrowserSupabaseClient();
         const { data, error } = await supabase
           .from("household_members")
-          .select("id, external_key, metadata")
+          .select("id, external_key, preferred_name, display_name, role, relationship, birth_date, metadata")
           .eq("household_id", currentHouseholdId)
           .eq("status", "active")
+          .order("preferred_name", { ascending: true })
           .returns<RemoteHouseholdMemberConfigRow[]>();
 
         if (error) {
@@ -704,6 +758,7 @@ export function ProfileDashboard({
         setRemoteMemberIdsByExternalKey(
           Object.fromEntries((data ?? []).map((member) => [member.external_key, member.id])),
         );
+        setRemoteMembers((data ?? []).map(mapRemoteMemberToDashboardMember));
         setRemoteMemberConfigsByExternalKey(
           Object.fromEntries(
             (data ?? []).map((member) => [
@@ -716,12 +771,14 @@ export function ProfileDashboard({
             ]),
           ),
         );
+        setRemoteMemberDataHouseholdId(currentHouseholdId);
         setRemoteAllowanceError("");
       } catch (error) {
         if (!isActive) {
           return;
         }
 
+        setRemoteMemberDataHouseholdId("");
         setRemoteAllowanceError(
           error instanceof Error ? error.message : "Could not load household member settings.",
         );
@@ -1034,7 +1091,7 @@ export function ProfileDashboard({
     }
 
     const currentHouseholdId = householdId;
-    const remoteMemberId = remoteMemberIdsByExternalKey[selectedMember.id];
+    const remoteMemberId = activeRemoteMemberIdsByExternalKey[selectedMember.id];
 
     if (!remoteMemberId) {
       return;
@@ -1072,7 +1129,7 @@ export function ProfileDashboard({
     return () => {
       isActive = false;
     };
-  }, [householdId, householdStatus, remoteMemberIdsByExternalKey, selectedMember.id, selectedMember.role, choreSyncVersion]);
+  }, [householdId, householdStatus, activeRemoteMemberIdsByExternalKey, selectedMember.id, selectedMember.role, choreSyncVersion]);
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready") {
@@ -1082,7 +1139,7 @@ export function ProfileDashboard({
     const scopeChildIds =
       selectedMember.role === "child" ? [selectedMember.id] : childMembers.map((member) => member.id);
     const remoteChildIds = scopeChildIds
-      .map((childId) => remoteMemberIdsByExternalKey[childId])
+      .map((childId) => activeRemoteMemberIdsByExternalKey[childId])
       .filter((remoteMemberId): remoteMemberId is string => Boolean(remoteMemberId));
 
     if (remoteChildIds.length === 0) {
@@ -1126,7 +1183,7 @@ export function ProfileDashboard({
     childMembers,
     householdId,
     householdStatus,
-    remoteMemberIdsByExternalKey,
+    activeRemoteMemberIdsByExternalKey,
     selectedMember.id,
     selectedMember.role,
   ]);
@@ -1200,7 +1257,7 @@ export function ProfileDashboard({
           };
 
           if (isRemoteHouseholdReady && householdId) {
-            const remoteMemberId = remoteMemberIdsByExternalKey[childId];
+            const remoteMemberId = activeRemoteMemberIdsByExternalKey[childId];
 
             if (!remoteMemberId) {
               if (shouldAward && rewardAmount) {
@@ -1356,7 +1413,7 @@ export function ProfileDashboard({
     const selectedBankChild =
       childMembers.find((member) => member.id === targetChildId) ?? childMembers[0] ?? null;
     const selectedBankChildRemoteMemberId = selectedBankChild
-      ? remoteMemberIdsByExternalKey[selectedBankChild.id]
+      ? activeRemoteMemberIdsByExternalKey[selectedBankChild.id]
       : undefined;
 
     if (!selectedBankChild || !selectedBankChildRemoteMemberId) {
@@ -1641,7 +1698,7 @@ export function ProfileDashboard({
           completed: !isComplete,
           date: displayedDay.date,
           householdId: household!.householdId,
-          memberId: remoteMemberIdsByExternalKey[selectedMember.id],
+          memberId: activeRemoteMemberIdsByExternalKey[selectedMember.id],
         });
         setRoutineSyncVersion((current) => current + 1);
         setRemoteTemporaryRoutineError("");
@@ -1726,7 +1783,7 @@ export function ProfileDashboard({
         }
       }
 
-      const remoteMemberId = remoteMemberIdsByExternalKey[assignment.childId];
+      const remoteMemberId = activeRemoteMemberIdsByExternalKey[assignment.childId];
 
       if (!remoteMemberId) {
         setRemoteChoreError("Open Setup and save household members before tracking allowance.");
@@ -1856,7 +1913,7 @@ export function ProfileDashboard({
           completed: !isComplete,
           date: displayedDay.date,
           householdId: household!.householdId,
-          memberId: remoteMemberIdsByExternalKey[selectedMember.id],
+          memberId: activeRemoteMemberIdsByExternalKey[selectedMember.id],
         });
         if (item.source === "temporary-routine") {
           setTemporaryRoutineSyncVersion((current) => current + 1);
@@ -1902,7 +1959,7 @@ export function ProfileDashboard({
 
     if (input.mode === "open") {
       if (isRemoteHouseholdReady && householdId) {
-        const remoteMemberId = remoteMemberIdsByExternalKey[input.assigneeId];
+        const remoteMemberId = activeRemoteMemberIdsByExternalKey[input.assigneeId];
 
         if (!remoteMemberId) {
           setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
@@ -1968,7 +2025,7 @@ export function ProfileDashboard({
     }
 
     if (isRemoteHouseholdReady && householdId) {
-      const remoteMemberId = remoteMemberIdsByExternalKey[input.assigneeId];
+      const remoteMemberId = activeRemoteMemberIdsByExternalKey[input.assigneeId];
 
       if (!remoteMemberId) {
         setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
@@ -2010,6 +2067,97 @@ export function ProfileDashboard({
     return true;
   }
 
+  function findResponsibilityOverride(configuredResponsibilityId: string) {
+    const responsibilities = isRemoteHouseholdReady
+      ? [...remoteResponsibilities, ...state.localResponsibilities]
+      : state.localResponsibilities;
+
+    return responsibilities.find(
+      (responsibility) => responsibility.configuredSourceId === configuredResponsibilityId,
+    );
+  }
+
+  async function upsertConfiguredResponsibilityOverride(
+    configuredResponsibility: LocalResponsibilityItem,
+    input: Omit<LocalResponsibilityItem, "createdAt" | "id">,
+  ) {
+    const existingOverride = findResponsibilityOverride(configuredResponsibility.id);
+    const overrideInput = {
+      ...input,
+      configuredSourceId: configuredResponsibility.id,
+    };
+
+    if (existingOverride) {
+      return updateLocalResponsibility(existingOverride.id, overrideInput);
+    }
+
+    return addLocalResponsibility(overrideInput);
+  }
+
+  async function addManualScheduleEvent(input: ManualScheduleEventDraftInput) {
+    const title = input.title.trim();
+    const category = input.category.trim() || "family";
+    const locationNote = input.locationNote.trim();
+    const assignedMemberIds = Array.from(new Set(input.assignedMemberIds));
+
+    if (!title || !input.startTime || !input.endTime || input.startTime >= input.endTime) {
+      return false;
+    }
+
+    if (isRemoteHouseholdReady && householdId) {
+      const remoteAssignedMemberIds = assignedMemberIds
+        .map((memberId) => activeRemoteMemberIdsByExternalKey[memberId])
+        .filter((memberId): memberId is string => Boolean(memberId));
+
+      if (remoteAssignedMemberIds.length !== assignedMemberIds.length) {
+        setRemoteBaselineError("Open Setup and save household members before assigning a schedule event.");
+        return false;
+      }
+
+      try {
+        await saveRemoteManualScheduleEvent({
+          assignedMemberIds: remoteAssignedMemberIds,
+          category,
+          date: displayedDay.date,
+          endTime: input.endTime,
+          householdId,
+          locationNote,
+          startTime: input.startTime,
+          title,
+        });
+        setBaselineScheduleSyncVersion((current) => current + 1);
+        setRemoteBaselineError("");
+        return true;
+      } catch (error) {
+        setRemoteBaselineError(
+          error instanceof Error ? error.message : "Could not save the schedule event.",
+        );
+        return false;
+      }
+    }
+
+    const createdAt = new Date().toISOString();
+
+    setState((current) => ({
+      ...current,
+      localScheduleEvents: [
+        ...current.localScheduleEvents,
+        createLocalManualScheduleEvent({
+          assignedMemberIds,
+          category,
+          createdAt,
+          date: displayedDay.date,
+          endTime: input.endTime,
+          locationNote,
+          startTime: input.startTime,
+          title,
+        }),
+      ],
+    }));
+
+    return true;
+  }
+
   function toggleBaselineBlockSelection(blockId: string) {
     setSelectedBaselineBlockIds((current) =>
       current.includes(blockId)
@@ -2027,7 +2175,7 @@ export function ProfileDashboard({
 
     if (isRemoteHouseholdReady && householdId) {
       const remoteMemberIds = normalizedAssignedMemberIds
-        .map((memberId) => remoteMemberIdsByExternalKey[memberId])
+        .map((memberId) => activeRemoteMemberIdsByExternalKey[memberId])
         .filter((memberId): memberId is string => Boolean(memberId));
 
       if (remoteMemberIds.length !== normalizedAssignedMemberIds.length) {
@@ -2102,7 +2250,7 @@ export function ProfileDashboard({
     }
 
     if (isRemoteHouseholdReady && householdId && isUuid(responsibilityId)) {
-      const remoteMemberId = remoteMemberIdsByExternalKey[input.assigneeId];
+      const remoteMemberId = activeRemoteMemberIdsByExternalKey[input.assigneeId];
 
       if (!remoteMemberId) {
         setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
@@ -2253,7 +2401,7 @@ export function ProfileDashboard({
       try {
         const savedRoutine = await saveRemoteTemporaryRoutine({
           householdId: household!.householdId,
-          memberId: remoteMemberIdsByExternalKey[input.assigneeId],
+          memberId: activeRemoteMemberIdsByExternalKey[input.assigneeId],
           routine,
         });
 
@@ -2557,8 +2705,7 @@ export function ProfileDashboard({
                                 displayedDay.date,
                                 selectedMember.id,
                               );
-                              const editableResponsibility =
-                                item.source === "local" ? item.localResponsibility : undefined;
+                              const editableResponsibility = item.localResponsibility;
                               const choreAllowanceState = item.assignment
                                 ? getChoreAllowanceRequestState({
                                     allowanceEntries: selectedMemberAllowanceEntries,
@@ -2610,7 +2757,10 @@ export function ProfileDashboard({
                                     editableResponsibility
                                       ? () =>
                                           setResponsibilityModal({
-                                            mode: "edit",
+                                            mode:
+                                              item.source === "configured-responsibility"
+                                                ? "edit-configured"
+                                                : "edit",
                                             responsibility: editableResponsibility,
                                           })
                                       : undefined
@@ -2674,7 +2824,18 @@ export function ProfileDashboard({
           </div>
 
           <div className="space-y-5">
-            <Panel title="Day Schedule">
+            <Panel
+              action={
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setManualScheduleEventModal(true)}
+                  type="button"
+                >
+                  Add Event
+                </button>
+              }
+              title="Day Schedule"
+            >
               {scheduleEvents.length > 0 ? (
                 <ol className="grid gap-2">
                   {scheduleEvents.map((event) => (
@@ -2682,11 +2843,7 @@ export function ProfileDashboard({
                       event={event}
                       key={event.id}
                       members={members}
-                      onRemove={
-                        event.source === "baseline-flow"
-                          ? () => void removeScheduledBaselineEvent(event.id)
-                          : undefined
-                      }
+                      onRemove={isManagedScheduleEvent(event) ? () => void removeScheduledBaselineEvent(event.id) : undefined}
                     />
                   ))}
                 </ol>
@@ -2703,11 +2860,7 @@ export function ProfileDashboard({
                       event={event}
                       key={event.id}
                       members={members}
-                      onRemove={
-                        event.source === "baseline-flow"
-                          ? () => void removeScheduledBaselineEvent(event.id)
-                          : undefined
-                      }
+                      onRemove={isManagedScheduleEvent(event) ? () => void removeScheduledBaselineEvent(event.id) : undefined}
                     />
                   ))}
                 </ol>
@@ -3047,7 +3200,7 @@ export function ProfileDashboard({
           defaultDate={displayedDay.date}
           defaultDayOfWeek={displayedDay.dayOfWeek}
           initialResponsibility={
-            responsibilityModal.mode === "edit" ? responsibilityModal.responsibility : undefined
+            responsibilityModal.mode === "add" ? undefined : responsibilityModal.responsibility
           }
           members={members}
           onClose={() => setResponsibilityModal(null)}
@@ -3057,6 +3210,13 @@ export function ProfileDashboard({
                 ? input.mode === "weekly"
                   ? updateLocalResponsibility(responsibilityModal.responsibility.id, input)
                   : false
+                : responsibilityModal.mode === "edit-configured"
+                  ? input.mode === "weekly"
+                    ? upsertConfiguredResponsibilityOverride(
+                        responsibilityModal.responsibility,
+                        input,
+                      )
+                    : false
                 : addDashboardResponsibility(input)
             );
 
@@ -3076,6 +3236,20 @@ export function ProfileDashboard({
             if (await addBaselineBlocksToSchedule(baselineScheduleModal, assignedMemberIds)) {
               setBaselineScheduleModal(null);
               setSelectedBaselineBlockIds([]);
+            }
+          }}
+          selectedDate={displayedDay.date}
+        />
+      ) : null}
+      {manualScheduleEventModal ? (
+        <ManualScheduleEventModal
+          defaultCategory="family"
+          defaultSelectedMemberIds={selectedMember?.role === "parent" ? [] : [selectedMember?.id ?? ""]}
+          members={members}
+          onClose={() => setManualScheduleEventModal(false)}
+          onSave={async (input) => {
+            if (await addManualScheduleEvent(input)) {
+              setManualScheduleEventModal(false);
             }
           }}
           selectedDate={displayedDay.date}
@@ -3281,7 +3455,7 @@ function responsibilitySourceLabel(item: DashboardResponsibilityItem) {
     case "configured-responsibility":
       return "Configured";
     case "local":
-      return "Custom";
+      return item.localResponsibility?.configuredSourceId ? "Edited" : "Custom";
     case "dated-task":
       return "Today";
     case "open-responsibility":
@@ -3510,7 +3684,6 @@ function getChoreAllowanceRequestState({
 function getResponsibilityItems(
   routines: DashboardRoutineItem[],
   assignments: AssignmentWithChore[],
-  configuredResponsibilities: LocalResponsibilityItem[],
   localResponsibilities: LocalResponsibilityItem[],
   localTemporaryRoutines: LocalTemporaryRoutineItem[],
   localTasks: DashboardHouseholdItem[],
@@ -3537,20 +3710,6 @@ function getResponsibilityItems(
     assignment,
     allowanceAmount: member.role === "child" ? getChoreAllowanceAmount(assignment.chore) : undefined,
   }));
-  const configuredResponsibilityItems = configuredResponsibilities
-    .filter(
-      (responsibility) =>
-        responsibility.assigneeId === member.id &&
-        responsibility.daysOfWeek.includes(today.dayOfWeek),
-    )
-    .map((responsibility) => ({
-      id: responsibility.id,
-      title: responsibility.title,
-      startTime: responsibility.startTime,
-      endTime: responsibility.endTime,
-      category: responsibility.category ?? "chores",
-      source: "configured-responsibility" as const,
-    }));
   const localItems = localResponsibilities
     .filter(
       (responsibility) =>
@@ -3603,7 +3762,6 @@ function getResponsibilityItems(
   return [
     ...routineResponsibilities,
     ...configuredItems,
-    ...configuredResponsibilityItems,
     ...localItems,
     ...datedTasks,
     ...temporaryRoutineItems,
@@ -3898,7 +4056,10 @@ async function loadRemoteHouseholdItems(
       return false;
     }
 
-    return item.metadata.kind !== "baseline-schedule-block";
+    return (
+      item.metadata.kind !== "baseline-schedule-block" &&
+      item.metadata.kind !== "manual-calendar-event"
+    );
   });
 
   const actionItemIds = relevantActionItems.map((item) => item.id);
@@ -3996,6 +4157,10 @@ async function loadRemoteHouseholdItems(
         id: item.id,
         title: item.title,
         category: normalizeRemoteResponsibilityCategory(item.metadata.category),
+        configuredSourceId:
+          typeof item.metadata.configuredSourceId === "string"
+            ? item.metadata.configuredSourceId
+            : undefined,
         assigneeId,
         daysOfWeek: normalizeRemoteDaysOfWeek(item.days_of_week),
         startTime: normalizeTimeForInput(item.start_time),
@@ -4072,6 +4237,7 @@ async function saveRemoteResponsibility({
     metadata: {
       kind: "custom-responsibility",
       category: responsibility.category ?? "chores",
+      configuredSourceId: responsibility.configuredSourceId,
     },
   };
   const query =
@@ -4310,14 +4476,18 @@ async function loadRemoteBaselineScheduleEvents(
     .eq("item_kind", "task")
     .eq("status", "active")
     .eq("occurrence_date", date)
-    .eq("metadata->>kind", "baseline-schedule-block")
     .returns<RemoteActionItemRow[]>();
 
   if (actionItemsError) {
     throw actionItemsError;
   }
 
-  const actionItemIds = (actionItems ?? []).map((item) => item.id);
+  const scheduleActionItems = (actionItems ?? []).filter(
+    (item) =>
+      item.metadata.kind === "baseline-schedule-block" ||
+      item.metadata.kind === "manual-calendar-event",
+  );
+  const actionItemIds = scheduleActionItems.map((item) => item.id);
   const { data: assignments, error: assignmentsError } =
     actionItemIds.length === 0
       ? { data: [], error: null }
@@ -4353,16 +4523,17 @@ async function loadRemoteBaselineScheduleEvents(
   }
 
   return {
-    events: (actionItems ?? []).map((item) => ({
+    events: scheduleActionItems.map((item) => ({
       id: item.id,
-      source: "baseline-flow",
+      source: item.metadata.kind === "manual-calendar-event" ? "manual-event" : "baseline-flow",
       date,
       startTime: normalizeTimeForInput(item.start_time),
       endTime: normalizeTimeForInput(item.end_time),
       title: item.title,
       category: item.metadata.category ?? "personal",
-      calendarBehavior: "draft",
+      calendarBehavior: item.metadata.kind === "manual-calendar-event" ? "fixed" : "draft",
       assignedMemberIds: assignedMemberIdsByActionItemId.get(item.id) ?? [],
+      ...(item.metadata.locationNote ? { locationNote: item.metadata.locationNote } : {}),
     })),
   };
 }
@@ -4508,6 +4679,73 @@ async function saveRemoteBaselineScheduleEvents({
         "id",
         (actionItems ?? []).map((item) => item.id),
       );
+    throw assignmentsError;
+  }
+}
+
+async function saveRemoteManualScheduleEvent({
+  assignedMemberIds,
+  category,
+  date,
+  endTime,
+  householdId,
+  locationNote,
+  startTime,
+  title,
+}: {
+  assignedMemberIds: string[];
+  category: string;
+  date: string;
+  endTime: string;
+  householdId: string;
+  locationNote: string;
+  startTime: string;
+  title: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const { data: actionItem, error: actionItemError } = await supabase
+    .from("household_action_items")
+    .insert({
+      household_id: householdId,
+      item_kind: "task",
+      title,
+      source: "manual",
+      occurrence_date: date,
+      start_time: startTime,
+      end_time: endTime,
+      metadata: {
+        kind: "manual-calendar-event",
+        category,
+        ...(locationNote ? { locationNote } : {}),
+      },
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (actionItemError) {
+    throw actionItemError;
+  }
+
+  if (assignedMemberIds.length === 0) {
+    return;
+  }
+
+  const { error: assignmentsError } = await supabase.from("household_assignments").insert(
+    assignedMemberIds.map((memberId) => ({
+      household_id: householdId,
+      assignable_type: "action_item",
+      assignable_id: actionItem.id,
+      assignee_type: "member",
+      household_member_id: memberId,
+    })),
+  );
+
+  if (assignmentsError) {
+    await supabase
+      .from("household_action_items")
+      .delete()
+      .eq("household_id", householdId)
+      .eq("id", actionItem.id);
     throw assignmentsError;
   }
 }
@@ -5402,6 +5640,190 @@ function BaselineScheduleModal({
   );
 }
 
+function ManualScheduleEventModal({
+  defaultCategory,
+  defaultSelectedMemberIds,
+  members,
+  onClose,
+  onSave,
+  selectedDate,
+}: {
+  defaultCategory: string;
+  defaultSelectedMemberIds: string[];
+  members: HouseholdMember[];
+  onClose: () => void;
+  onSave: (input: ManualScheduleEventDraftInput) => void | Promise<void>;
+  selectedDate: string;
+}) {
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState(defaultCategory);
+  const [startTime, setStartTime] = useState("15:00");
+  const [endTime, setEndTime] = useState("16:00");
+  const [locationNote, setLocationNote] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState(
+    defaultSelectedMemberIds.filter(Boolean),
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const hasInvalidTimeRange = startTime >= endTime;
+
+  function toggleMember(memberId: string) {
+    setSelectedMemberIds((current) =>
+      current.includes(memberId)
+        ? current.filter((candidate) => candidate !== memberId)
+        : [...current, memberId],
+    );
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!title.trim() || hasInvalidTimeRange) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        assignedMemberIds: selectedMemberIds,
+        category,
+        endTime,
+        locationNote,
+        startTime,
+        title,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#cbd5df] bg-white p-5 shadow-xl">
+        <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Add event</h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Add a manual calendar event for {formatDateLabel(selectedDate)}.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <form className="grid gap-4" onSubmit={submit}>
+            <div className="grid gap-3">
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Event</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="Dentist appointment, park meetup, family dinner..."
+                  required
+                  value={title}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[140px_140px_minmax(0,1fr)]">
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Starts</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => setStartTime(event.target.value)}
+                  type="time"
+                  value={startTime}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Ends</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => setEndTime(event.target.value)}
+                  type="time"
+                  value={endTime}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Category</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => setCategory(event.target.value)}
+                  placeholder="family"
+                  value={category}
+                />
+              </label>
+            </div>
+
+            <label className="grid gap-1 text-sm">
+              <span className="font-semibold">Location</span>
+              <input
+                className="border border-[#d7e0e7] bg-white px-3 py-2"
+                onChange={(event) => setLocationNote(event.target.value)}
+                placeholder="Optional location or note"
+                value={locationNote}
+              />
+            </label>
+
+            <fieldset className="grid gap-2 text-sm">
+              <legend className="font-semibold">Family members</legend>
+              <p className="text-xs text-[#657381]">
+                Leave everyone unchecked to keep this as a household-wide event.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {members.map((member) => (
+                  <label
+                    className="flex items-center gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3"
+                    key={member.id}
+                  >
+                    <input
+                      checked={selectedMemberIds.includes(member.id)}
+                      onChange={() => toggleMember(member.id)}
+                      type="checkbox"
+                    />
+                    <span>
+                      <span className="block font-semibold text-[#17202a]">
+                        {member.preferredName}
+                      </span>
+                      <span className="block text-xs uppercase tracking-[0.12em] text-[#657381]">
+                        {member.role}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {hasInvalidTimeRange ? (
+              <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                End time must be after start time.
+              </p>
+            ) : null}
+
+            <button
+              className="justify-self-end border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSaving || !title.trim() || hasInvalidTimeRange}
+              type="submit"
+            >
+              {isSaving ? "Saving..." : `Add to ${formatDateLabel(selectedDate)}`}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TemporaryRoutineModal({
   defaultAssigneeId,
   defaultDate,
@@ -5869,6 +6291,40 @@ function createLocalScheduleEvent({
   };
 }
 
+function createLocalManualScheduleEvent({
+  assignedMemberIds,
+  category,
+  createdAt,
+  date,
+  endTime,
+  locationNote,
+  startTime,
+  title,
+}: {
+  assignedMemberIds: string[];
+  category: string;
+  createdAt: string;
+  date: string;
+  endTime: string;
+  locationNote: string;
+  startTime: string;
+  title: string;
+}) {
+  return {
+    id: createId(`manual-event-${date}-${startTime}-${title}-${createdAt}`),
+    assignedMemberIds,
+    calendarBehavior: "fixed" as const,
+    category,
+    createdAt,
+    date,
+    endTime,
+    locationNote: locationNote || undefined,
+    source: "manual-event",
+    startTime,
+    title,
+  };
+}
+
 function getLocalScheduleEventKey(
   event: Pick<
     LocalScheduledEvent,
@@ -5910,6 +6366,40 @@ function getScheduledBaselineEventKey({
   ].join("|");
 }
 
+function isManagedScheduleEvent(event: FixedEvent) {
+  return event.source === "baseline-flow" || event.source === "manual-event";
+}
+
+function mapRemoteMemberToDashboardMember(member: RemoteHouseholdMemberConfigRow): HouseholdMember {
+  return {
+    id: member.external_key,
+    preferredName: member.preferred_name,
+    displayName: member.display_name ?? member.preferred_name,
+    morningRoutineAllowanceAmount: normalizeCurrencyAmount(
+      member.metadata?.morningRoutineAllowanceAmount,
+    ),
+    role: member.role,
+    relationship: normalizeDashboardRelationship(member.relationship, member.role),
+    birthDate: member.birth_date ?? undefined,
+  };
+}
+
+function normalizeDashboardRelationship(
+  relationship: string | null,
+  role: "parent" | "child",
+): HouseholdMember["relationship"] {
+  if (
+    relationship === "dad" ||
+    relationship === "mom" ||
+    relationship === "son" ||
+    relationship === "daughter"
+  ) {
+    return relationship;
+  }
+
+  return role === "parent" ? "mom" : "daughter";
+}
+
 function sourceLabel(source: string) {
   if (source === "sportsengine-calendar") {
     return "Sports";
@@ -5921,6 +6411,10 @@ function sourceLabel(source: string) {
 
   if (source === "baseline-flow") {
     return "Baseline";
+  }
+
+  if (source === "manual-event") {
+    return "Manual";
   }
 
   return source.replace(/-calendar$/, "").replace(/-/g, " ");
