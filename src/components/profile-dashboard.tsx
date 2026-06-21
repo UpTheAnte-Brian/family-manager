@@ -5665,6 +5665,8 @@ function ManualScheduleEventModal({
   );
   const [isSaving, setIsSaving] = useState(false);
   const hasInvalidTimeRange = startTime >= endTime;
+  const hasSelectedAllMembers =
+    members.length > 0 && members.every((member) => selectedMemberIds.includes(member.id));
 
   function toggleMember(memberId: string) {
     setSelectedMemberIds((current) =>
@@ -5672,6 +5674,10 @@ function ManualScheduleEventModal({
         ? current.filter((candidate) => candidate !== memberId)
         : [...current, memberId],
     );
+  }
+
+  function toggleAllMembers() {
+    setSelectedMemberIds(hasSelectedAllMembers ? [] : members.map((member) => member.id));
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -5777,9 +5783,18 @@ function ManualScheduleEventModal({
 
             <fieldset className="grid gap-2 text-sm">
               <legend className="font-semibold">Family members</legend>
-              <p className="text-xs text-[#657381]">
-                Leave everyone unchecked to keep this as a household-wide event.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-[#657381]">
+                  Leave everyone unchecked to keep this as a household-wide event.
+                </p>
+                <button
+                  className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1f6f8b]"
+                  onClick={toggleAllMembers}
+                  type="button"
+                >
+                  {hasSelectedAllMembers ? "Clear all" : "Select all"}
+                </button>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {members.map((member) => (
                   <label
