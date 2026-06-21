@@ -165,12 +165,15 @@ type DashboardResponsibilityItem = {
   remoteActionItemId?: string;
   completionKey?: string;
   allowanceAmount?: number;
+  completedAt?: string;
+  householdItem?: DashboardHouseholdItem;
 };
 
 type ResponsibilityModalState =
   | { mode: "add" }
   | { mode: "edit"; responsibility: LocalResponsibilityItem }
-  | { mode: "edit-configured"; responsibility: LocalResponsibilityItem };
+  | { mode: "edit-configured"; responsibility: LocalResponsibilityItem }
+  | { mode: "edit-open"; item: DashboardHouseholdItem };
 
 type ManualScheduleEventDraftInput = {
   assignedMemberIds: string[];
@@ -280,6 +283,7 @@ type RemoteAssignmentRow = {
 type RemoteActionCompletionRow = {
   action_item_id: string;
   occurrence_date: string;
+  completed_at?: string | null;
 };
 
 type RemoteTemporaryRoutineLoad = {
@@ -2291,6 +2295,61 @@ export function ProfileDashboard({
     return true;
   }
 
+  async function updateOpenResponsibility(
+    item: DashboardHouseholdItem,
+    input: Extract<ResponsibilityDraftInput, { mode: "open" }>,
+  ) {
+    const title = input.title.trim();
+
+    if (!title) {
+      return false;
+    }
+
+    if (isRemoteHouseholdReady && householdId && item.remoteActionItemId) {
+      const remoteMemberId = activeRemoteMemberIdsByExternalKey[input.assigneeId];
+
+      if (!remoteMemberId) {
+        setRemoteHouseholdItemError("Open Setup and save household members before assigning responsibilities.");
+        return false;
+      }
+
+      try {
+        await saveRemoteOpenResponsibility({
+          actionItemId: item.remoteActionItemId,
+          availableFrom: item.date,
+          category: input.category,
+          householdId,
+          memberId: remoteMemberId,
+          title,
+        });
+        setHouseholdItemSyncVersion((current) => current + 1);
+        setRemoteHouseholdItemError("");
+        return true;
+      } catch (error) {
+        setRemoteHouseholdItemError(
+          error instanceof Error ? error.message : "Could not update responsibility in Supabase.",
+        );
+        return false;
+      }
+    }
+
+    setState((current) => ({
+      ...current,
+      localItems: current.localItems.map((candidate) =>
+        candidate.id === item.id
+          ? {
+              ...candidate,
+              assigneeId: input.assigneeId,
+              category: input.category,
+              title,
+            }
+          : candidate,
+      ),
+    }));
+
+    return true;
+  }
+
   async function removeLocalResponsibility(responsibilityId: string) {
     if (isRemoteHouseholdReady && householdId && isUuid(responsibilityId)) {
       try {
@@ -2720,12 +2779,21 @@ export function ProfileDashboard({
                               const choreSupportText = item.assignment
                                 ? getChoreSupportText(item.assignment.chore)
                                 : undefined;
+                              const openResponsibilityCompletionDetail =
+                                item.source === "open-responsibility"
+                                  ? getOpenResponsibilityCompletionDetail(item, displayedDay.date)
+                                  : undefined;
+                              const isHistoricalOpenCompletion =
+                                item.source === "open-responsibility" &&
+                                Boolean(getOpenResponsibilityCompletedOn(item)) &&
+                                !checked;
 
                               return (
                                 <ChecklistItem
                                   checked={checked}
-                                  detail={choreSupportText}
-                                  isPastDue={isPastSelectedDate && !checked}
+                                  detail={openResponsibilityCompletionDetail ?? choreSupportText}
+                                  disabled={isHistoricalOpenCompletion}
+                                  isPastDue={isPastSelectedDate && !checked && !isHistoricalOpenCompletion}
                                   key={item.id}
                                   lateStatus={item.source === "open-responsibility" ? "carryover" : "missed"}
                                   meta={formatTimeRange(item.startTime, item.endTime)}
@@ -2754,7 +2822,13 @@ export function ProfileDashboard({
                                         : undefined
                                   }
                                   onEdit={
-                                    editableResponsibility
+                                    item.source === "open-responsibility" && item.householdItem && !item.completedAt
+                                      ? () =>
+                                          setResponsibilityModal({
+                                            mode: "edit-open",
+                                            item: item.householdItem!,
+                                          })
+                                      : editableResponsibility
                                       ? () =>
                                           setResponsibilityModal({
                                             mode:
@@ -3197,10 +3271,24 @@ export function ProfileDashboard({
       {responsibilityModal ? (
         <ResponsibilityModal
           defaultAssigneeId={selectedMember?.id ?? defaultQuickAddAssignee}
-          defaultDate={displayedDay.date}
+          defaultDate={
+            responsibilityModal.mode === "edit-open"
+              ? responsibilityModal.item.date
+              : displayedDay.date
+          }
           defaultDayOfWeek={displayedDay.dayOfWeek}
-          initialResponsibility={
-            responsibilityModal.mode === "add" ? undefined : responsibilityModal.responsibility
+          initialValue={
+            responsibilityModal.mode === "add"
+              ? undefined
+              : responsibilityModal.mode === "edit-open"
+                ? {
+                    mode: "open",
+                    item: responsibilityModal.item,
+                  }
+                : {
+                    mode: "weekly",
+                    responsibility: responsibilityModal.responsibility,
+                  }
           }
           members={members}
           onClose={() => setResponsibilityModal(null)}
@@ -3217,6 +3305,10 @@ export function ProfileDashboard({
                         input,
                       )
                     : false
+                  : responsibilityModal.mode === "edit-open"
+                    ? input.mode === "open"
+                      ? updateOpenResponsibility(responsibilityModal.item, input)
+                      : false
                 : addDashboardResponsibility(input)
             );
 
@@ -3517,6 +3609,10 @@ function isResponsibilityComplete(
     return hasCompletion(state.choreCompletions, item.assignment.id, date);
   }
 
+  if (item.source === "open-responsibility") {
+    return getOpenResponsibilityCompletedOn(item) === date;
+  }
+
   if (item.localTaskId) {
     const localTask = state.localItems.find((candidate) => candidate.id === item.localTaskId);
 
@@ -3740,6 +3836,8 @@ function getResponsibilityItems(
     localTaskId: item.remoteActionItemId ? undefined : item.id,
     remoteActionItemId: item.remoteActionItemId,
     completionKey: item.completionKey,
+    completedAt: item.completedAt,
+    householdItem: item,
   }));
   const temporaryRoutineItems = localTemporaryRoutines.flatMap((routine) => {
     if (routine.assigneeId !== member.id || today.date < routine.startsOn || today.date > routine.endsOn) {
@@ -3974,14 +4072,14 @@ function getVisibleLocalItems(
 ) {
   return items.filter(
     (item) => {
-      if (member.role !== "parent" && item.assigneeId !== member.id) {
+      if (item.assigneeId !== member.id) {
         return false;
       }
 
       if (item.kind === "task" && item.displayMode === "open-responsibility") {
         const completedOn = item.completedAt?.slice(0, 10);
 
-        return item.date <= date && (!completedOn || date < completedOn);
+        return item.date <= date && (!completedOn || date <= completedOn);
       }
 
       return item.date === date;
@@ -4101,9 +4199,8 @@ async function loadRemoteHouseholdItems(
       ? { data: [], error: null }
       : await supabase
           .from("household_action_item_completions")
-          .select("action_item_id, occurrence_date")
+          .select("action_item_id, occurrence_date, completed_at")
           .eq("household_id", householdId)
-          .lte("occurrence_date", date)
           .in("action_item_id", openResponsibilityIds)
           .returns<RemoteActionCompletionRow[]>();
 
@@ -4134,11 +4231,17 @@ async function loadRemoteHouseholdItems(
   const completionsOnDateByActionItemId = new Set(
     (completionsOnDate ?? []).map((completion) => completion.action_item_id),
   );
-  const completedOpenResponsibilityIds = new Set(
-    (openResponsibilityCompletions ?? []).map((completion) => completion.action_item_id),
-  );
+  const openResponsibilityCompletionByActionItemId = new Map<string, RemoteActionCompletionRow>();
   const responsibilities: LocalResponsibilityItem[] = [];
   const items: DashboardHouseholdItem[] = [];
+
+  for (const completion of openResponsibilityCompletions ?? []) {
+    const previousCompletion = openResponsibilityCompletionByActionItemId.get(completion.action_item_id);
+
+    if (!previousCompletion || compareStrings(previousCompletion.occurrence_date, completion.occurrence_date) < 0) {
+      openResponsibilityCompletionByActionItemId.set(completion.action_item_id, completion);
+    }
+  }
 
   for (const item of relevantActionItems) {
     const assignedMemberIds = assignedMemberIdsByActionItemId.get(item.id) ?? [];
@@ -4171,8 +4274,14 @@ async function loadRemoteHouseholdItems(
     }
 
     if (item.item_kind === "task" && item.metadata.kind === "open-responsibility") {
-      if (!assigneeId || completedOpenResponsibilityIds.has(item.id)) {
+      if (!assigneeId) {
         continue;
+      }
+
+      const completion = openResponsibilityCompletionByActionItemId.get(item.id);
+
+      if (completion?.occurrence_date === date) {
+        completionMap[getActionKey(date, assigneeId, item.id)] = true;
       }
 
       items.push({
@@ -4183,6 +4292,7 @@ async function loadRemoteHouseholdItems(
         date: item.occurrence_date ?? date,
         createdAt: item.created_at,
         category: normalizeRemoteResponsibilityCategory(item.metadata.category),
+        completedAt: completion?.completed_at ?? (completion ? `${completion.occurrence_date}T00:00:00` : undefined),
         displayMode: "open-responsibility",
         remoteActionItemId: item.id,
       });
@@ -4279,12 +4389,14 @@ async function saveRemoteResponsibility({
 }
 
 async function saveRemoteOpenResponsibility({
+  actionItemId,
   availableFrom,
   category,
   householdId,
   memberId,
   title,
 }: {
+  actionItemId?: string;
   availableFrom: string;
   category: ResponsibilityCategory;
   householdId: string;
@@ -4292,24 +4404,40 @@ async function saveRemoteOpenResponsibility({
   title: string;
 }) {
   const supabase = createBrowserSupabaseClient();
-  const { data: item, error: itemError } = await supabase
-    .from("household_action_items")
-    .insert({
-      household_id: householdId,
-      item_kind: "task",
-      title,
-      source: "manual",
-      occurrence_date: availableFrom,
-      metadata: {
-        kind: "open-responsibility",
-        category,
-      },
-    })
-    .select("id")
-    .single<{ id: string }>();
+  const row = {
+    household_id: householdId,
+    item_kind: "task",
+    title,
+    source: "manual",
+    occurrence_date: availableFrom,
+    metadata: {
+      kind: "open-responsibility",
+      category,
+    },
+  };
+  const query =
+    actionItemId && isUuid(actionItemId)
+      ? supabase
+          .from("household_action_items")
+          .update(row)
+          .eq("household_id", householdId)
+          .eq("id", actionItemId)
+      : supabase.from("household_action_items").insert(row);
+  const { data: item, error: itemError } = await query.select("id").single<{ id: string }>();
 
   if (itemError) {
     throw itemError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "action_item")
+    .eq("assignable_id", item.id);
+
+  if (deleteError) {
+    throw deleteError;
   }
 
   const { error: assignmentError } = await supabase.from("household_assignments").insert({
@@ -6020,7 +6148,7 @@ function ResponsibilityModal({
   defaultAssigneeId,
   defaultDate,
   defaultDayOfWeek,
-  initialResponsibility,
+  initialValue,
   members,
   onClose,
   onSave,
@@ -6028,27 +6156,37 @@ function ResponsibilityModal({
   defaultAssigneeId: string;
   defaultDate: string;
   defaultDayOfWeek: DayOfWeek;
-  initialResponsibility?: LocalResponsibilityItem;
+  initialValue?:
+    | {
+        mode: "weekly";
+        responsibility: LocalResponsibilityItem;
+      }
+    | {
+        mode: "open";
+        item: DashboardHouseholdItem;
+      };
   members: HouseholdMember[];
   onClose: () => void;
   onSave: (input: ResponsibilityDraftInput) => void | Promise<void>;
 }) {
-  const [title, setTitle] = useState(initialResponsibility?.title ?? "");
+  const initialResponsibility = initialValue?.mode === "weekly" ? initialValue.responsibility : undefined;
+  const initialOpenResponsibility = initialValue?.mode === "open" ? initialValue.item : undefined;
+  const [title, setTitle] = useState(initialResponsibility?.title ?? initialOpenResponsibility?.title ?? "");
   const [category, setCategory] = useState<ResponsibilityCategory>(
-    initialResponsibility?.category ?? "chores",
+    initialResponsibility?.category ?? initialOpenResponsibility?.category ?? "chores",
   );
   const [assigneeId, setAssigneeId] = useState(
-    initialResponsibility?.assigneeId ?? defaultAssigneeId,
+    initialResponsibility?.assigneeId ?? initialOpenResponsibility?.assigneeId ?? defaultAssigneeId,
   );
   const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>(
     initialResponsibility?.daysOfWeek ?? [defaultDayOfWeek],
   );
   const [startTime, setStartTime] = useState(initialResponsibility?.startTime ?? "16:00");
   const [endTime, setEndTime] = useState(initialResponsibility?.endTime ?? "16:15");
-  const [scheduleMode, setScheduleMode] = useState<"weekly" | "open">("weekly");
+  const [scheduleMode, setScheduleMode] = useState<"weekly" | "open">(initialValue?.mode ?? "weekly");
   const [isSaving, setIsSaving] = useState(false);
-  const isEditing = Boolean(initialResponsibility);
-  const showsWeeklyFields = isEditing || scheduleMode === "weekly";
+  const isEditing = Boolean(initialValue);
+  const showsWeeklyFields = scheduleMode === "weekly";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6060,7 +6198,7 @@ function ResponsibilityModal({
         await onSave({
           mode: "open",
           assigneeId,
-          availableFrom: defaultDate,
+          availableFrom: initialOpenResponsibility?.date ?? defaultDate,
           category,
           title,
         });
@@ -6104,7 +6242,9 @@ function ResponsibilityModal({
             <p className="mt-1 text-sm text-[#4c5965]">
               {showsWeeklyFields
                 ? "Choose who owns it, when it appears, and where it is grouped."
-                : `This will show in Responsibilities starting ${formatDateLabel(defaultDate)} and stay there until it is checked off.`}
+                : isEditing
+                  ? "Choose who owns it and where it is grouped. It will stay here until it is checked off."
+                  : `This will show in Responsibilities starting ${formatDateLabel(defaultDate)} and stay there until it is checked off.`}
             </p>
           </div>
           <button
@@ -6998,6 +7138,7 @@ function Checklist({ children }: Readonly<{ children: React.ReactNode }>) {
 function ChecklistItem({
   checked,
   detail,
+  disabled = false,
   isPastDue = false,
   lateStatus = "missed",
   meta,
@@ -7011,6 +7152,7 @@ function ChecklistItem({
 }: {
   checked: boolean;
   detail?: string;
+  disabled?: boolean;
   isPastDue?: boolean;
   lateStatus?: "carryover" | "missed";
   meta: string;
@@ -7038,8 +7180,14 @@ function ChecklistItem({
   return (
     <li>
       <div className={`grid grid-cols-[1fr_auto] gap-2 border px-3 py-3 text-sm ${itemClass}`}>
-        <label className="grid cursor-pointer grid-cols-[24px_1fr] gap-3">
-          <input checked={checked} className="mt-1 h-4 w-4" onChange={onChange} type="checkbox" />
+        <label className={`grid grid-cols-[24px_1fr] gap-3 ${disabled ? "cursor-default" : "cursor-pointer"}`}>
+          <input
+            checked={checked}
+            className="mt-1 h-4 w-4"
+            disabled={disabled}
+            onChange={onChange}
+            type="checkbox"
+          />
           <span>
             <span className={checked ? "block font-semibold text-[#657381] line-through" : "block font-semibold"}>
               {title}
@@ -7174,6 +7322,20 @@ function getAssignedMemberNames(event: FixedEvent, members: HouseholdMember[]) {
   return assignedMemberIds
     .map((memberId) => members.find((member) => member.id === memberId)?.preferredName)
     .filter((name): name is string => Boolean(name));
+}
+
+function getOpenResponsibilityCompletedOn(item: DashboardResponsibilityItem) {
+  return item.completedAt?.slice(0, 10);
+}
+
+function getOpenResponsibilityCompletionDetail(item: DashboardResponsibilityItem, displayedDate: string) {
+  const completedOn = getOpenResponsibilityCompletedOn(item);
+
+  if (!completedOn || completedOn === displayedDate) {
+    return undefined;
+  }
+
+  return `Completed ${formatDateLabel(completedOn)}.`;
 }
 
 function compareStrings(first: string, second: string) {
