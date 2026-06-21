@@ -8,6 +8,14 @@ import { AdminBaselineTemplates } from "@/components/admin-baseline-templates";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
 import { ConsolePageHeader } from "@/components/console-page-header";
+import {
+  emptyHouseholdLocation,
+  isHouseholdLocationComplete,
+  mapHouseholdLocationToRow,
+  normalizeHouseholdLocation,
+  type AddressSuggestion,
+  type HouseholdLocation,
+} from "@/lib/households/location";
 import type { DayTemplate, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
 import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
@@ -76,6 +84,19 @@ type CreatedHouseholdRow = {
   timezone?: string;
 };
 
+type HouseholdLocationRow = {
+  address_line1: string | null;
+  address_line2: string | null;
+  administrative_area: string | null;
+  country_code: string | null;
+  formatted_address: string | null;
+  google_place_id: string | null;
+  latitude: number | null;
+  locality: string | null;
+  longitude: number | null;
+  postal_code: string | null;
+};
+
 const emptyMemberDraft = createBlankMemberDraft("parent");
 
 export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: HouseholdSetupProps) {
@@ -85,6 +106,13 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
   const [authReady, setAuthReady] = useState(false);
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMemberRow[]>([]);
   const [householdAccessEntries, setHouseholdAccessEntries] = useState<HouseholdAccessEntryRow[]>([]);
+  const [householdAddressLookupMessage, setHouseholdAddressLookupMessage] = useState("");
+  const [householdAddressLookupStatus, setHouseholdAddressLookupStatus] = useState<"idle" | "loading" | "searching">(
+    "idle",
+  );
+  const [householdAddressQuery, setHouseholdAddressQuery] = useState("");
+  const [householdAddressSuggestions, setHouseholdAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [householdLocation, setHouseholdLocation] = useState<HouseholdLocation>(emptyHouseholdLocation);
   const [householdName, setHouseholdName] = useState("");
   const [invitationEmail, setInvitationEmail] = useState("");
   const [invitationRole, setInvitationRole] = useState<InvitationRole>("parent");
@@ -200,6 +228,10 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
         setHouseholdMembers([]);
         setHouseholdAccessEntries([]);
+        setHouseholdAddressLookupMessage("");
+        setHouseholdAddressQuery("");
+        setHouseholdAddressSuggestions([]);
+        setHouseholdLocation(emptyHouseholdLocation);
         setMemberDrafts([emptyMemberDraft]);
         return;
       }
@@ -211,6 +243,10 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
         setHouseholdMembers([]);
         setHouseholdAccessEntries([]);
+        setHouseholdAddressLookupMessage("");
+        setHouseholdAddressQuery("");
+        setHouseholdAddressSuggestions([]);
+        setHouseholdLocation(emptyHouseholdLocation);
         setMemberDrafts([emptyMemberDraft]);
         return;
       }
@@ -226,6 +262,10 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
         setHouseholdMembers(nextState.members);
         setHouseholdAccessEntries(nextState.accessEntries);
+        setHouseholdAddressLookupMessage("");
+        setHouseholdAddressQuery(nextState.householdLocation.formattedAddress);
+        setHouseholdAddressSuggestions([]);
+        setHouseholdLocation(nextState.householdLocation);
         setMemberDrafts(
           nextActiveMembers.length > 0 ? nextActiveMembers.map(mapRemoteMemberToDraft) : [emptyMemberDraft],
         );
@@ -245,6 +285,40 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
       isActive = false;
     };
   }, [isHouseholdAdmin, refreshVersion, selectedHouseholdId, session]);
+
+  useEffect(() => {
+    const accessToken = session?.access_token;
+    const normalizedQuery = householdAddressQuery.trim();
+
+    if (!accessToken || normalizedQuery.length < 3 || normalizedQuery === householdLocation.formattedAddress) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setHouseholdAddressLookupStatus("searching");
+        setHouseholdAddressLookupMessage("");
+        const suggestions = await lookupAddressSuggestions(accessToken, normalizedQuery, controller.signal);
+
+        setHouseholdAddressSuggestions(suggestions);
+        setHouseholdAddressLookupStatus("idle");
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setHouseholdAddressSuggestions([]);
+        setHouseholdAddressLookupStatus("idle");
+        setHouseholdAddressLookupMessage(getSupabaseLikeErrorMessage(error, "Could not search for addresses."));
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [householdAddressQuery, householdLocation.formattedAddress, session?.access_token]);
 
   async function signUp() {
     await runSetupAction(async () => {
@@ -333,9 +407,32 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
       setMemberDrafts([emptyMemberDraft]);
       setOpenStepOverride(3);
       await refreshCurrentHousehold();
+
+      if (isHouseholdLocationComplete(householdLocation)) {
+        await saveHouseholdLocation(householdId, householdLocation);
+      }
+
       await saveMemberDrafts(householdId);
       setRefreshVersion((current) => current + 1);
-      return `Created ${household?.name ?? "household"}.`;
+      return isHouseholdLocationComplete(householdLocation)
+        ? `Created ${household?.name ?? "household"} with its household address.`
+        : `Created ${household?.name ?? "household"}. Add a household address so it appears on the platform map.`;
+    }, "household");
+  }
+
+  async function saveSelectedHouseholdLocation() {
+    if (!selectedHouseholdId) {
+      return;
+    }
+
+    await runSetupAction(async () => {
+      if (!isHouseholdLocationComplete(householdLocation)) {
+        throw new Error("Select a suggested address before saving the household location.");
+      }
+
+      await saveHouseholdLocation(selectedHouseholdId, householdLocation);
+      setRefreshVersion((current) => current + 1);
+      return "Household address saved.";
     }, "household");
   }
 
@@ -526,6 +623,37 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     );
   }
 
+  function updateHouseholdAddressQuery(nextValue: string) {
+    setHouseholdAddressQuery(nextValue);
+    setHouseholdAddressLookupStatus("idle");
+    setHouseholdAddressSuggestions([]);
+    setHouseholdAddressLookupMessage("");
+
+    if (nextValue.trim() !== householdLocation.formattedAddress) {
+      setHouseholdLocation(emptyHouseholdLocation);
+    }
+  }
+
+  async function selectHouseholdAddressSuggestion(suggestion: AddressSuggestion) {
+    if (!session?.access_token) {
+      return;
+    }
+
+    try {
+      setHouseholdAddressLookupStatus("loading");
+      setHouseholdAddressLookupMessage("");
+      const nextLocation = await lookupAddressDetails(session.access_token, suggestion.placeId);
+
+      setHouseholdLocation(nextLocation);
+      setHouseholdAddressQuery(nextLocation.formattedAddress);
+      setHouseholdAddressSuggestions([]);
+      setHouseholdAddressLookupStatus("idle");
+    } catch (error) {
+      setHouseholdAddressLookupStatus("idle");
+      setHouseholdAddressLookupMessage(getSupabaseLikeErrorMessage(error, "Could not load address details."));
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
       <ConsolePageHeader
@@ -675,6 +803,80 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                         value={householdName}
                       />
                     </label>
+                    <div className="grid gap-3 border border-[#d7e0e7] bg-white p-3">
+                      <div>
+                        <p className="font-semibold">Household address</p>
+                        <p className="mt-1 text-sm leading-6 text-[#4c5965]">
+                          Save the household location from Google address lookup so platform admin can
+                          map household coverage without weakening household-level access controls.
+                        </p>
+                      </div>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Address lookup</span>
+                        <input
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) => updateHouseholdAddressQuery(event.target.value)}
+                          placeholder="123 Main St, Maple Grove, MN"
+                          value={householdAddressQuery}
+                        />
+                      </label>
+                      {householdAddressLookupStatus === "searching" ? (
+                        <p className="text-sm text-[#657381]">Searching Google Maps addresses...</p>
+                      ) : null}
+                      {householdAddressSuggestions.length > 0 ? (
+                        <ul className="grid gap-2">
+                          {householdAddressSuggestions.map((suggestion) => (
+                            <li key={suggestion.placeId}>
+                              <button
+                                className="w-full border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left hover:border-[#1f6f8b]"
+                                disabled={householdAddressLookupStatus === "loading" || status === "loading"}
+                                onClick={() => selectHouseholdAddressSuggestion(suggestion)}
+                                type="button"
+                              >
+                                <span className="block font-semibold">{suggestion.primaryText}</span>
+                                {suggestion.secondaryText ? (
+                                  <span className="mt-1 block text-sm text-[#657381]">{suggestion.secondaryText}</span>
+                                ) : null}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {householdAddressLookupMessage ? (
+                        <p className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#657381]">
+                          {householdAddressLookupMessage}
+                        </p>
+                      ) : null}
+                      {isHouseholdLocationComplete(householdLocation) ? (
+                        <div className="grid gap-2 border border-[#b7d7ce] bg-[#e8f4f3] px-3 py-3 text-sm text-[#2f6f73]">
+                          <p className="font-semibold">Selected address</p>
+                          <p>{householdLocation.formattedAddress}</p>
+                          <p className="text-xs">
+                            {householdLocation.latitude?.toFixed(5)}, {householdLocation.longitude?.toFixed(5)}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#657381]">
+                          Select a suggestion to save a verified location. Household creation still
+                          works without it, but the platform map will show this household as missing a
+                          location.
+                        </p>
+                      )}
+                      {selectedHouseholdId && isHouseholdAdmin ? (
+                        <button
+                          className="justify-self-start border border-[#1f6f8b] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:opacity-50"
+                          disabled={
+                            status === "loading" ||
+                            householdAddressLookupStatus === "loading" ||
+                            !isHouseholdLocationComplete(householdLocation)
+                          }
+                          onClick={saveSelectedHouseholdLocation}
+                          type="button"
+                        >
+                          Save household address
+                        </button>
+                      ) : null}
+                    </div>
                     <button
                       className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       disabled={status === "loading" || !session || !householdName.trim()}
@@ -869,6 +1071,58 @@ async function createHouseholdForCurrentUser(accessToken: string, householdName:
     throw error;
   } finally {
     window.clearTimeout(timeout);
+  }
+}
+
+async function lookupAddressSuggestions(accessToken: string, query: string, signal?: AbortSignal) {
+  const response = await fetch(`/api/google-maps/address-search?q=${encodeURIComponent(query)}`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+    signal,
+  });
+  const body = (await response.json()) as {
+    error?: string;
+    suggestions?: AddressSuggestion[];
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error || "Could not search Google Maps addresses.");
+  }
+
+  return Array.isArray(body.suggestions) ? body.suggestions : [];
+}
+
+async function lookupAddressDetails(accessToken: string, placeId: string) {
+  const response = await fetch(`/api/google-maps/address-details?placeId=${encodeURIComponent(placeId)}`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const body = (await response.json()) as {
+    error?: string;
+    location?: HouseholdLocation;
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error || "Could not load Google Maps address details.");
+  }
+
+  return normalizeHouseholdLocation(body.location);
+}
+
+async function saveHouseholdLocation(householdId: string, location: HouseholdLocation) {
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase
+    .from("households")
+    .update({
+      ...mapHouseholdLocationToRow(location),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", householdId);
+
+  if (error) {
+    throw error;
   }
 }
 
@@ -1321,6 +1575,19 @@ function EmptySetupState({ text }: { text: string }) {
 
 async function loadHouseholdWorkflowState(selectedHouseholdId: string, includeAccessEntries: boolean) {
   const supabase = createBrowserSupabaseClient();
+  const { data: householdLocationRow, error: householdError } = await supabase
+    .from("households")
+    .select(
+      "address_line1, address_line2, administrative_area, country_code, formatted_address, google_place_id, latitude, locality, longitude, postal_code",
+    )
+    .eq("id", selectedHouseholdId)
+    .returns<HouseholdLocationRow>()
+    .single();
+
+  if (householdError) {
+    throw householdError;
+  }
+
   const { data: members, error: membersError } = await supabase
     .from("household_members")
     .select("id, external_key, preferred_name, display_name, role, relationship, birth_date, metadata, status, archived_at")
@@ -1340,6 +1607,7 @@ async function loadHouseholdWorkflowState(selectedHouseholdId: string, includeAc
 
   return {
     accessEntries,
+    householdLocation: mapHouseholdLocationRow(householdLocationRow),
     members: members ?? [],
   };
 }
@@ -1462,6 +1730,21 @@ async function mutateHouseholdMember(
   }
 
   return member;
+}
+
+function mapHouseholdLocationRow(row: HouseholdLocationRow | null) {
+  return normalizeHouseholdLocation({
+    addressLine1: row?.address_line1 ?? "",
+    addressLine2: row?.address_line2 ?? "",
+    administrativeArea: row?.administrative_area ?? "",
+    countryCode: row?.country_code ?? "",
+    formattedAddress: row?.formatted_address ?? "",
+    googlePlaceId: row?.google_place_id ?? "",
+    latitude: row?.latitude ?? null,
+    locality: row?.locality ?? "",
+    longitude: row?.longitude ?? null,
+    postalCode: row?.postal_code ?? "",
+  });
 }
 
 function mapRemoteMemberToPlannerMember(member: HouseholdMemberRow): HouseholdMember {

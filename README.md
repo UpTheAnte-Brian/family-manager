@@ -25,6 +25,8 @@ The current app keeps the summer 2026 planner, chores, and calendar importer as 
 - Real-date Today Engine with explicit missing states when no baseline is configured for the current day.
 - Browser-local checklist completion tracking, chore allowance ledger tracking, plus editable routine steps, recurring responsibilities, and same-day task/reminder quick-add.
 - Admin setup route for shared calendar source URLs, ICS preview, and local apply-to-dashboard.
+- Household address lookup in setup, backed by Google Maps geocoding data.
+- Platform-admin route for household counts and location coverage on a Google map.
 - Browser-local ICS setup for Apple Calendar, SportsEngine, school, and other shared calendar feeds.
 - Optional scheduled refresh for saved shared calendar feeds when the app is deployed with Supabase service credentials.
 - Supabase migration target for recurring routines, recurring responsibilities, dated tasks, dated reminders, and shared completion records.
@@ -59,15 +61,21 @@ NEXT_PUBLIC_SUPABASE_URL="https://..."
 NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
 SUPABASE_SERVICE_ROLE_KEY="..."
 CRON_SECRET="..."
+GOOGLE_MAPS_SERVER_API_KEY="..."
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="..."
+PLATFORM_ADMIN_BOOTSTRAP_EMAILS="you@example.com"
 ```
 
 Supabase data access requires an authenticated Supabase session and a matching `household_users` row. Without that session, the app keeps working from browser `localStorage`.
 
 After deployment, open `/setup` to create or sign in to an owner account and create a household. The same account can belong to multiple households. `/setup` now lets household owners and parents invite additional adult accounts and switch the active household when one account belongs to more than one family context.
 
+If you want a platform-admin account, add its email to `PLATFORM_ADMIN_BOOTSTRAP_EMAILS`, sign in with that account, and open `/platform-admin` once. The app will bootstrap a durable `platform_admins` row for that authenticated user and then use that row for ongoing access checks.
+
 The normalized Supabase schema includes durable tables for:
 
 - households and household users
+- platform admins and household location fields
 - household members
 - calendar sources and calendar events
 - action items, assignments, and completions

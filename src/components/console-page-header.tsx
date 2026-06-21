@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type ConsolePageKey = "admin" | "calendar" | "chores" | "dashboard";
+type ConsolePageKey = "admin" | "calendar" | "chores" | "dashboard" | "platform";
 
 type ConsolePageHeaderProps = {
   activePage: ConsolePageKey;
@@ -16,6 +16,7 @@ const navItems: Array<{ href: string; key: ConsolePageKey; label: string }> = [
   { href: "/calendar", key: "calendar", label: "Calendar" },
   { href: "/chores", key: "chores", label: "Chores" },
   { href: "/admin", key: "admin", label: "Admin setup" },
+  { href: "/platform-admin", key: "platform", label: "Platform" },
 ];
 
 export function ConsolePageHeader({
