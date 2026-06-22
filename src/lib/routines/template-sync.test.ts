@@ -6,10 +6,12 @@ describe("planRoutineTemplateSync", () => {
   it("preserves matching member-step pairs and only updates changed fields", () => {
     assert.deepEqual(
       planRoutineTemplateSync({
+        category: "morning-routine",
         daysOfWeek: ["MO", "TU"],
         existing: [
           {
             actionItemId: "action-1",
+            category: "morning-routine",
             daysOfWeek: ["MO", "TU"],
             endTime: "07:35",
             memberId: "member-1",
@@ -20,6 +22,7 @@ describe("planRoutineTemplateSync", () => {
           },
           {
             actionItemId: "action-2",
+            category: "morning-routine",
             daysOfWeek: ["MO", "TU"],
             endTime: "07:40",
             memberId: "member-1",
@@ -52,6 +55,7 @@ describe("planRoutineTemplateSync", () => {
         update: [
           {
             actionItemId: "action-2",
+            category: "morning-routine",
             daysOfWeek: ["MO", "TU"],
             endTime: "07:42",
             memberId: "member-1",
@@ -68,10 +72,12 @@ describe("planRoutineTemplateSync", () => {
   it("creates new pairs and removes obsolete ones without touching retained ids", () => {
     assert.deepEqual(
       planRoutineTemplateSync({
+        category: "night-routine",
         daysOfWeek: ["MO", "WE"],
         existing: [
           {
             actionItemId: "action-1",
+            category: "morning-routine",
             daysOfWeek: ["MO", "TU"],
             endTime: "07:35",
             memberId: "member-1",
@@ -82,6 +88,7 @@ describe("planRoutineTemplateSync", () => {
           },
           {
             actionItemId: "action-2",
+            category: "morning-routine",
             daysOfWeek: ["MO", "TU"],
             endTime: "07:40",
             memberId: "member-2",
@@ -105,6 +112,7 @@ describe("planRoutineTemplateSync", () => {
       {
         create: [
           {
+            category: "night-routine",
             daysOfWeek: ["MO", "WE"],
             endTime: "07:35",
             memberId: "member-2",
@@ -118,6 +126,7 @@ describe("planRoutineTemplateSync", () => {
         update: [
           {
             actionItemId: "action-1",
+            category: "night-routine",
             daysOfWeek: ["MO", "WE"],
             endTime: "07:35",
             memberId: "member-1",

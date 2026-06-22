@@ -1,3 +1,4 @@
+import type { RoutineTemplateCategory } from "@/lib/routines/categories";
 import type { DayOfWeek } from "@/lib/planner/types";
 
 export type RoutineTemplateStepDraft = {
@@ -9,6 +10,7 @@ export type RoutineTemplateStepDraft = {
 
 export type ExistingRoutineTemplateStepInstance = {
   actionItemId: string;
+  category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
   memberId: string;
   startTime: string;
@@ -20,6 +22,7 @@ export type ExistingRoutineTemplateStepInstance = {
 
 export type PlannedRoutineTemplateStepInstance = {
   actionItemId?: string;
+  category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
   memberId: string;
   startTime: string;
@@ -30,12 +33,14 @@ export type PlannedRoutineTemplateStepInstance = {
 };
 
 export function planRoutineTemplateSync({
+  category,
   daysOfWeek,
   existing,
   memberIds,
   steps,
   templateName,
 }: {
+  category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
   existing: ExistingRoutineTemplateStepInstance[];
   memberIds: string[];
@@ -44,6 +49,7 @@ export function planRoutineTemplateSync({
 }) {
   const desired = memberIds.flatMap((memberId) =>
     steps.map((step) => ({
+      category,
       daysOfWeek,
       memberId,
       startTime: step.startTime,
@@ -74,6 +80,7 @@ export function planRoutineTemplateSync({
       existingItem.title !== item.title ||
       existingItem.startTime !== item.startTime ||
       existingItem.endTime !== item.endTime ||
+      existingItem.category !== item.category ||
       existingItem.templateName !== item.templateName ||
       !haveSameDaysOfWeek(existingItem.daysOfWeek, item.daysOfWeek)
     ) {

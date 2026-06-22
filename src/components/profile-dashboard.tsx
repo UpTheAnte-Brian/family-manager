@@ -66,6 +66,7 @@ import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import { getAppliedCalendarEventAssignmentKey } from "@/lib/calendar/applied-events";
 import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
+import { resolveRoutineTemplateCategory } from "@/lib/routines/categories";
 import {
   calendarEventAssignmentsStorageKey,
   calendarTeamAssignmentsStorageKey,
@@ -130,6 +131,7 @@ type AssignmentWithChore = WeeklyChoreAssignmentTemplate & {
 };
 
 type DashboardRoutineItem = {
+  category: ResponsibilityCategory;
   id: string;
   title: string;
   startTime: string;
@@ -387,6 +389,7 @@ const storageKey = "family-manager:dashboard:v1";
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 const responsibilityCategories: ResponsibilityCategory[] = [
   "morning-routine",
+  "night-routine",
   "homework",
   "chores",
   "sports",
@@ -2800,6 +2803,7 @@ export function ProfileDashboard({
                                   onChange={() =>
                                     item.source === "routine"
                                       ? void toggleRoutine({
+                                          category: item.category,
                                           id: item.id,
                                           title: item.title,
                                           startTime: item.startTime,
@@ -3515,6 +3519,8 @@ function categoryLabel(category: ResponsibilityCategory) {
   switch (category) {
     case "morning-routine":
       return "Morning Routine";
+    case "night-routine":
+      return "Night Routine";
     case "homework":
       return "Homework";
     case "chores":
@@ -3576,6 +3582,7 @@ function choreCategoryToResponsibilityCategory(category?: string): Responsibilit
 function normalizeRemoteResponsibilityCategory(category?: string): ResponsibilityCategory {
   if (
     category === "morning-routine" ||
+    category === "night-routine" ||
     category === "homework" ||
     category === "chores" ||
     category === "sports" ||
@@ -3651,6 +3658,7 @@ function getRoutineItems(
               routine.schedule.daysOfWeek.includes(today.dayOfWeek),
           )
           .map((routine) => ({
+            category: "morning-routine" as const,
             id: routine.id,
             title: routine.title,
             startTime: routine.schedule.startTime,
@@ -3664,6 +3672,7 @@ function getRoutineItems(
         routine.assigneeId === member.id && routine.daysOfWeek.includes(today.dayOfWeek),
     )
     .map((routine) => ({
+      category: "morning-routine" as const,
       id: routine.id,
       title: routine.title,
       startTime: routine.startTime,
@@ -3791,7 +3800,7 @@ function getResponsibilityItems(
     title: routine.title,
     startTime: routine.startTime,
     endTime: routine.endTime,
-    category: "morning-routine" as const,
+    category: routine.category,
     source: "routine" as const,
     completionKey: routine.completionKey,
     remoteActionItemId: routine.remoteActionItemId,
@@ -3949,7 +3958,7 @@ function getReminderItems(
         title:
           responsibilityCount > 0
             ? "One house responsibility is scheduled today."
-            : "No weekly chore is scheduled today.",
+            : "No house responsibilities are scheduled today.",
       },
     ];
   }
@@ -5001,6 +5010,15 @@ async function loadRemoteRoutines(
 
     return [
       {
+        category: normalizeRemoteResponsibilityCategory(
+          resolveRoutineTemplateCategory({
+            category: item.metadata.category,
+            endTime: item.end_time,
+            startTime: item.start_time,
+            templateName: item.metadata.routineTemplateName,
+            title: item.title,
+          }),
+        ),
         id: `${memberExternalKey}:${item.id}`,
         title: item.title,
         startTime: normalizeTimeForInput(item.start_time),

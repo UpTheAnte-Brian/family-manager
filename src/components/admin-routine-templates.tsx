@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import {
+  getRoutineTemplateCategoryLabel,
+  resolveRoutineTemplateCategory,
+  routineTemplateCategoryOptions,
+  type RoutineTemplateCategory,
+} from "@/lib/routines/categories";
 import { starterMorningRoutineTemplate } from "@/lib/routines/defaults";
 import {
   planRoutineTemplateSync,
@@ -49,6 +55,7 @@ type RoutineTemplateAssignmentRow = {
 };
 
 type RoutineTemplateSummary = {
+  category: RoutineTemplateCategory;
   id: string;
   name: string;
   stepCount: number;
@@ -60,8 +67,8 @@ type RoutineTemplateSummary = {
 };
 
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
-const weekdayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR"];
 const defaultRoutineSteps: RoutineStepDraft[] = starterMorningRoutineTemplate.steps;
+const defaultRoutineCategory: RoutineTemplateCategory = "morning-routine";
 
 export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
   const { household, status: householdStatus } = useCurrentHousehold();
@@ -70,7 +77,8 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
   const [templates, setTemplates] = useState<RoutineTemplateSummary[]>([]);
   const [templateName, setTemplateName] = useState(starterMorningRoutineTemplate.name);
   const [selectedMemberIds, setSelectedMemberIds] = useState(() => childMembers.map((member) => member.id));
-  const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(weekdayOptions);
+  const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(dayOptions);
+  const [selectedCategory, setSelectedCategory] = useState<RoutineTemplateCategory>(defaultRoutineCategory);
   const [steps, setSteps] = useState<RoutineStepDraft[]>(defaultRoutineSteps);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
@@ -174,6 +182,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
       if (editingTemplate) {
         await updateRoutineTemplate({
           actionItemIds: editingTemplate.actionItemIds,
+          category: selectedCategory,
           daysOfWeek: selectedDays,
           householdId,
           memberIds: remoteMemberIds,
@@ -184,6 +193,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
         setStatusMessage(`Updated ${cleanName}.`);
       } else {
         await createRoutineTemplate({
+          category: selectedCategory,
           daysOfWeek: selectedDays,
           householdId,
           memberIds: remoteMemberIds,
@@ -230,7 +240,8 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
     setEditingTemplateId(template.id);
     setTemplateName(template.name);
     setSelectedMemberIds(template.assignedMemberIds);
-    setSelectedDays(template.daysOfWeek.length > 0 ? template.daysOfWeek : weekdayOptions);
+    setSelectedDays(template.daysOfWeek.length > 0 ? template.daysOfWeek : dayOptions);
+    setSelectedCategory(template.category);
     setSteps(template.steps.length > 0 ? template.steps.map((step) => ({ ...step })) : defaultRoutineSteps);
     setEditorMode("edit");
     setErrorMessage("");
@@ -254,7 +265,8 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
     setEditingTemplateId(null);
     setTemplateName(starterMorningRoutineTemplate.name);
     setSelectedMemberIds(childMembers.map((member) => member.id));
-    setSelectedDays(weekdayOptions);
+    setSelectedDays(dayOptions);
+    setSelectedCategory(defaultRoutineCategory);
     setSteps(defaultRoutineSteps.map((step) => ({ ...step })));
   }
 
@@ -309,7 +321,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
         <div>
           <h2 className="text-xl font-semibold">Routine templates</h2>
           <p className="mt-1 text-sm leading-6 text-[#4c5965]">
-            Create a reusable morning routine and apply those recurring steps to one or more kids.
+            Create reusable routine templates and apply those recurring steps to one or more kids.
           </p>
         </div>
         <span className="text-sm font-semibold text-[#2f6f73]">
@@ -328,7 +340,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                   </p>
                   <p className="mt-2 text-sm text-[#4c5965]">
                     Saved routine templates are the recurring routine steps the dashboard loads for
-                    matching weekdays and assigned kids. Editing a template updates those recurring
+                    matching selected days and assigned kids. Editing a template updates those recurring
                     steps directly instead of creating a separate copy.
                   </p>
                 </div>
@@ -365,7 +377,8 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                         <p className="font-semibold text-[#17202a]">{template.name}</p>
                         <p className="mt-1 text-sm text-[#657381]">
                           {template.stepCount} step{template.stepCount === 1 ? "" : "s"} ·{" "}
-                          {template.assignedMemberNames.join(", ") || "No children"}
+                          {template.assignedMemberNames.join(", ") || "No children"} ·{" "}
+                          {getRoutineTemplateCategoryLabel(template.category)}
                         </p>
                         <p className="mt-1 text-sm text-[#657381]">
                           {template.daysOfWeek.join(", ")}
@@ -482,6 +495,30 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                           </div>
                         </fieldset>
                       </div>
+
+                      <fieldset className="grid gap-2">
+                        <legend className="text-sm font-semibold">Routine bucket</legend>
+                        <div className="flex flex-wrap gap-2">
+                          {routineTemplateCategoryOptions.map((category) => (
+                            <label
+                              className="flex items-center gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-2 py-1 text-sm font-semibold text-[#4c5965]"
+                              key={category}
+                            >
+                              <input
+                                checked={selectedCategory === category}
+                                onChange={() => setSelectedCategory(category)}
+                                type="radio"
+                              />
+                              {getRoutineTemplateCategoryLabel(category)}
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-xs text-[#657381]">
+                          {selectedCategory === "morning-routine"
+                            ? "Morning routines can trigger the per-day child credit configured in Setup."
+                            : "Night routines stay separate on the dashboard and do not affect the morning credit."}
+                        </p>
+                      </fieldset>
 
                       <fieldset className="grid gap-2">
                         <legend className="text-sm font-semibold">Days</legend>
@@ -651,6 +688,7 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
     {
       actionItemIds: Set<string>;
       assignedMemberIds: Set<string>;
+      category: RoutineTemplateCategory;
       daysOfWeek: Set<DayOfWeek>;
       name: string;
       stepsById: Map<string, RoutineStepDraft>;
@@ -669,6 +707,13 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
       {
         actionItemIds: new Set<string>(),
         assignedMemberIds: new Set<string>(),
+        category: resolveRoutineTemplateCategory({
+          category: item.metadata.category,
+          endTime: item.end_time,
+          startTime: item.start_time,
+          templateName: item.metadata.routineTemplateName,
+          title: item.title,
+        }),
         daysOfWeek: new Set<DayOfWeek>(),
         name: item.metadata.routineTemplateName ?? "Routine template",
         stepsById: new Map<string, RoutineStepDraft>(),
@@ -690,6 +735,18 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
       });
     }
 
+    if (
+      resolveRoutineTemplateCategory({
+        category: item.metadata.category,
+        endTime: item.end_time,
+        startTime: item.start_time,
+        templateName: item.metadata.routineTemplateName,
+        title: item.title,
+      }) === "night-routine"
+    ) {
+      group.category = "night-routine";
+    }
+
     for (const memberId of assignmentsByActionItemId.get(item.id) ?? []) {
       group.assignedMemberIds.add(memberId);
     }
@@ -701,6 +758,7 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
     members: members ?? [],
     templates: [...templateGroups.entries()]
       .map(([id, group]) => ({
+        category: group.category,
         id,
         name: group.name,
         stepCount: group.stepsById.size,
@@ -721,6 +779,7 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
 }
 
 async function createRoutineTemplate({
+  category,
   daysOfWeek,
   householdId,
   memberIds,
@@ -728,6 +787,7 @@ async function createRoutineTemplate({
   templateId = crypto.randomUUID(),
   templateName,
 }: {
+  category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
   householdId: string;
   memberIds: string[];
@@ -738,6 +798,7 @@ async function createRoutineTemplate({
   await createRoutineTemplateActionItems({
     entries: memberIds.flatMap((memberId) =>
       steps.map((step) => ({
+        category,
         daysOfWeek,
         endTime: step.endTime,
         memberId,
@@ -780,7 +841,7 @@ async function createRoutineTemplateActionItems({
       routineTemplateName: entry.templateName,
       stepId: entry.stepId,
       assignedRemoteMemberId: entry.memberId,
-      category: "morning-routine",
+      category: entry.category,
     },
   }));
 
@@ -819,6 +880,7 @@ async function createRoutineTemplateActionItems({
 
 async function updateRoutineTemplate({
   actionItemIds,
+  category,
   daysOfWeek,
   householdId,
   memberIds,
@@ -827,6 +889,7 @@ async function updateRoutineTemplate({
   templateName,
 }: {
   actionItemIds: string[];
+  category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
   householdId: string;
   memberIds: string[];
@@ -877,6 +940,13 @@ async function updateRoutineTemplate({
     return [
       {
         actionItemId: item.id,
+        category: resolveRoutineTemplateCategory({
+          category: item.metadata.category,
+          endTime: item.end_time,
+          startTime: item.start_time,
+          templateName: item.metadata.routineTemplateName,
+          title: item.title,
+        }),
         daysOfWeek: normalizeDaysOfWeek(item.days_of_week),
         endTime: normalizeTimeForInput(item.end_time),
         memberId,
@@ -888,6 +958,7 @@ async function updateRoutineTemplate({
     ];
   });
   const syncPlan = planRoutineTemplateSync({
+    category,
     daysOfWeek,
     existing,
     memberIds,
@@ -909,7 +980,7 @@ async function updateRoutineTemplate({
           routineTemplateName: item.templateName,
           stepId: item.stepId,
           assignedRemoteMemberId: item.memberId,
-          category: "morning-routine",
+          category: item.category,
         },
       })
       .eq("household_id", householdId)

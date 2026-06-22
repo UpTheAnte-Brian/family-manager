@@ -67,6 +67,7 @@ export type LocalTemporaryRoutineItem = {
 
 export type ResponsibilityCategory =
   | "morning-routine"
+  | "night-routine"
   | "homework"
   | "chores"
   | "sports"
