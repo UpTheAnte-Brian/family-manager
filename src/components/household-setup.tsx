@@ -17,6 +17,7 @@ import {
   type HouseholdLocation,
 } from "@/lib/households/location";
 import type { DayTemplate, HouseholdMember } from "@/lib/planner/types";
+import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient, getBrowserSupabaseConfig } from "@/lib/supabase/client";
 import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -98,6 +99,7 @@ type HouseholdLocationRow = {
 };
 
 const emptyMemberDraft = createBlankMemberDraft("parent");
+const adminWorkflowOpenStepStorageKeyPrefix = "family-manager:admin:open-step:v1";
 
 export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: HouseholdSetupProps) {
   const [email, setEmail] = useState("");
@@ -121,7 +123,6 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
   const [message, setMessage] = useState("");
   const [activeStep, setActiveStep] = useState<SetupStepId | null>(null);
   const [isConfigured, setIsConfigured] = useState(true);
-  const [openStepOverride, setOpenStepOverride] = useState<number | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const {
     household: selectedHousehold,
@@ -130,6 +131,12 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     selectHousehold,
   } = useCurrentHousehold();
   const selectedHouseholdId = selectedHousehold?.householdId ?? "";
+  const openStepStorageKey = getAdminWorkflowOpenStepStorageKey(session?.user.id, selectedHouseholdId);
+  const [openStepOverrideState, setOpenStepOverrideState] = useState<{ key: string; step: number | null }>({
+    key: openStepStorageKey,
+    step: null,
+  });
+  const [storedOpenStep, setStoredOpenStep] = useLocalStorageState<number>(openStepStorageKey, 0);
   const isHouseholdAdmin = selectedHousehold
     ? selectedHousehold.role === "owner" || selectedHousehold.role === "parent"
     : false;
@@ -140,7 +147,26 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
   const hasMembers = activeHouseholdMembers.length > 0;
   const setupProgress = [hasAccount, hasHousehold, hasMembers].filter(Boolean).length;
   const recommendedOpenStep = getRecommendedOpenStep(authReady, hasAccount, hasHousehold, hasMembers);
-  const openStep = openStepOverride ?? recommendedOpenStep;
+  const restoredOpenStep = getRestorableWorkflowStep(storedOpenStep, {
+    hasAccount,
+    hasHousehold,
+    hasMembers,
+    hasSelectedHousehold: Boolean(selectedHouseholdId),
+    isHouseholdAdmin,
+  });
+  const openStepOverride =
+    openStepOverrideState.key === openStepStorageKey ? openStepOverrideState.step : null;
+  const resolvedOpenStepOverride =
+    openStepOverride === 0
+      ? 0
+      : getRestorableWorkflowStep(openStepOverride, {
+          hasAccount,
+          hasHousehold,
+          hasMembers,
+          hasSelectedHousehold: Boolean(selectedHouseholdId),
+          isHouseholdAdmin,
+        });
+  const openStep = resolvedOpenStepOverride ?? restoredOpenStep ?? recommendedOpenStep;
   const activeAccessEntries = householdAccessEntries.filter((entry) => entry.entry_type === "member");
   const pendingInvitationEntries = householdAccessEntries.filter((entry) => entry.entry_type === "invitation");
   const adminMembers = useMemo(() => {
@@ -188,7 +214,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
           if (event === "SIGNED_IN") {
             setPassword("");
-            setOpenStepOverride(null);
+            setOpenStepOverrideState({ key: "", step: null });
             setRefreshVersion((current) => current + 1);
           }
         });
@@ -337,7 +363,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
       setPassword("");
       setSession(data.session);
-      setOpenStepOverride(null);
+      setOpenStepOverrideState({ key: openStepStorageKey, step: null });
 
       if (!data.session) {
         return `If this is a new account, check ${email} for the confirmation email. If this email is already confirmed, use Sign in.`;
@@ -362,7 +388,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
       setPassword("");
       setSession(data.session);
-      setOpenStepOverride(null);
+      setOpenStepOverrideState({ key: openStepStorageKey, step: null });
       setRefreshVersion((current) => current + 1);
       return "Signed in.";
     }, "account");
@@ -379,7 +405,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
 
       setSession(null);
       setPassword("");
-      setOpenStepOverride(null);
+      setOpenStepOverrideState({ key: openStepStorageKey, step: null });
       return "Signed out.";
     }, "account");
   }
@@ -405,7 +431,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
       setHouseholdMembers([]);
       setHouseholdAccessEntries([]);
       setMemberDrafts([emptyMemberDraft]);
-      setOpenStepOverride(3);
+      openWorkflowStep(3);
       await refreshCurrentHousehold();
 
       if (isHouseholdLocationComplete(householdLocation)) {
@@ -634,6 +660,20 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     }
   }
 
+  function openWorkflowStep(step: number) {
+    setOpenStepOverrideState({ key: openStepStorageKey, step });
+    setStoredOpenStep(step);
+  }
+
+  function toggleWorkflowStep(step: number, isOpen: boolean) {
+    if (isOpen) {
+      openWorkflowStep(step);
+      return;
+    }
+
+    setOpenStepOverrideState({ key: openStepStorageKey, step: 0 });
+  }
+
   async function selectHouseholdAddressSuggestion(suggestion: AddressSuggestion) {
     if (!session?.access_token) {
       return;
@@ -693,7 +733,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   complete={hasAccount}
                   index={1}
                   isOpen={openStep === 1}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 1 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(1, isOpen)}
                   summary={session?.user.email ?? "Create or sign in to the household owner account."}
                   title="Profile"
                 >
@@ -764,7 +804,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasAccount}
                   index={2}
                   isOpen={openStep === 2}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 2 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(2, isOpen)}
                   summary={selectedHousehold ? selectedHousehold.householdName : "Create or select a household."}
                   title="Household"
                 >
@@ -896,7 +936,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasHousehold || !isHouseholdAdmin}
                   index={3}
                   isOpen={openStep === 3}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 3 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(3, isOpen)}
                   summary={
                     !hasHousehold
                       ? "Select a household before editing people."
@@ -930,7 +970,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasHousehold || !isHouseholdAdmin}
                   index={4}
                   isOpen={openStep === 4}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 4 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(4, isOpen)}
                   summary={
                     !hasHousehold
                       ? "Select a household before managing access."
@@ -962,7 +1002,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasMembers || !isHouseholdAdmin}
                   index={5}
                   isOpen={openStep === 5}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 5 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(5, isOpen)}
                   summary={
                     !isHouseholdAdmin
                       ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage routines.`
@@ -978,7 +1018,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasMembers || !isHouseholdAdmin}
                   index={6}
                   isOpen={openStep === 6}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 6 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(6, isOpen)}
                   summary={
                     !isHouseholdAdmin
                       ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage baseline flows.`
@@ -994,7 +1034,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasMembers || !isHouseholdAdmin}
                   index={7}
                   isOpen={openStep === 7}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 7 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(7, isOpen)}
                   summary={
                     !isHouseholdAdmin
                       ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage calendar imports.`
@@ -1010,7 +1050,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                   disabled={!hasMembers || !selectedHouseholdId}
                   index={8}
                   isOpen={openStep === 8}
-                  onOpenChange={(isOpen) => setOpenStepOverride(isOpen ? 8 : 0)}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(8, isOpen)}
                   summary={
                     !selectedHouseholdId
                       ? "Select a household before configuring activity challenges."
@@ -1192,6 +1232,45 @@ function getRecommendedOpenStep(
   }
 
   return 0;
+}
+
+function getAdminWorkflowOpenStepStorageKey(authUserId: string | undefined, householdId: string) {
+  return `${adminWorkflowOpenStepStorageKeyPrefix}:${authUserId ?? "guest"}:${householdId || "global"}`;
+}
+
+function getRestorableWorkflowStep(
+  step: number | null,
+  {
+    hasAccount,
+    hasHousehold,
+    hasMembers,
+    hasSelectedHousehold,
+    isHouseholdAdmin,
+  }: {
+    hasAccount: boolean;
+    hasHousehold: boolean;
+    hasMembers: boolean;
+    hasSelectedHousehold: boolean;
+    isHouseholdAdmin: boolean;
+  },
+) {
+  switch (step) {
+    case 1:
+      return 1;
+    case 2:
+      return hasAccount ? 2 : null;
+    case 3:
+    case 4:
+      return hasHousehold && isHouseholdAdmin ? step : null;
+    case 5:
+    case 6:
+    case 7:
+      return hasMembers && isHouseholdAdmin ? step : null;
+    case 8:
+      return hasMembers && hasSelectedHousehold ? 8 : null;
+    default:
+      return null;
+  }
 }
 
 function WorkflowStep({

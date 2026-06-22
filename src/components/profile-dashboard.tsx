@@ -2778,7 +2778,7 @@ export function ProfileDashboard({
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
-        <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <div className="grid gap-5 min-[810px]:grid-cols-[1fr_1fr]">
           <div className="space-y-5">
             <Panel
               action={
@@ -3039,7 +3039,7 @@ export function ProfileDashboard({
             </Panel>
           </div>
 
-          <div className="grid gap-5 xl:col-span-2 xl:grid-cols-[1fr_1fr]">
+          <div className="grid gap-5 min-[810px]:col-span-2 min-[810px]:grid-cols-[1fr_1fr]">
             {remoteSyncErrors.length > 0 ? (
               <Panel title="Sync Issues">
                 <ul className="grid gap-2">
@@ -3066,7 +3066,7 @@ export function ProfileDashboard({
             </Panel>
           </div>
 
-          <div className="xl:col-span-2">
+          <div className="min-[810px]:col-span-2">
             <Panel
               action={
                 displayedDay.baseline.blocks.length > 0 ? (
