@@ -2639,8 +2639,8 @@ export function ProfileDashboard({
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
       <section className="sticky top-0 z-30 border-b border-[#cbd5df] bg-[rgba(248,250,252,0.96)] shadow-sm backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:px-8 lg:px-10">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-3 sm:px-8 lg:px-10">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
             <Link className="text-sm font-semibold text-[#1f6f8b]" href="/admin">
               Admin setup
             </Link>
@@ -2651,15 +2651,15 @@ export function ProfileDashboard({
               Chores
             </Link>
           </div>
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-start">
-            <div className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_280px] lg:items-center">
+            <div className="flex flex-wrap items-end gap-2.5">
               {households.length > 1 ? (
                 <label className="grid gap-1 text-sm">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
                     Household
                   </span>
                   <select
-                    className="min-w-[200px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
+                    className="min-w-[170px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a] xl:min-w-[200px]"
                     onChange={(event) => selectHousehold(event.target.value)}
                     value={household?.householdId ?? ""}
                   >
@@ -2671,7 +2671,7 @@ export function ProfileDashboard({
                   </select>
                 </label>
               ) : household ? (
-                <div className="min-w-[200px] border border-[#d7e0e7] bg-white px-3 py-2">
+                <div className="min-w-[170px] border border-[#d7e0e7] bg-white px-3 py-2 xl:min-w-[200px]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">Household</p>
                   <p className="mt-1 text-sm font-semibold text-[#17202a]">{household.householdName}</p>
                 </div>
@@ -2679,7 +2679,7 @@ export function ProfileDashboard({
               <label className="grid gap-1 text-sm">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">Person</span>
                 <select
-                  className="min-w-[190px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a]"
+                  className="min-w-[170px] border border-[#cbd5df] bg-white px-3 py-2 text-sm font-semibold text-[#17202a] xl:min-w-[190px]"
                   onChange={(event) => selectMember(event.target.value)}
                   value={selectedMember.id}
                 >
@@ -2693,7 +2693,7 @@ export function ProfileDashboard({
             </div>
             <button
               aria-haspopup="dialog"
-              className={`group flex min-w-[220px] items-center gap-3 border px-4 py-3 text-left shadow-sm transition xl:self-center ${
+              className={`group flex w-full items-center gap-2.5 border px-3 py-2.5 text-left shadow-sm transition sm:w-auto lg:w-[170px] lg:justify-self-center ${
                 hasPendingBankRequests
                   ? "border-[#ef476f] bg-[#fff2f6] shadow-[0_0_0_3px_rgba(239,71,111,0.12)]"
                   : "border-[#d7e0e7] bg-white hover:border-[#9fb8c5]"
@@ -2702,7 +2702,7 @@ export function ProfileDashboard({
               type="button"
             >
               <span
-                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border text-lg font-semibold ${
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border text-base font-semibold ${
                   hasPendingBankRequests
                     ? "border-[#ef476f] bg-white text-[#d83b63]"
                     : "border-[#cbd5df] bg-[#f8fafc] text-[#1f6f8b]"
@@ -2711,10 +2711,10 @@ export function ProfileDashboard({
                 $
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
                   {selectedMember.role === "child" ? "Bank" : "Bank Requests"}
                 </span>
-                <span className="mt-0.5 block text-lg font-semibold text-[#17202a]">
+                <span className="mt-0.5 block text-base font-semibold text-[#17202a]">
                   {selectedMember.role === "child"
                     ? formatCurrency(allowanceBalance)
                     : hasPendingBankRequests
@@ -2722,17 +2722,17 @@ export function ProfileDashboard({
                       : "View details"}
                 </span>
                 <span
-                  className={`mt-1 block text-xs ${
+                  className={`mt-0.5 block text-[11px] leading-4 ${
                     hasPendingBankRequests ? "font-semibold text-[#d83b63]" : "text-[#4c5965]"
                   }`}
                 >
                   {hasPendingBankRequests
                     ? selectedMember.role === "child"
-                      ? "Pending request needs approval"
-                      : "Review pending household requests"
+                      ? "Pending request"
+                      : "Review pending"
                     : selectedMember.role === "child"
-                      ? "Open ledger and requests"
-                      : "Open balances and requests"}
+                      ? "Open bank"
+                      : "Open requests"}
                 </span>
               </span>
               {hasPendingBankRequests ? (
@@ -2741,17 +2741,17 @@ export function ProfileDashboard({
                 </span>
               ) : null}
             </button>
-            <div className="flex flex-col gap-3 sm:items-end xl:justify-self-end">
-              <div className="grid grid-cols-3 gap-2 sm:w-[340px]">
+            <div className="grid gap-2 border border-[#d7e0e7] bg-white px-3 py-2.5 shadow-sm lg:w-[280px] lg:justify-self-end">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  className="border border-[#d7e0e7] bg-[#f8fafc] px-2 py-1.5 text-xs font-semibold"
                   onClick={() => shiftDashboardDate(-1)}
                   type="button"
                 >
                   Previous
                 </button>
                 <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  className="border border-[#d7e0e7] bg-[#f8fafc] px-2 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={isTodaySelected}
                   onClick={() => setDashboardDate(today.date)}
                   type="button"
@@ -2759,15 +2759,15 @@ export function ProfileDashboard({
                   Today
                 </button>
                 <button
-                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  className="border border-[#d7e0e7] bg-[#f8fafc] px-2 py-1.5 text-xs font-semibold"
                   onClick={() => shiftDashboardDate(1)}
                   type="button"
                 >
                   Next
                 </button>
               </div>
-              <div className="sm:w-[340px] sm:text-right">
-                <h2 className="text-lg font-semibold">{formatDateLabel(displayedDay.date)}</h2>
+              <div className="text-center lg:text-right">
+                <h2 className="text-base font-semibold">{formatDateLabel(displayedDay.date)}</h2>
                 <p className="text-xs text-[#4c5965]">
                   {displayedDay.dayTypeLabel} · {scheduleEvents.length} event{scheduleEvents.length === 1 ? "" : "s"}
                 </p>
