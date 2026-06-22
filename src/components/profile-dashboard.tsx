@@ -675,14 +675,30 @@ export function ProfileDashboard({
       temporaryRoutines,
     ],
   );
-  const responsibilityItems = getResponsibilityItems(
-    routineItems,
-    assignments,
-    isRemoteHouseholdReady ? [...remoteResponsibilities, ...state.localResponsibilities] : state.localResponsibilities,
-    temporaryRoutines,
-    localTasks,
-    selectedMember,
-    displayedDay,
+  const responsibilityItems = useMemo(
+    () =>
+      getResponsibilityItems(
+        routineItems,
+        assignments,
+        isRemoteHouseholdReady
+          ? [...remoteResponsibilities, ...state.localResponsibilities]
+          : state.localResponsibilities,
+        temporaryRoutines,
+        localTasks,
+        selectedMember,
+        displayedDay,
+      ),
+    [
+      assignments,
+      displayedDay,
+      isRemoteHouseholdReady,
+      localTasks,
+      remoteResponsibilities,
+      routineItems,
+      selectedMember,
+      state.localResponsibilities,
+      temporaryRoutines,
+    ],
   );
   const reminderItems = getReminderItems(
     selectedMember,
@@ -724,7 +740,10 @@ export function ProfileDashboard({
     : [];
   const isPastSelectedDate = displayedDay.date < today.date;
   const isTodaySelected = displayedDay.date === today.date;
-  const groupedResponsibilityItems = groupResponsibilitiesByCategory(responsibilityItems);
+  const groupedResponsibilityItems = useMemo(
+    () => groupResponsibilitiesByCategory(responsibilityItems),
+    [responsibilityItems],
+  );
   const selectedBaselineBlocks = displayedDay.baseline.blocks.filter((block) =>
     selectedBaselineBlockIds.includes(block.id),
   );
@@ -1376,15 +1395,23 @@ export function ProfileDashboard({
     morningRoutineProgressRef.current = syncPlan.nextProgress;
 
     if (syncPlan.shouldCollapseCategory) {
-      setCollapsedResponsibilityCategories((current) => ({
-        ...current,
-        "morning-routine": true,
-      }));
+      setCollapsedResponsibilityCategories((current) =>
+        current["morning-routine"]
+          ? current
+          : {
+              ...current,
+              "morning-routine": true,
+            },
+      );
     } else if (syncPlan.shouldSyncAllowance) {
-      setCollapsedResponsibilityCategories((current) => ({
-        ...current,
-        "morning-routine": false,
-      }));
+      setCollapsedResponsibilityCategories((current) =>
+        current["morning-routine"]
+          ? {
+              ...current,
+              "morning-routine": false,
+            }
+          : current,
+      );
     }
 
     if (!syncPlan.shouldSyncAllowance) {

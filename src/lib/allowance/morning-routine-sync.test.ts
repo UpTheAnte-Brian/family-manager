@@ -49,6 +49,29 @@ describe("planMorningRoutineSync", () => {
     );
   });
 
+  it("does not keep recollapsing an already-complete routine", () => {
+    assert.deepEqual(
+      planMorningRoutineSync({
+        contextKey: "2026-06-16:mason",
+        isComplete: true,
+        previousProgress: {
+          contextKey: "2026-06-16:mason",
+          isComplete: true,
+        },
+      }),
+      {
+        nextProgress: {
+          contextKey: "2026-06-16:mason",
+          isComplete: true,
+        },
+        shouldCelebrate: false,
+        shouldCollapseCategory: false,
+        shouldSyncAllowance: false,
+        shouldAwardAllowance: true,
+      },
+    );
+  });
+
   it("celebrates only when the current day flips to complete", () => {
     assert.deepEqual(
       planMorningRoutineSync({

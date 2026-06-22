@@ -31,7 +31,7 @@ export function planMorningRoutineSync({
     return {
       nextProgress: previousProgress,
       shouldCelebrate: false,
-      shouldCollapseCategory: isComplete,
+      shouldCollapseCategory: false,
       shouldSyncAllowance: false,
       shouldAwardAllowance: isComplete,
     };
