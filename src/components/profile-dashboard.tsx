@@ -375,6 +375,8 @@ type AllowanceEntryModalState = {
   entry: AllowanceEntry;
 } | null;
 
+type BankModalState = boolean;
+
 type DashboardEvent = FixedEvent & {
   assignedMemberIds?: string[];
 };
@@ -389,7 +391,6 @@ const storageKey = "family-manager:dashboard:v1";
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 const responsibilityCategories: ResponsibilityCategory[] = [
   "morning-routine",
-  "night-routine",
   "homework",
   "chores",
   "sports",
@@ -400,6 +401,7 @@ const responsibilityCategories: ResponsibilityCategory[] = [
   "family-planning",
   "home-maintenance",
   "finance",
+  "night-routine",
 ];
 const monthNames = [
   "January",
@@ -508,6 +510,7 @@ export function ProfileDashboard({
   const [approvingAllowanceRequestId, setApprovingAllowanceRequestId] = useState("");
   const [allowanceEntryModal, setAllowanceEntryModal] = useState<AllowanceEntryModalState>(null);
   const [allowanceRequestModal, setAllowanceRequestModal] = useState<AllowanceRequestModalState>(null);
+  const [bankModalOpen, setBankModalOpen] = useState<BankModalState>(false);
   const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
   const [responsibilityModal, setResponsibilityModal] = useState<ResponsibilityModalState | null>(null);
   const [manualScheduleEventModal, setManualScheduleEventModal] = useState(false);
@@ -727,6 +730,7 @@ export function ProfileDashboard({
     ? getMorningRoutineAllowanceAmount(activeRemoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
   const allowanceBalance = getAllowanceBalance(selectedMemberAllowanceEntries, selectedMember.id);
+  const hasPendingBankRequests = visibleAllowanceRequests.length > 0;
   const selectedMemberActivityEntries = remoteActivityEntries.filter(
     (entry) => entry.memberId === selectedMember.id,
   );
@@ -2647,7 +2651,7 @@ export function ProfileDashboard({
               Chores
             </Link>
           </div>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-start">
             <div className="flex flex-wrap items-end gap-3">
               {households.length > 1 ? (
                 <label className="grid gap-1 text-sm">
@@ -2687,6 +2691,56 @@ export function ProfileDashboard({
                 </select>
               </label>
             </div>
+            <button
+              aria-haspopup="dialog"
+              className={`group flex min-w-[220px] items-center gap-3 border px-4 py-3 text-left shadow-sm transition xl:self-center ${
+                hasPendingBankRequests
+                  ? "border-[#ef476f] bg-[#fff2f6] shadow-[0_0_0_3px_rgba(239,71,111,0.12)]"
+                  : "border-[#d7e0e7] bg-white hover:border-[#9fb8c5]"
+              }`}
+              onClick={() => setBankModalOpen(true)}
+              type="button"
+            >
+              <span
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border text-lg font-semibold ${
+                  hasPendingBankRequests
+                    ? "border-[#ef476f] bg-white text-[#d83b63]"
+                    : "border-[#cbd5df] bg-[#f8fafc] text-[#1f6f8b]"
+                }`}
+              >
+                $
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                  {selectedMember.role === "child" ? "Bank" : "Bank Requests"}
+                </span>
+                <span className="mt-0.5 block text-lg font-semibold text-[#17202a]">
+                  {selectedMember.role === "child"
+                    ? formatCurrency(allowanceBalance)
+                    : hasPendingBankRequests
+                      ? `${visibleAllowanceRequests.length} pending`
+                      : "View details"}
+                </span>
+                <span
+                  className={`mt-1 block text-xs ${
+                    hasPendingBankRequests ? "font-semibold text-[#d83b63]" : "text-[#4c5965]"
+                  }`}
+                >
+                  {hasPendingBankRequests
+                    ? selectedMember.role === "child"
+                      ? "Pending request needs approval"
+                      : "Review pending household requests"
+                    : selectedMember.role === "child"
+                      ? "Open ledger and requests"
+                      : "Open balances and requests"}
+                </span>
+              </span>
+              {hasPendingBankRequests ? (
+                <span className="shrink-0 border border-[#ef476f] bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#d83b63]">
+                  {visibleAllowanceRequests.length}
+                </span>
+              ) : null}
+            </button>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="min-w-[150px]">
                 <h2 className="text-lg font-semibold">{formatDateLabel(displayedDay.date)}</h2>
@@ -3001,232 +3055,6 @@ export function ProfileDashboard({
               </Panel>
             ) : null}
             <BirthdayCountdownPanel member={selectedMember} referenceDate={displayedDay.date} />
-
-            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Bank</h2>
-                  <p className="mt-1 text-sm text-[#657381]">
-                    Approved credits and debits land in the ledger below. New bank requests wait for a parent approval
-                    before they change the balance.
-                  </p>
-                  {selectedMember.role === "child" && selectedMemberMorningRoutineAllowanceAmount ? (
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                      Morning routine credit {formatCurrency(selectedMemberMorningRoutineAllowanceAmount)} per day
-                    </p>
-                  ) : null}
-                </div>
-                {selectedMember.role === "child" ? (
-                  <div className="text-right">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                      Balance
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-[#1f6f8b]">
-                      {formatCurrency(allowanceBalance)}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-              {selectedMember.role !== "child" ? (
-                <p className="mt-4 text-sm text-[#4c5965]">
-                  Switch to a child to view their balance, or submit a new bank request for a child below.
-                </p>
-              ) : selectedMemberAllowanceEntries.length > 0 ? (
-                <ol className="mt-4 grid gap-2">
-                  {selectedMemberAllowanceEntries.slice(0, 8).map((entry) => (
-                    <li
-                      className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[1fr_auto]"
-                      key={entry.id}
-                    >
-                      <div>
-                        <p className="font-semibold">{entry.choreTitle ?? entry.label ?? "Allowance credit"}</p>
-                        <p className="mt-1 text-xs text-[#657381]">
-                          {formatDateLabel(entry.occurredAt.slice(0, 10))}
-                        </p>
-                        {entry.note ? (
-                          <p className="mt-2 text-xs text-[#4c5965]">{entry.note}</p>
-                        ) : null}
-                      </div>
-                      <span
-                        className={`font-semibold ${
-                          entry.amount < 0 ? "text-[#8a3b12]" : "text-[#2f6f73]"
-                        }`}
-                      >
-                        {formatCurrency(entry.amount)}
-                      </span>
-                      {isAllowanceApprovalMode ? (
-                        <div className="sm:col-span-2 flex justify-end">
-                          <button
-                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                            onClick={() => openAllowanceEntryModal(entry)}
-                            type="button"
-                          >
-                            Edit or delete
-                          </button>
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <EmptyState text="No allowance has been earned yet." />
-              )}
-              <div className="mt-4 border-t border-[#e2e8f0] pt-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                      Bank Requests
-                    </h3>
-                    <p className="mt-1 text-sm text-[#4c5965]">
-                      Submit credits for earned work or debits when cash is taken out of the bank.
-                    </p>
-                  </div>
-                  {isAllowanceApprovalMode ? (
-                    <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                      Parent approval enabled
-                    </span>
-                  ) : null}
-                </div>
-                {!isRemoteHouseholdReady ? (
-                  <p className="mt-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm text-[#4c5965]">
-                    Connect a household in Setup to submit and approve bank requests.
-                  </p>
-                ) : childMembers.length === 0 ? (
-                  <p className="mt-3 text-sm text-[#4c5965]">
-                    Add at least one child in Setup before creating bank requests.
-                  </p>
-                ) : (
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4">
-                    <p className="max-w-2xl text-sm text-[#4c5965]">
-                      Open a request to add money into the bank or debit it back out. Parents can also
-                      reopen pending requests to fix details before approval.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
-                        onClick={() => openCreateAllowanceRequestModal("credit")}
-                        type="button"
-                      >
-                        New credit request
-                      </button>
-                      <button
-                        className="border border-[#8a3b12] bg-white px-4 py-2 text-sm font-semibold text-[#8a3b12]"
-                        onClick={() => openCreateAllowanceRequestModal("debit")}
-                        type="button"
-                      >
-                        New debit request
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 border-t border-[#e2e8f0] pt-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
-                      Pending Approval
-                    </h3>
-                    <p className="mt-1 text-sm text-[#4c5965]">
-                      {selectedMember.role === "child"
-                        ? "Requests waiting to be added to this bank balance."
-                        : "Pending child bank requests across the household."}
-                    </p>
-                  </div>
-                </div>
-                {visibleAllowanceRequests.length > 0 ? (
-                  <ol className="mt-4 grid gap-2">
-                    {visibleAllowanceRequests.map((request) => {
-                      const requestChildId = remoteExternalKeysByMemberId[request.childRemoteMemberId];
-                      const requestChild =
-                        members.find((member) => member.id === requestChildId) ?? null;
-                      const requestedById = request.requestedByRemoteMemberId
-                        ? remoteExternalKeysByMemberId[request.requestedByRemoteMemberId]
-                        : undefined;
-                      const requestedBy =
-                        members.find((member) => member.id === requestedById) ?? null;
-
-                      return (
-                        <li
-                          className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm"
-                          key={request.id}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold">{request.choreTitle}</p>
-                              <p className="mt-1 text-xs text-[#657381]">
-                                {formatDateLabel(request.occurrenceDate)} · {getAllowanceRequestKindLabel(request.kind)}
-                                {request.kind === "credit" && request.category
-                                  ? ` · ${getChoreCategoryLabel(request.category)}`
-                                  : ""}
-                                {requestChild && selectedMember.role !== "child"
-                                  ? ` · ${requestChild.preferredName}`
-                                  : ""}
-                                {requestedBy ? ` · entered by ${requestedBy.preferredName}` : ""}
-                              </p>
-                              {request.note ? (
-                                <p className="mt-2 text-xs text-[#4c5965]">{request.note}</p>
-                              ) : null}
-                            </div>
-                            <div className="text-right">
-                              <p
-                                className={`font-semibold ${
-                                  request.kind === "debit" ? "text-[#8a3b12]" : "text-[#2f6f73]"
-                                }`}
-                              >
-                                {formatCurrency(getSignedAllowanceRequestAmount(request.amount, request.kind))}
-                              </p>
-                              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#a14a1a]">
-                                Awaiting approval
-                              </p>
-                            </div>
-                          </div>
-                          {isAllowanceApprovalMode ? (
-                            <div className="flex flex-wrap justify-end gap-2">
-                              <button
-                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                                disabled={approvingAllowanceRequestId === request.id}
-                                onClick={() => openEditAllowanceRequestModal(request)}
-                                type="button"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={approvingAllowanceRequestId === request.id}
-                                onClick={() => {
-                                  void approveAllowanceRequest(request);
-                                }}
-                                type="button"
-                              >
-                                {approvingAllowanceRequestId === request.id ? "Approving..." : "Approve"}
-                              </button>
-                            </div>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                ) : (
-                  <EmptyState text="No bank requests are waiting for approval." />
-                )}
-              </div>
-              {isRemoteHouseholdReady && remoteAllowanceError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {remoteAllowanceError}
-                </p>
-              ) : null}
-              {allowanceEntryError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {allowanceEntryError}
-                </p>
-              ) : null}
-              {remoteAllowanceRequestError ? (
-                <p className="mt-3 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                  {remoteAllowanceRequestError}
-                </p>
-              ) : null}
-            </section>
-
             <Panel title="History Notes">
               <EmptyState
                 text={
@@ -3389,6 +3217,31 @@ export function ProfileDashboard({
               setTemporaryRoutineModal(false);
             }
           }}
+        />
+      ) : null}
+      {bankModalOpen ? (
+        <BankDetailsModal
+          allowanceBalance={allowanceBalance}
+          allowanceEntryError={allowanceEntryError}
+          approvingAllowanceRequestId={approvingAllowanceRequestId}
+          childMembers={childMembers}
+          isAllowanceApprovalMode={isAllowanceApprovalMode}
+          isRemoteHouseholdReady={isRemoteHouseholdReady}
+          members={members}
+          onApproveAllowanceRequest={(request) => {
+            void approveAllowanceRequest(request);
+          }}
+          onClose={() => setBankModalOpen(false)}
+          onOpenAllowanceEntryModal={openAllowanceEntryModal}
+          onOpenCreateAllowanceRequestModal={openCreateAllowanceRequestModal}
+          onOpenEditAllowanceRequestModal={openEditAllowanceRequestModal}
+          remoteAllowanceError={remoteAllowanceError}
+          remoteAllowanceRequestError={remoteAllowanceRequestError}
+          remoteExternalKeysByMemberId={remoteExternalKeysByMemberId}
+          selectedMember={selectedMember}
+          selectedMemberAllowanceEntries={selectedMemberAllowanceEntries}
+          selectedMemberMorningRoutineAllowanceAmount={selectedMemberMorningRoutineAllowanceAmount}
+          visibleAllowanceRequests={visibleAllowanceRequests}
         />
       ) : null}
       {allowanceRequestModal ? (
@@ -6681,6 +6534,328 @@ function DashboardSetupGate({ title }: { title: string }) {
         </Link>
       </section>
     </main>
+  );
+}
+
+function BankDetailsModal({
+  allowanceBalance,
+  allowanceEntryError,
+  approvingAllowanceRequestId,
+  childMembers,
+  isAllowanceApprovalMode,
+  isRemoteHouseholdReady,
+  members,
+  onApproveAllowanceRequest,
+  onClose,
+  onOpenAllowanceEntryModal,
+  onOpenCreateAllowanceRequestModal,
+  onOpenEditAllowanceRequestModal,
+  remoteAllowanceError,
+  remoteAllowanceRequestError,
+  remoteExternalKeysByMemberId,
+  selectedMember,
+  selectedMemberAllowanceEntries,
+  selectedMemberMorningRoutineAllowanceAmount,
+  visibleAllowanceRequests,
+}: {
+  allowanceBalance: number;
+  allowanceEntryError: string;
+  approvingAllowanceRequestId: string;
+  childMembers: HouseholdMember[];
+  isAllowanceApprovalMode: boolean;
+  isRemoteHouseholdReady: boolean;
+  members: HouseholdMember[];
+  onApproveAllowanceRequest: (request: AllowanceRequest) => void;
+  onClose: () => void;
+  onOpenAllowanceEntryModal: (entry: AllowanceEntry) => void;
+  onOpenCreateAllowanceRequestModal: (kind: AllowanceRequestKind) => void;
+  onOpenEditAllowanceRequestModal: (request: AllowanceRequest) => void;
+  remoteAllowanceError: string;
+  remoteAllowanceRequestError: string;
+  remoteExternalKeysByMemberId: Record<string, string>;
+  selectedMember: HouseholdMember;
+  selectedMemberAllowanceEntries: AllowanceEntry[];
+  selectedMemberMorningRoutineAllowanceAmount?: number;
+  visibleAllowanceRequests: AllowanceRequest[];
+}) {
+  const hasPendingRequests = visibleAllowanceRequests.length > 0;
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+              Family Bank
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-[#17202a]">
+              {selectedMember.role === "child"
+                ? `${selectedMember.preferredName}'s bank`
+                : "Household bank requests"}
+            </h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Approved credits and debits change the ledger. New requests stay pending until a parent approves them.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          <div
+            className={`mb-5 grid gap-3 border px-4 py-4 sm:grid-cols-[1fr_auto] ${
+              hasPendingRequests ? "border-[#ef476f] bg-[#fff3f6]" : "border-[#d7e0e7] bg-[#f8fafc]"
+            }`}
+          >
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                {selectedMember.role === "child" ? "Current balance" : "Pending approval"}
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-[#17202a]">
+                {selectedMember.role === "child"
+                  ? formatCurrency(allowanceBalance)
+                  : `${visibleAllowanceRequests.length} request${visibleAllowanceRequests.length === 1 ? "" : "s"}`}
+              </p>
+              <p className={`mt-1 text-sm ${hasPendingRequests ? "font-semibold text-[#d83b63]" : "text-[#4c5965]"}`}>
+                {hasPendingRequests
+                  ? selectedMember.role === "child"
+                    ? "Pending request highlighted here until it is approved."
+                    : "Pending requests need review before they affect a child balance."
+                  : selectedMember.role === "child"
+                    ? "No pending requests are waiting on this balance."
+                    : "No household requests are waiting for approval."}
+              </p>
+            </div>
+            {selectedMember.role === "child" && selectedMemberMorningRoutineAllowanceAmount ? (
+              <div className="sm:text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                  Morning routine
+                </p>
+                <p className="mt-1 text-lg font-semibold text-[#1f6f8b]">
+                  {formatCurrency(selectedMemberMorningRoutineAllowanceAmount)}
+                </p>
+                <p className="mt-1 text-xs text-[#4c5965]">Daily credit when fully completed.</p>
+              </div>
+            ) : null}
+          </div>
+
+          {selectedMember.role !== "child" ? (
+            <p className="mb-4 text-sm text-[#4c5965]">
+              Switch to a child to view their balance, or submit a new bank request for a child below.
+            </p>
+          ) : selectedMemberAllowanceEntries.length > 0 ? (
+            <section className="mb-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">Ledger</h3>
+                  <p className="mt-1 text-sm text-[#4c5965]">Recent credits and debits for this child.</p>
+                </div>
+              </div>
+              <ol className="grid gap-2">
+                {selectedMemberAllowanceEntries.slice(0, 8).map((entry) => (
+                  <li
+                    className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[1fr_auto]"
+                    key={entry.id}
+                  >
+                    <div>
+                      <p className="font-semibold">{entry.choreTitle ?? entry.label ?? "Allowance credit"}</p>
+                      <p className="mt-1 text-xs text-[#657381]">
+                        {formatDateLabel(entry.occurredAt.slice(0, 10))}
+                      </p>
+                      {entry.note ? <p className="mt-2 text-xs text-[#4c5965]">{entry.note}</p> : null}
+                    </div>
+                    <span
+                      className={`font-semibold ${
+                        entry.amount < 0 ? "text-[#8a3b12]" : "text-[#2f6f73]"
+                      }`}
+                    >
+                      {formatCurrency(entry.amount)}
+                    </span>
+                    {isAllowanceApprovalMode ? (
+                      <div className="sm:col-span-2 flex justify-end">
+                        <button
+                          className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                          onClick={() => onOpenAllowanceEntryModal(entry)}
+                          type="button"
+                        >
+                          Edit or delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : (
+            <div className="mb-5">
+              <EmptyState text="No allowance has been earned yet." />
+            </div>
+          )}
+
+          <section className="border-t border-[#e2e8f0] pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                  Bank Requests
+                </h3>
+                <p className="mt-1 text-sm text-[#4c5965]">
+                  Submit credits for earned work or debits when cash is taken out of the bank.
+                </p>
+              </div>
+              {isAllowanceApprovalMode ? (
+                <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                  Parent approval enabled
+                </span>
+              ) : null}
+            </div>
+            {!isRemoteHouseholdReady ? (
+              <p className="mt-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm text-[#4c5965]">
+                Connect a household in Setup to submit and approve bank requests.
+              </p>
+            ) : childMembers.length === 0 ? (
+              <p className="mt-3 text-sm text-[#4c5965]">
+                Add at least one child in Setup before creating bank requests.
+              </p>
+            ) : (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4">
+                <p className="max-w-2xl text-sm text-[#4c5965]">
+                  Open a request to add money into the bank or debit it back out. Parents can also reopen
+                  pending requests to fix details before approval.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() => onOpenCreateAllowanceRequestModal("credit")}
+                    type="button"
+                  >
+                    New credit request
+                  </button>
+                  <button
+                    className="border border-[#8a3b12] bg-white px-4 py-2 text-sm font-semibold text-[#8a3b12]"
+                    onClick={() => onOpenCreateAllowanceRequestModal("debit")}
+                    type="button"
+                  >
+                    New debit request
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="mt-4 border-t border-[#e2e8f0] pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                  Pending Approval
+                </h3>
+                <p className="mt-1 text-sm text-[#4c5965]">
+                  {selectedMember.role === "child"
+                    ? "Requests waiting to be added to this bank balance."
+                    : "Pending child bank requests across the household."}
+                </p>
+              </div>
+            </div>
+            {visibleAllowanceRequests.length > 0 ? (
+              <ol className="mt-4 grid gap-2">
+                {visibleAllowanceRequests.map((request) => {
+                  const requestChildId = remoteExternalKeysByMemberId[request.childRemoteMemberId];
+                  const requestChild = members.find((member) => member.id === requestChildId) ?? null;
+                  const requestedById = request.requestedByRemoteMemberId
+                    ? remoteExternalKeysByMemberId[request.requestedByRemoteMemberId]
+                    : undefined;
+                  const requestedBy = members.find((member) => member.id === requestedById) ?? null;
+
+                  return (
+                    <li
+                      className="grid gap-3 border border-[#efb1c0] bg-[#fff6f8] px-3 py-3 text-sm"
+                      key={request.id}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{request.choreTitle}</p>
+                          <p className="mt-1 text-xs text-[#657381]">
+                            {formatDateLabel(request.occurrenceDate)} · {getAllowanceRequestKindLabel(request.kind)}
+                            {request.kind === "credit" && request.category
+                              ? ` · ${getChoreCategoryLabel(request.category)}`
+                              : ""}
+                            {requestChild && selectedMember.role !== "child"
+                              ? ` · ${requestChild.preferredName}`
+                              : ""}
+                            {requestedBy ? ` · entered by ${requestedBy.preferredName}` : ""}
+                          </p>
+                          {request.note ? <p className="mt-2 text-xs text-[#4c5965]">{request.note}</p> : null}
+                        </div>
+                        <div className="text-right">
+                          <p
+                            className={`font-semibold ${
+                              request.kind === "debit" ? "text-[#8a3b12]" : "text-[#2f6f73]"
+                            }`}
+                          >
+                            {formatCurrency(getSignedAllowanceRequestAmount(request.amount, request.kind))}
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#d83b63]">
+                            Awaiting approval
+                          </p>
+                        </div>
+                      </div>
+                      {isAllowanceApprovalMode ? (
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
+                            disabled={approvingAllowanceRequestId === request.id}
+                            onClick={() => onOpenEditAllowanceRequestModal(request)}
+                            type="button"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={approvingAllowanceRequestId === request.id}
+                            onClick={() => onApproveAllowanceRequest(request)}
+                            type="button"
+                          >
+                            {approvingAllowanceRequestId === request.id ? "Approving..." : "Approve"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <div className="mt-4">
+                <EmptyState text="No bank requests are waiting for approval." />
+              </div>
+            )}
+          </section>
+
+          {isRemoteHouseholdReady && remoteAllowanceError ? (
+            <p className="mt-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+              {remoteAllowanceError}
+            </p>
+          ) : null}
+          {allowanceEntryError ? (
+            <p className="mt-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+              {allowanceEntryError}
+            </p>
+          ) : null}
+          {remoteAllowanceRequestError ? (
+            <p className="mt-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+              {remoteAllowanceRequestError}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
