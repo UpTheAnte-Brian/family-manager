@@ -2741,13 +2741,7 @@ export function ProfileDashboard({
                 </span>
               ) : null}
             </button>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="min-w-[150px]">
-                <h2 className="text-lg font-semibold">{formatDateLabel(displayedDay.date)}</h2>
-                <p className="text-xs text-[#4c5965]">
-                  {displayedDay.dayTypeLabel} · {scheduleEvents.length} event{scheduleEvents.length === 1 ? "" : "s"}
-                </p>
-              </div>
+            <div className="flex flex-col gap-3 sm:items-end xl:justify-self-end">
               <div className="grid grid-cols-3 gap-2 sm:w-[340px]">
                 <button
                   className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
@@ -2771,6 +2765,12 @@ export function ProfileDashboard({
                 >
                   Next
                 </button>
+              </div>
+              <div className="sm:w-[340px] sm:text-right">
+                <h2 className="text-lg font-semibold">{formatDateLabel(displayedDay.date)}</h2>
+                <p className="text-xs text-[#4c5965]">
+                  {displayedDay.dayTypeLabel} · {scheduleEvents.length} event{scheduleEvents.length === 1 ? "" : "s"}
+                </p>
               </div>
             </div>
           </div>
