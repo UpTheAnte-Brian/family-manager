@@ -59,6 +59,7 @@ import {
   getMorningRoutineAllowanceAmount,
   getMorningRoutineOccurredAt,
   hasMorningRoutineAllowanceEntry,
+  morningRoutineAllowanceCategory,
   removeMorningRoutineAllowanceEntries,
 } from "@/lib/allowance/morning-routine";
 import { planMorningRoutineSync } from "@/lib/allowance/morning-routine-sync";
@@ -765,6 +766,15 @@ export function ProfileDashboard({
   const selectedMemberMorningRoutineAllowanceAmount = isRemoteHouseholdReady
     ? getMorningRoutineAllowanceAmount(activeRemoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
+  const selectedMemberMorningRoutineEarnedAmount =
+    selectedMember.role === "child"
+      ? selectedMemberAllowanceEntries.find(
+          (entry) =>
+            entry.source === "morning-routine-completion" &&
+            entry.routineCategory === morningRoutineAllowanceCategory &&
+            entry.routineCompletionDate === displayedDay.date,
+        )?.amount
+      : undefined;
   const allowanceBalance = getAllowanceBalance(selectedMemberAllowanceEntries, selectedMember.id);
   const hasPendingBankRequests = visibleAllowanceRequests.length > 0;
   const selectedMemberActivityEntries = remoteActivityEntries.filter(
@@ -1617,34 +1627,6 @@ export function ProfileDashboard({
 
   function closeAllowanceRequestModal() {
     setAllowanceRequestModal(null);
-    setRemoteAllowanceRequestError("");
-  }
-
-  function openCompletedChoreAllowanceRequest(
-    assignment: AssignmentWithChore,
-    completion: ChoreCompletion,
-  ) {
-    const amount = getChoreAllowanceAmount(assignment.chore);
-
-    if (!amount) {
-      return;
-    }
-
-    setAllowanceRequestModal({
-      mode: "create",
-      draft: {
-        amount: amount.toFixed(2),
-        assignmentTemplateId: assignment.id,
-        category: assignment.chore?.category ?? "yard",
-        childId: assignment.childId,
-        choreCompletionId: completion.id,
-        choreId: assignment.choreId,
-        kind: "credit",
-        note: "",
-        occurrenceDate: displayedDay.date,
-        title: assignment.chore?.title ?? "",
-      },
-    });
     setRemoteAllowanceRequestError("");
   }
 
@@ -2962,6 +2944,11 @@ export function ProfileDashboard({
                             {categoryLabel(category)}
                           </span>
                           <span className="flex items-center gap-2 text-xs font-semibold text-[#657381]">
+                            {category === "morning-routine" && selectedMemberMorningRoutineEarnedAmount ? (
+                              <span className="border border-[#b7d8c3] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f6f73]">
+                                +{formatCurrency(selectedMemberMorningRoutineEarnedAmount)}
+                              </span>
+                            ) : null}
                             <span>
                               {completedCount}/{items.length}
                             </span>
@@ -3062,21 +3049,7 @@ export function ProfileDashboard({
                                       : undefined
                                   }
                                   secondaryAction={
-                                    choreAllowanceState.status === "available" &&
-                                    choreAllowanceState.completion ? (
-                                      <button
-                                        className="border border-[#1f6f8b] bg-white px-2 py-1 text-xs font-semibold text-[#1f6f8b]"
-                                        onClick={() =>
-                                          openCompletedChoreAllowanceRequest(
-                                            item.assignment!,
-                                            choreAllowanceState.completion!,
-                                          )
-                                        }
-                                        type="button"
-                                      >
-                                        Create missing bank request
-                                      </button>
-                                    ) : choreAllowanceState.status === "pending" ? (
+                                    choreAllowanceState.status === "pending" ? (
                                       <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
                                         Bank request pending
                                       </span>
