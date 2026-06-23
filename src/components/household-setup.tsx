@@ -39,6 +39,8 @@ type HouseholdMemberRow = {
   id: string;
   metadata: {
     morningRoutineAllowanceAmount?: number;
+    weekdayWakeUpTime?: string;
+    weekendWakeUpTime?: string;
   };
   preferred_name: string;
   relationship: string | null;
@@ -56,6 +58,8 @@ type MemberDraft = {
   relationship: string;
   role: "parent" | "child";
   tempId: string;
+  weekdayWakeUpTime: string;
+  weekendWakeUpTime: string;
 };
 
 type HouseholdAccessRole = "owner" | "parent" | "caregiver" | "viewer";
@@ -558,6 +562,8 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
       memberRows.map((member) => {
         const morningRoutineAllowanceAmount =
           member.role === "child" ? normalizeCurrencyAmount(member.morningRoutineAllowanceAmount) : undefined;
+        const weekdayWakeUpTime = normalizeWakeUpTime(member.weekdayWakeUpTime);
+        const weekendWakeUpTime = normalizeWakeUpTime(member.weekendWakeUpTime);
 
         return {
           archived_at: null,
@@ -569,11 +575,11 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
           relationship: member.relationship || null,
           birth_date: member.birthDate || null,
           status: "active",
-          metadata: morningRoutineAllowanceAmount
-            ? {
-                morningRoutineAllowanceAmount,
-              }
-            : {},
+          metadata: {
+            ...(morningRoutineAllowanceAmount ? { morningRoutineAllowanceAmount } : {}),
+            ...(weekdayWakeUpTime ? { weekdayWakeUpTime } : {}),
+            ...(weekendWakeUpTime ? { weekendWakeUpTime } : {}),
+          },
         };
       }),
       {
@@ -1352,8 +1358,9 @@ function MemberDraftEditor({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm leading-6 text-[#4c5965]">
           These names and birthdays become the durable member records used by dashboards, routines,
-          chores, and calendar assignments. Child members can also earn a daily morning routine
-          credit when every item in that category is checked off.
+          chores, and calendar assignments. Weekday and weekend wake-up times anchor duration-based
+          routines, and child members can also earn a daily morning routine credit when every item
+          in that category is checked off.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1388,7 +1395,7 @@ function MemberDraftEditor({
 
           return (
             <li
-              className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_140px_auto]"
+              className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_130px_130px_140px_auto]"
               key={member.tempId}
             >
               <label className="grid gap-1 text-sm">
@@ -1436,6 +1443,24 @@ function MemberDraftEditor({
                   className="border border-[#d7e0e7] bg-white px-3 py-2"
                   onChange={(event) => onUpdateMember(member.tempId, { relationship: event.target.value })}
                   value={member.relationship}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Weekday wake-up</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => onUpdateMember(member.tempId, { weekdayWakeUpTime: event.target.value })}
+                  type="time"
+                  value={member.weekdayWakeUpTime}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Weekend wake-up</span>
+                <input
+                  className="border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) => onUpdateMember(member.tempId, { weekendWakeUpTime: event.target.value })}
+                  type="time"
+                  value={member.weekendWakeUpTime}
                 />
               </label>
               <label className="grid gap-1 text-sm">
@@ -1826,6 +1851,10 @@ function mapHouseholdLocationRow(row: HouseholdLocationRow | null) {
   });
 }
 
+function normalizeWakeUpTime(value?: string | null) {
+  return value && /^\d{2}:\d{2}$/.test(value) ? value : undefined;
+}
+
 function mapRemoteMemberToPlannerMember(member: HouseholdMemberRow): HouseholdMember {
   return {
     id: member.external_key,
@@ -1834,6 +1863,8 @@ function mapRemoteMemberToPlannerMember(member: HouseholdMemberRow): HouseholdMe
     morningRoutineAllowanceAmount: normalizeCurrencyAmount(
       member.metadata?.morningRoutineAllowanceAmount,
     ),
+    weekdayWakeUpTime: normalizeWakeUpTime(member.metadata?.weekdayWakeUpTime),
+    weekendWakeUpTime: normalizeWakeUpTime(member.metadata?.weekendWakeUpTime),
     role: member.role,
     relationship: normalizePlannerRelationship(member.relationship, member.role),
     birthDate: member.birth_date ?? undefined,
@@ -1869,6 +1900,8 @@ function mapRemoteMemberToDraft(member: HouseholdMemberRow): MemberDraft {
     relationship: member.relationship ?? "",
     role: member.role,
     tempId: member.id,
+    weekdayWakeUpTime: normalizeWakeUpTime(member.metadata?.weekdayWakeUpTime) ?? "",
+    weekendWakeUpTime: normalizeWakeUpTime(member.metadata?.weekendWakeUpTime) ?? "",
   };
 }
 
@@ -1885,6 +1918,8 @@ function createBlankMemberDraft(role: "parent" | "child"): MemberDraft {
     relationship: "",
     role,
     tempId,
+    weekdayWakeUpTime: "",
+    weekendWakeUpTime: "",
   };
 }
 
@@ -1901,6 +1936,8 @@ function mapPlannerMemberToDraft(member: HouseholdMember): MemberDraft {
     relationship: member.relationship,
     role: member.role,
     tempId: member.id,
+    weekdayWakeUpTime: normalizeWakeUpTime(member.weekdayWakeUpTime) ?? "",
+    weekendWakeUpTime: normalizeWakeUpTime(member.weekendWakeUpTime) ?? "",
   };
 }
 
@@ -1947,6 +1984,8 @@ function getValidMemberDrafts(members: MemberDraft[]) {
       morningRoutineAllowanceAmount: member.morningRoutineAllowanceAmount.trim(),
       preferredName: member.preferredName.trim(),
       relationship: member.relationship.trim(),
+      weekdayWakeUpTime: normalizeWakeUpTime(member.weekdayWakeUpTime) ?? "",
+      weekendWakeUpTime: normalizeWakeUpTime(member.weekendWakeUpTime) ?? "",
     }))
     .filter((member) => member.preferredName && member.externalKey && member.birthDate);
 }

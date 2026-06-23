@@ -4,32 +4,34 @@ import type { DayOfWeek } from "@/lib/planner/types";
 export type RoutineTemplateStepDraft = {
   id: string;
   title: string;
-  startTime: string;
-  endTime: string;
+  durationMinutes: number;
+  orderIndex?: number;
 };
 
 export type ExistingRoutineTemplateStepInstance = {
   actionItemId: string;
   category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
+  durationMinutes: number;
   memberId: string;
-  startTime: string;
+  offsetMinutes: number;
+  orderIndex?: number;
   stepId: string;
   templateName: string;
   title: string;
-  endTime: string;
 };
 
 export type PlannedRoutineTemplateStepInstance = {
   actionItemId?: string;
   category: RoutineTemplateCategory;
   daysOfWeek: DayOfWeek[];
+  durationMinutes: number;
   memberId: string;
-  startTime: string;
+  offsetMinutes: number;
+  orderIndex: number;
   stepId: string;
   templateName: string;
   title: string;
-  endTime: string;
 };
 
 export function planRoutineTemplateSync({
@@ -48,16 +50,23 @@ export function planRoutineTemplateSync({
   templateName: string;
 }) {
   const desired = memberIds.flatMap((memberId) =>
-    steps.map((step) => ({
-      category,
-      daysOfWeek,
-      memberId,
-      startTime: step.startTime,
-      stepId: step.id,
-      templateName,
-      title: step.title,
-      endTime: step.endTime,
-    })),
+    steps.map((step, index) => {
+      const priorStepsDuration = steps
+        .slice(0, index)
+        .reduce((total, currentStep) => total + Math.max(1, Math.trunc(currentStep.durationMinutes || 0)), 0);
+      const normalizedDurationMinutes = Math.max(1, Math.trunc(step.durationMinutes || 0));
+      return {
+        category,
+        daysOfWeek,
+        durationMinutes: normalizedDurationMinutes,
+        memberId,
+        offsetMinutes: priorStepsDuration,
+        orderIndex: index,
+        stepId: step.id,
+        templateName,
+        title: step.title,
+      };
+    }),
   );
   const existingByKey = new Map(
     existing.map((item) => [getRoutineTemplateInstanceKey(item.memberId, item.stepId), item]),
@@ -78,8 +87,9 @@ export function planRoutineTemplateSync({
 
     if (
       existingItem.title !== item.title ||
-      existingItem.startTime !== item.startTime ||
-      existingItem.endTime !== item.endTime ||
+      existingItem.durationMinutes !== item.durationMinutes ||
+      existingItem.offsetMinutes !== item.offsetMinutes ||
+      existingItem.orderIndex !== item.orderIndex ||
       existingItem.category !== item.category ||
       existingItem.templateName !== item.templateName ||
       !haveSameDaysOfWeek(existingItem.daysOfWeek, item.daysOfWeek)

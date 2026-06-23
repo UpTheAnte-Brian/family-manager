@@ -78,7 +78,7 @@ These browser storage keys are temporary. Supabase durable tables now exist for 
 
 The first Supabase migration in `supabase/migrations` promotes the dashboard's three editable surfaces into one durable action-item model.
 
-- `routine`: recurring checklist step with `days_of_week`, `start_time`, and `end_time`.
+- `routine`: recurring checklist step with `days_of_week`, plus either explicit `start_time` and `end_time` or duration/offset metadata anchored to each member's wake-up defaults.
 - `task`: dated responsibility with `occurrence_date`, or recurring responsibility with `days_of_week`, `start_time`, and `end_time`.
 - `reminder`: dated remember item with `occurrence_date`.
 - `household_action_item_completions`: occurrence-level checkoff records for routines and tasks.

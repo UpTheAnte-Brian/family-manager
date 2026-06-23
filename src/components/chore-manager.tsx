@@ -19,6 +19,11 @@ import {
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { ConsolePageHeader } from "@/components/console-page-header";
+import {
+  formatDurationMinutes,
+  normalizeDurationMinutes,
+  normalizeOffsetMinutes,
+} from "@/lib/routines/schedule";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -92,6 +97,8 @@ type RemoteRoutineActionItemRow = {
   metadata: {
     category?: string;
     countsTowardWeeklyTarget?: boolean;
+    durationMinutes?: number;
+    offsetMinutes?: number;
     stepId?: string;
   };
 };
@@ -1319,11 +1326,33 @@ function RoutineChoreRow({
       <div>
         <p className="font-semibold">{chore.title}</p>
         <p className="mt-1 text-xs text-[#657381]">
-          {formatTimeRange(chore.schedule.startTime, chore.schedule.endTime)} · {assignedKids}
+          {getRoutineScheduleLabel(chore)} · {assignedKids}
         </p>
       </div>
     </li>
   );
+}
+
+function getRoutineScheduleLabel(chore: RoutineChore) {
+  const durationLabel =
+    formatDurationMinutes(
+      normalizeDurationMinutes(chore.schedule.durationMinutes) ??
+        getDurationMinutes(chore.schedule.startTime, chore.schedule.endTime),
+    ) || null;
+
+  if (durationLabel) {
+    return durationLabel;
+  }
+
+  return formatTimeRange(normalizeRemoteTime(chore.schedule.startTime), normalizeRemoteTime(chore.schedule.endTime));
+}
+
+function getRoutineChoreSortKey(chore: RoutineChore) {
+  if (typeof chore.schedule.offsetMinutes === "number") {
+    return `0-${String(chore.schedule.offsetMinutes).padStart(4, "0")}-${chore.title}`;
+  }
+
+  return `1-${normalizeRemoteTime(chore.schedule.startTime)}-${chore.title}`;
 }
 
 function StatusPill({ isComplete, label }: { isComplete: boolean; label: string }) {
@@ -1527,11 +1556,14 @@ async function loadRemoteRoutineChores(
   for (const item of routineItems ?? []) {
     const startTime = normalizeRemoteTime(item.start_time);
     const endTime = normalizeRemoteTime(item.end_time);
+    const durationMinutes =
+      normalizeDurationMinutes(item.metadata.durationMinutes) ?? getDurationMinutes(startTime, endTime);
+    const offsetMinutes = normalizeOffsetMinutes(item.metadata.offsetMinutes);
     const groupKey = [
       item.metadata.stepId ?? item.title,
       item.title,
-      startTime,
-      endTime,
+      durationMinutes ?? startTime,
+      offsetMinutes ?? endTime,
       item.days_of_week.join(","),
     ].join("|");
     const existing = grouped.get(groupKey);
@@ -1544,15 +1576,17 @@ async function loadRemoteRoutineChores(
       defaultAssigneeIds: [...new Set([...(existing?.defaultAssigneeIds ?? []), ...assigneeIds])],
       schedule: {
         daysOfWeek: item.days_of_week,
-        startTime,
-        endTime,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+        durationMinutes: durationMinutes ?? undefined,
+        offsetMinutes: offsetMinutes ?? undefined,
       },
       countsTowardWeeklyTarget: item.metadata.countsTowardWeeklyTarget ?? false,
     });
   }
 
   return [...grouped.values()].sort((first, second) =>
-    compareStrings(`${first.schedule.startTime}-${first.title}`, `${second.schedule.startTime}-${second.title}`),
+    compareStrings(getRoutineChoreSortKey(first), getRoutineChoreSortKey(second)),
   );
 }
 
@@ -1686,7 +1720,7 @@ function getRemoteMemberId(remoteMembers: RemoteMemberRow[], externalKey: string
   return member.id;
 }
 
-function normalizeRemoteTime(value: string | null) {
+function normalizeRemoteTime(value: string | null | undefined) {
   return value?.slice(0, 5) ?? "08:30";
 }
 
@@ -1783,7 +1817,11 @@ function getEligibleMembersForChore(
   return members.filter((member) => eligibleIds.has(member.id));
 }
 
-function getDurationMinutes(startTime: string, endTime: string) {
+function getDurationMinutes(startTime?: string, endTime?: string) {
+  if (!startTime || !endTime) {
+    return null;
+  }
+
   const startMinutes = parseTimeMinutes(startTime);
   const endMinutes = parseTimeMinutes(endTime);
 

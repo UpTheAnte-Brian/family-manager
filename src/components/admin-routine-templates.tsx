@@ -16,6 +16,7 @@ import {
   type PlannedRoutineTemplateStepInstance,
   type RoutineTemplateStepDraft as RoutineStepDraft,
 } from "@/lib/routines/template-sync";
+import { formatDurationMinutes, getDurationMinutes, timeToMinutes } from "@/lib/routines/schedule";
 import type { DayOfWeek, HouseholdMember } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -38,6 +39,9 @@ type RoutineTemplateMetadata = {
   routineTemplateName?: string;
   stepId?: string;
   category?: string;
+  durationMinutes?: number;
+  offsetMinutes?: number;
+  orderIndex?: number;
 };
 
 type RoutineTemplateActionItemRow = {
@@ -138,9 +142,10 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
     const cleanSteps = steps
       .map((step) => ({
         ...step,
+        durationMinutes: Math.max(1, Math.trunc(step.durationMinutes || 0)),
         title: step.title.trim(),
       }))
-      .filter((step) => step.title && step.startTime && step.endTime);
+      .filter((step) => step.title);
 
     if (!cleanName) {
       setErrorMessage("Add a template name.");
@@ -305,14 +310,34 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
       {
         id: crypto.randomUUID(),
         title: "",
-        startTime: "09:00",
-        endTime: "09:10",
+        durationMinutes: 5,
       },
     ]);
   }
 
   function removeStep(stepId: string) {
     setSteps((current) => (current.length === 1 ? current : current.filter((step) => step.id !== stepId)));
+  }
+
+  function moveStep(stepId: string, direction: -1 | 1) {
+    setSteps((current) => {
+      const index = current.findIndex((step) => step.id === stepId);
+
+      if (index < 0) {
+        return current;
+      }
+
+      const nextIndex = index + direction;
+
+      if (nextIndex < 0 || nextIndex >= current.length) {
+        return current;
+      }
+
+      const nextSteps = [...current];
+      const [step] = nextSteps.splice(index, 1);
+      nextSteps.splice(nextIndex, 0, step);
+      return nextSteps;
+    });
   }
 
   return (
@@ -409,9 +434,7 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                           key={step.id}
                         >
                           <span className="font-semibold text-[#17202a]">{step.title}</span>
-                          <span className="text-[#657381]">
-                            {formatTimeRange(step.startTime, step.endTime)}
-                          </span>
+                          <span className="text-[#657381]">{formatDurationMinutes(step.durationMinutes)}</span>
                         </li>
                       ))}
                     </ol>
@@ -552,9 +575,14 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                             Add step
                           </button>
                         </div>
+                        <p className="text-xs text-[#657381]">
+                          Each step stores only its duration and list order. The dashboard anchors
+                          morning routines to each family member&apos;s weekday or weekend wake-up
+                          time from Setup.
+                        </p>
                         <div className="grid gap-2">
-                          {steps.map((step) => (
-                            <div className="grid gap-2 md:grid-cols-[1fr_130px_130px_90px]" key={step.id}>
+                          {steps.map((step, index) => (
+                            <div className="grid gap-2 md:grid-cols-[1fr_120px_170px_90px]" key={step.id}>
                               <input
                                 aria-label="Step title"
                                 className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
@@ -562,19 +590,34 @@ export function AdminRoutineTemplates({ members }: AdminRoutineTemplatesProps) {
                                 value={step.title}
                               />
                               <input
-                                aria-label="Step start"
+                                aria-label="Step duration"
                                 className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
-                                onChange={(event) => updateStep(step.id, { startTime: event.target.value })}
-                                type="time"
-                                value={step.startTime}
+                                min="1"
+                                onChange={(event) =>
+                                  updateStep(step.id, { durationMinutes: Number(event.target.value) || 1 })
+                                }
+                                step="1"
+                                type="number"
+                                value={step.durationMinutes}
                               />
-                              <input
-                                aria-label="Step end"
-                                className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm"
-                                onChange={(event) => updateStep(step.id, { endTime: event.target.value })}
-                                type="time"
-                                value={step.endTime}
-                              />
+                              <div className="flex gap-2">
+                                <button
+                                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965] disabled:opacity-50"
+                                  disabled={index === 0}
+                                  onClick={() => moveStep(step.id, -1)}
+                                  type="button"
+                                >
+                                  Up
+                                </button>
+                                <button
+                                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965] disabled:opacity-50"
+                                  disabled={index === steps.length - 1}
+                                  onClick={() => moveStep(step.id, 1)}
+                                  type="button"
+                                >
+                                  Down
+                                </button>
+                              </div>
                               <button
                                 className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#4c5965]"
                                 onClick={() => removeStep(step.id)}
@@ -727,11 +770,21 @@ async function loadRemoteRoutineTemplateState(householdId: string) {
 
     const stepId = item.metadata.stepId ?? `${item.title}-${item.start_time ?? ""}-${item.end_time ?? ""}`;
     if (!group.stepsById.has(stepId)) {
+      const normalizedDurationMinutes =
+        item.metadata.durationMinutes ??
+        getDurationMinutes(normalizeTimeForInput(item.start_time), normalizeTimeForInput(item.end_time)) ??
+        5;
+      const orderIndex =
+        item.metadata.orderIndex ??
+        item.metadata.offsetMinutes ??
+        timeToMinutes(normalizeTimeForInput(item.start_time)) ??
+        group.stepsById.size;
+
       group.stepsById.set(stepId, {
         id: stepId,
         title: item.title,
-        startTime: normalizeTimeForInput(item.start_time),
-        endTime: normalizeTimeForInput(item.end_time),
+        durationMinutes: normalizedDurationMinutes,
+        orderIndex,
       });
     }
 
@@ -797,12 +850,15 @@ async function createRoutineTemplate({
 }) {
   await createRoutineTemplateActionItems({
     entries: memberIds.flatMap((memberId) =>
-      steps.map((step) => ({
+      steps.map((step, index) => ({
         category,
         daysOfWeek,
-        endTime: step.endTime,
+        durationMinutes: step.durationMinutes,
         memberId,
-        startTime: step.startTime,
+        offsetMinutes: steps
+          .slice(0, index)
+          .reduce((total, currentStep) => total + Math.max(1, Math.trunc(currentStep.durationMinutes || 0)), 0),
+        orderIndex: index,
         stepId: step.id,
         templateName,
         title: step.title,
@@ -833,8 +889,8 @@ async function createRoutineTemplateActionItems({
     title: entry.title,
     source: "manual",
     days_of_week: entry.daysOfWeek,
-    start_time: entry.startTime,
-    end_time: entry.endTime,
+    start_time: null,
+    end_time: null,
     metadata: {
       kind: "routine-template-step",
       routineTemplateId: templateId,
@@ -842,6 +898,9 @@ async function createRoutineTemplateActionItems({
       stepId: entry.stepId,
       assignedRemoteMemberId: entry.memberId,
       category: entry.category,
+      durationMinutes: entry.durationMinutes,
+      offsetMinutes: entry.offsetMinutes,
+      orderIndex: entry.orderIndex,
     },
   }));
 
@@ -948,9 +1007,18 @@ async function updateRoutineTemplate({
           title: item.title,
         }),
         daysOfWeek: normalizeDaysOfWeek(item.days_of_week),
-        endTime: normalizeTimeForInput(item.end_time),
+        durationMinutes:
+          item.metadata.durationMinutes ??
+          getDurationMinutes(normalizeTimeForInput(item.start_time), normalizeTimeForInput(item.end_time)) ??
+          5,
         memberId,
-        startTime: normalizeTimeForInput(item.start_time),
+        offsetMinutes:
+          item.metadata.offsetMinutes ?? timeToMinutes(normalizeTimeForInput(item.start_time)) ?? 0,
+        orderIndex:
+          item.metadata.orderIndex ??
+          item.metadata.offsetMinutes ??
+          timeToMinutes(normalizeTimeForInput(item.start_time)) ??
+          0,
         stepId,
         templateName: item.metadata.routineTemplateName ?? templateName,
         title: item.title,
@@ -972,8 +1040,8 @@ async function updateRoutineTemplate({
       .update({
         title: item.title,
         days_of_week: item.daysOfWeek,
-        start_time: item.startTime,
-        end_time: item.endTime,
+        start_time: null,
+        end_time: null,
         metadata: {
           kind: "routine-template-step",
           routineTemplateId: templateId,
@@ -981,6 +1049,9 @@ async function updateRoutineTemplate({
           stepId: item.stepId,
           assignedRemoteMemberId: item.memberId,
           category: item.category,
+          durationMinutes: item.durationMinutes,
+          offsetMinutes: item.offsetMinutes,
+          orderIndex: item.orderIndex,
         },
       })
       .eq("household_id", householdId)
@@ -1060,10 +1131,10 @@ function compareStrings(first: string, second: string) {
 }
 
 function compareRoutineSteps(first: RoutineStepDraft, second: RoutineStepDraft) {
-  const startComparison = compareStrings(first.startTime, second.startTime);
+  const orderComparison = (first.orderIndex ?? 0) - (second.orderIndex ?? 0);
 
-  if (startComparison !== 0) {
-    return startComparison;
+  if (orderComparison !== 0) {
+    return orderComparison;
   }
 
   return compareStrings(first.title, second.title);
@@ -1075,16 +1146,4 @@ function normalizeDaysOfWeek(daysOfWeek: string[] | null | undefined): DayOfWeek
 
 function normalizeTimeForInput(value: string | null) {
   return value?.slice(0, 5) ?? "";
-}
-
-function formatTimeRange(startTime: string, endTime: string) {
-  return `${formatClockTime(startTime)}-${formatClockTime(endTime)}`;
-}
-
-function formatClockTime(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  const suffix = hours >= 12 ? "PM" : "AM";
-  const normalizedHours = hours % 12 || 12;
-
-  return `${normalizedHours}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }

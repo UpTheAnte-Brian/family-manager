@@ -47,8 +47,10 @@ import {
 import { canApproveAllowanceRequests } from "@/lib/allowance/approval";
 import {
   approveRemoteAllowanceRequest,
+  cancelRemoteAllowanceRequest,
   createRemoteAllowanceRequest,
   loadRemoteAllowanceRequests,
+  rejectRemoteAllowanceRequest,
   type AllowanceRequest,
   updateRemoteAllowanceRequest,
 } from "@/lib/allowance/requests";
@@ -67,6 +69,14 @@ import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calenda
 import { getAppliedCalendarEventAssignmentKey } from "@/lib/calendar/applied-events";
 import { useCalendarFeed } from "@/lib/calendar/supabase-calendar";
 import { resolveRoutineTemplateCategory } from "@/lib/routines/categories";
+import {
+  formatDurationMinutes,
+  getDurationMinutes,
+  normalizeDurationMinutes,
+  normalizeOffsetMinutes,
+  resolveMemberWakeUpTime,
+  resolveRoutineTiming,
+} from "@/lib/routines/schedule";
 import {
   calendarEventAssignmentsStorageKey,
   calendarTeamAssignmentsStorageKey,
@@ -136,6 +146,10 @@ type DashboardRoutineItem = {
   title: string;
   startTime: string;
   endTime: string;
+  durationMinutes?: number | null;
+  metaLabel?: string;
+  offsetMinutes?: number | null;
+  sortKey?: string;
   source: "configured" | "local" | "remote";
   remoteActionItemId?: string;
   completionKey?: string;
@@ -151,6 +165,9 @@ type DashboardResponsibilityItem = {
   title: string;
   startTime: string;
   endTime: string;
+  durationMinutes?: number | null;
+  metaLabel?: string;
+  sortKey?: string;
   category: ResponsibilityCategory;
   source:
     | "routine"
@@ -192,10 +209,13 @@ type RemoteTemporaryRoutineMetadata = {
   baselineTemplateName?: string;
   kind?: string;
   category?: string;
+  durationMinutes?: number;
   configuredSourceId?: string;
   locationNote?: string;
   noiseLevel?: "low" | "medium" | "high" | "variable";
   location?: ScheduleBlock["location"];
+  offsetMinutes?: number;
+  orderIndex?: number;
   routineTemplateId?: string;
   routineTemplateName?: string;
   stepId?: string;
@@ -216,6 +236,8 @@ type RemoteHouseholdMemberRow = {
   role?: "parent" | "child";
   metadata?: {
     morningRoutineAllowanceAmount?: number;
+    weekdayWakeUpTime?: string;
+    weekendWakeUpTime?: string;
   };
 };
 
@@ -229,6 +251,8 @@ type RemoteHouseholdMemberConfigRow = {
   role: "parent" | "child";
   metadata: {
     morningRoutineAllowanceAmount?: number;
+    weekdayWakeUpTime?: string;
+    weekendWakeUpTime?: string;
   };
 };
 
@@ -490,7 +514,14 @@ export function ProfileDashboard({
   const [remoteAllowanceRequests, setRemoteAllowanceRequests] = useState<AllowanceRequest[]>([]);
   const [remoteMemberIdsByExternalKey, setRemoteMemberIdsByExternalKey] = useState<Record<string, string>>({});
   const [remoteMemberConfigsByExternalKey, setRemoteMemberConfigsByExternalKey] = useState<
-    Record<string, { morningRoutineAllowanceAmount?: number }>
+    Record<
+      string,
+      {
+        morningRoutineAllowanceAmount?: number;
+        weekdayWakeUpTime?: string;
+        weekendWakeUpTime?: string;
+      }
+    >
   >({});
   const [remoteTemporaryRoutineError, setRemoteTemporaryRoutineError] = useState("");
   const [remoteBaselineError, setRemoteBaselineError] = useState("");
@@ -508,6 +539,7 @@ export function ProfileDashboard({
   const [allowanceRequestSyncVersion, setAllowanceRequestSyncVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(today.date);
   const [approvingAllowanceRequestId, setApprovingAllowanceRequestId] = useState("");
+  const [rejectingAllowanceRequestId, setRejectingAllowanceRequestId] = useState("");
   const [allowanceEntryModal, setAllowanceEntryModal] = useState<AllowanceEntryModalState>(null);
   const [allowanceRequestModal, setAllowanceRequestModal] = useState<AllowanceRequestModalState>(null);
   const [bankModalOpen, setBankModalOpen] = useState<BankModalState>(false);
@@ -558,13 +590,17 @@ export function ProfileDashboard({
   );
   const childMembers = useMemo(() => members.filter((member) => member.role === "child"), [members]);
   const defaultQuickAddAssignee = members[0]?.id ?? "";
-  const selectedMember = members.find((member) => member.id === state.selectedMemberId) ?? members[0] ?? {
-    id: "",
-    preferredName: "",
-    displayName: "",
-    role: "parent" as const,
-    relationship: "mom" as const,
-  };
+  const selectedMember = useMemo(
+    () =>
+      members.find((member) => member.id === state.selectedMemberId) ?? members[0] ?? {
+        id: "",
+        preferredName: "",
+        displayName: "",
+        role: "parent" as const,
+        relationship: "mom" as const,
+      },
+    [members, state.selectedMemberId],
+  );
   const isAllowanceApprovalMode = canApproveAllowanceRequests({
     householdRole: household?.role,
     selectedMemberRole: selectedMember.role,
@@ -797,6 +833,8 @@ export function ProfileDashboard({
                 morningRoutineAllowanceAmount: normalizeCurrencyAmount(
                   member.metadata?.morningRoutineAllowanceAmount,
                 ),
+                weekdayWakeUpTime: member.metadata?.weekdayWakeUpTime,
+                weekendWakeUpTime: member.metadata?.weekendWakeUpTime,
               },
             ]),
           ),
@@ -1697,6 +1735,43 @@ export function ProfileDashboard({
     }
   }
 
+  async function rejectAllowanceRequest(request: AllowanceRequest) {
+    if (!isAllowanceApprovalMode) {
+      setRemoteAllowanceRequestError("Switch to a parent profile before rejecting a bank request.");
+      return;
+    }
+
+    try {
+      setRejectingAllowanceRequestId(request.id);
+      await rejectRemoteAllowanceRequest(request.id);
+      setRemoteAllowanceRequests((current) =>
+        current.filter((candidate) => candidate.id !== request.id),
+      );
+
+      if (request.choreCompletionId) {
+        setChoreConfig((current) => ({
+          ...current,
+          completions: current.completions.filter(
+            (completion) => completion.id !== request.choreCompletionId,
+          ),
+        }));
+        setAllowanceState((current) => ({
+          entries: removeAllowanceEntriesForCompletion(current.entries, request.choreCompletionId!),
+        }));
+      }
+
+      setRemoteAllowanceRequestError("");
+      setAllowanceRequestSyncVersion((current) => current + 1);
+      setChoreSyncVersion((current) => current + 1);
+    } catch (error) {
+      setRemoteAllowanceRequestError(
+        error instanceof Error ? error.message : "Could not reject the bank request.",
+      );
+    } finally {
+      setRejectingAllowanceRequestId("");
+    }
+  }
+
   function selectMember(memberId: string) {
     setState((current) => ({
       ...current,
@@ -1792,6 +1867,14 @@ export function ProfileDashboard({
       if (existing) {
         const previousCompletions = choreConfig.completions;
         const previousAllowanceEntries = allowanceState.entries;
+        const linkedPendingRequest = findPendingAllowanceRequestForCompletion({
+          assignment,
+          completionId: existing.id,
+          date: displayedDay.date,
+          remoteMemberId: activeRemoteMemberIdsByExternalKey[assignment.childId],
+          requests: remoteAllowanceRequests,
+        });
+        const previousRequests = remoteAllowanceRequests;
 
         setChoreConfig((current) => ({
           ...current,
@@ -1800,9 +1883,19 @@ export function ProfileDashboard({
         setAllowanceState((current) => ({
           entries: removeAllowanceEntriesForCompletion(current.entries, existing.id),
         }));
+        if (linkedPendingRequest) {
+          setRemoteAllowanceRequests((current) =>
+            current.filter((request) => request.id !== linkedPendingRequest.id),
+          );
+        }
 
         try {
-          await deleteRemoteChoreCompletion(householdId, existing.id);
+          if (linkedPendingRequest) {
+            await cancelRemoteAllowanceRequest(linkedPendingRequest.id);
+            setAllowanceRequestSyncVersion((current) => current + 1);
+          } else {
+            await deleteRemoteChoreCompletion(householdId, existing.id);
+          }
           setChoreSyncVersion((current) => current + 1);
           setRemoteChoreError("");
           return;
@@ -1814,6 +1907,7 @@ export function ProfileDashboard({
           setAllowanceState({
             entries: previousAllowanceEntries,
           });
+          setRemoteAllowanceRequests(previousRequests);
           setRemoteChoreError(
             error instanceof Error ? error.message : "Could not clear chore completion.",
           );
@@ -1832,11 +1926,43 @@ export function ProfileDashboard({
         const createdCompletion = await createRemoteChoreCompletion({
           assignment,
           chore: assignment.chore,
-          earnsAllowance: selectedMember.role !== "child",
+          earnsAllowance: false,
           householdId,
           occurrenceDate: displayedDay.date,
           remoteMemberId,
         });
+        let nextPendingRequest: AllowanceRequest | undefined;
+
+        if (selectedMember.role === "child") {
+          const requestAmount = getChoreAllowanceAmount(assignment.chore);
+
+          if (requestAmount) {
+            try {
+              nextPendingRequest = await createRemoteAllowanceRequest({
+                amount: requestAmount,
+                assignmentTemplateId: assignment.id,
+                category: assignment.chore?.category ?? "yard",
+                childRemoteMemberId: remoteMemberId,
+                choreId: assignment.choreId,
+                choreCompletionId: createdCompletion.id,
+                choreTitle: assignment.chore?.title ?? "",
+                householdId,
+                kind: "credit",
+                note: "",
+                occurrenceDate: displayedDay.date,
+                requestedByRemoteMemberId: remoteMemberId,
+              });
+            } catch (error) {
+              await deleteRemoteChoreCompletion(householdId, createdCompletion.id);
+              setRemoteChoreError(
+                error instanceof Error
+                  ? error.message
+                  : "Could not create the pending bank request for this chore.",
+              );
+              return;
+            }
+          }
+        }
         const nextCompletion: ChoreCompletion = {
           id: createdCompletion.id,
           assignmentTemplateId: assignment.id,
@@ -1867,6 +1993,11 @@ export function ProfileDashboard({
           setAllowanceState((current) => ({
             entries: [...current.entries, allowanceEntry],
           }));
+        }
+
+        if (nextPendingRequest) {
+          setRemoteAllowanceRequests((current) => [nextPendingRequest!, ...current]);
+          setAllowanceRequestSyncVersion((current) => current + 1);
         }
 
         setChoreSyncVersion((current) => current + 1);
@@ -2840,8 +2971,14 @@ export function ProfileDashboard({
                           </span>
                         </button>
                         {isCollapsed ? null : (
-                          <Checklist>
-                            {items.map((item) => {
+                          <>
+                            {category === "morning-routine" ? (
+                              <p className="text-xs text-[#657381]">
+                                {getMorningRoutineWakeUpLabel(selectedMember, displayedDay.dayOfWeek)}
+                              </p>
+                            ) : null}
+                            <Checklist>
+                              {items.map((item) => {
                               const checked = isResponsibilityComplete(
                                 item,
                                 dashboardStateForView,
@@ -2880,7 +3017,7 @@ export function ProfileDashboard({
                                   isPastDue={isPastSelectedDate && !checked && !isHistoricalOpenCompletion}
                                   key={item.id}
                                   lateStatus={item.source === "open-responsibility" ? "carryover" : "missed"}
-                                  meta={formatTimeRange(item.startTime, item.endTime)}
+                                  meta={item.metaLabel ?? formatTimeRange(item.startTime, item.endTime)}
                                   onChange={() =>
                                     item.source === "routine"
                                       ? void toggleRoutine({
@@ -2937,7 +3074,7 @@ export function ProfileDashboard({
                                         }
                                         type="button"
                                       >
-                                        Request bank credit
+                                        Create missing bank request
                                       </button>
                                     ) : choreAllowanceState.status === "pending" ? (
                                       <span className="border border-[#c9d8df] bg-[#eef7f7] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
@@ -2956,8 +3093,9 @@ export function ProfileDashboard({
                                   }
                                 />
                               );
-                            })}
-                          </Checklist>
+                              })}
+                            </Checklist>
+                          </>
                         )}
                       </section>
                     );
@@ -3231,10 +3369,14 @@ export function ProfileDashboard({
           onApproveAllowanceRequest={(request) => {
             void approveAllowanceRequest(request);
           }}
+          onRejectAllowanceRequest={(request) => {
+            void rejectAllowanceRequest(request);
+          }}
           onClose={() => setBankModalOpen(false)}
           onOpenAllowanceEntryModal={openAllowanceEntryModal}
           onOpenCreateAllowanceRequestModal={openCreateAllowanceRequestModal}
           onOpenEditAllowanceRequestModal={openEditAllowanceRequestModal}
+          rejectingAllowanceRequestId={rejectingAllowanceRequestId}
           remoteAllowanceError={remoteAllowanceError}
           remoteAllowanceRequestError={remoteAllowanceRequestError}
           remoteExternalKeysByMemberId={remoteExternalKeysByMemberId}
@@ -3541,8 +3683,12 @@ function getRoutineItems(
             category: "morning-routine" as const,
             id: routine.id,
             title: routine.title,
-            startTime: routine.schedule.startTime,
-            endTime: routine.schedule.endTime,
+            ...getRoutineTimingDisplay({
+              dayOfWeek: today.dayOfWeek,
+              member,
+              schedule: routine.schedule,
+              title: routine.title,
+            }),
             source: "configured" as const,
           }))
       : [];
@@ -3561,11 +3707,77 @@ function getRoutineItems(
     }));
 
   const remoteItems = remoteRoutines.filter((routine) => routine.id.startsWith(`${member.id}:`));
-  const baseRoutineItems = remoteRoutinesAreAuthoritative ? remoteItems : configuredItems;
+  const baseRoutineItems = (remoteRoutinesAreAuthoritative ? remoteItems : configuredItems).map((routine) => ({
+    ...routine,
+    ...getRoutineTimingDisplay({
+      dayOfWeek: today.dayOfWeek,
+      member,
+      schedule: routine,
+      title: routine.title,
+    }),
+  }));
 
   return [...baseRoutineItems, ...localItems].sort((first, second) =>
-    compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
+    compareStrings(getRoutineSortKey(first), getRoutineSortKey(second)),
   );
+}
+
+function getRoutineTimingDisplay({
+  dayOfWeek,
+  member,
+  schedule,
+  title,
+}: {
+  dayOfWeek: DayOfWeek;
+  member: HouseholdMember;
+  schedule: {
+    durationMinutes?: number | null;
+    endTime?: string | null;
+    offsetMinutes?: number | null;
+    startTime?: string | null;
+  };
+  title: string;
+}) {
+  const timing = resolveRoutineTiming({
+    dayOfWeek,
+    member,
+    schedule,
+  });
+  const durationLabel = formatDurationMinutes(timing.durationMinutes);
+  const fallbackTimeLabel =
+    timing.startTime && timing.endTime ? formatTimeRange(timing.startTime, timing.endTime) : "Routine step";
+
+  return {
+    durationMinutes: timing.durationMinutes,
+    endTime: timing.endTime,
+    metaLabel: durationLabel || fallbackTimeLabel,
+    offsetMinutes: timing.offsetMinutes,
+    sortKey: getRoutineSortKey({
+      title,
+      durationMinutes: timing.durationMinutes,
+      offsetMinutes: timing.offsetMinutes,
+      startTime: timing.startTime,
+    }),
+    startTime: timing.startTime,
+  };
+}
+
+function getRoutineSortKey(
+  routine: Pick<DashboardRoutineItem, "durationMinutes" | "offsetMinutes" | "startTime" | "title">,
+) {
+  if (routine.startTime) {
+    return `0-${routine.startTime}-${routine.title}`;
+  }
+
+  if (routine.offsetMinutes !== null && routine.offsetMinutes !== undefined) {
+    return `1-${String(routine.offsetMinutes).padStart(4, "0")}-${routine.title}`;
+  }
+
+  return `2-${routine.title}`;
+}
+
+function getResponsibilitySortKey(item: Pick<DashboardResponsibilityItem, "sortKey" | "startTime" | "title">) {
+  return item.sortKey ?? `${item.startTime}-${item.title}`;
 }
 
 function getAssignments(
@@ -3593,6 +3805,34 @@ function getChoreSupportText(chore?: WeeklyChore) {
   ].filter((detail): detail is string => Boolean(detail));
 
   return details.length > 0 ? details.join(" ") : undefined;
+}
+
+function findPendingAllowanceRequestForCompletion({
+  assignment,
+  completionId,
+  date,
+  remoteMemberId,
+  requests,
+}: {
+  assignment: AssignmentWithChore;
+  completionId: string;
+  date: string;
+  remoteMemberId?: string;
+  requests: AllowanceRequest[];
+}) {
+  if (!remoteMemberId) {
+    return undefined;
+  }
+
+  return requests.find(
+    (request) =>
+      request.childRemoteMemberId === remoteMemberId &&
+      request.kind === "credit" &&
+      (request.choreCompletionId === completionId ||
+        (!request.choreCompletionId &&
+          request.choreId === assignment.choreId &&
+          request.occurrenceDate === date)),
+  );
 }
 
 function getChoreAllowanceRequestState({
@@ -3638,19 +3878,13 @@ function getChoreAllowanceRequestState({
     };
   }
 
-  const pendingRequest = requests.find(
-    (request) =>
-      request.childRemoteMemberId === remoteMemberId &&
-      request.kind === "credit" &&
-      (
-        request.choreCompletionId === completion.id ||
-        (
-          !request.choreCompletionId &&
-          request.choreId === assignment.choreId &&
-          request.occurrenceDate === date
-        )
-      ),
-  );
+  const pendingRequest = findPendingAllowanceRequestForCompletion({
+    assignment,
+    completionId: completion.id,
+    date,
+    remoteMemberId,
+    requests,
+  });
 
   if (pendingRequest) {
     return {
@@ -3680,6 +3914,9 @@ function getResponsibilityItems(
     title: routine.title,
     startTime: routine.startTime,
     endTime: routine.endTime,
+    durationMinutes: routine.durationMinutes,
+    metaLabel: routine.metaLabel,
+    sortKey: routine.sortKey,
     category: routine.category,
     source: "routine" as const,
     completionKey: routine.completionKey,
@@ -3753,7 +3990,7 @@ function getResponsibilityItems(
     ...datedTasks,
     ...temporaryRoutineItems,
   ].sort((first, second) =>
-    compareStrings(`${first.startTime}-${first.title}`, `${second.startTime}-${second.title}`),
+    compareStrings(getResponsibilitySortKey(first), getResponsibilitySortKey(second)),
   );
 }
 
@@ -4903,6 +5140,10 @@ async function loadRemoteRoutines(
         title: item.title,
         startTime: normalizeTimeForInput(item.start_time),
         endTime: normalizeTimeForInput(item.end_time),
+        durationMinutes:
+          normalizeDurationMinutes(item.metadata.durationMinutes) ??
+          getDurationMinutes(normalizeTimeForInput(item.start_time), normalizeTimeForInput(item.end_time)),
+        offsetMinutes: normalizeOffsetMinutes(item.metadata.offsetMinutes),
         source: "remote" as const,
         remoteActionItemId: item.id,
         completionKey,
@@ -6423,6 +6664,10 @@ function isManagedScheduleEvent(event: FixedEvent) {
   return event.source === "baseline-flow" || event.source === "manual-event";
 }
 
+function normalizeWakeUpTime(value?: string | null) {
+  return value && /^\d{2}:\d{2}$/.test(value) ? value : undefined;
+}
+
 function mapRemoteMemberToDashboardMember(member: RemoteHouseholdMemberConfigRow): HouseholdMember {
   return {
     id: member.external_key,
@@ -6431,6 +6676,8 @@ function mapRemoteMemberToDashboardMember(member: RemoteHouseholdMemberConfigRow
     morningRoutineAllowanceAmount: normalizeCurrencyAmount(
       member.metadata?.morningRoutineAllowanceAmount,
     ),
+    weekdayWakeUpTime: normalizeWakeUpTime(member.metadata?.weekdayWakeUpTime),
+    weekendWakeUpTime: normalizeWakeUpTime(member.metadata?.weekendWakeUpTime),
     role: member.role,
     relationship: normalizeDashboardRelationship(member.relationship, member.role),
     birthDate: member.birth_date ?? undefined,
@@ -6471,6 +6718,16 @@ function sourceLabel(source: string) {
   }
 
   return source.replace(/-calendar$/, "").replace(/-/g, " ");
+}
+
+function getMorningRoutineWakeUpLabel(member: HouseholdMember, dayOfWeek: DayOfWeek) {
+  const wakeUpTime = resolveMemberWakeUpTime(member, dayOfWeek);
+
+  if (!wakeUpTime) {
+    return "Set a weekday and weekend wake-up time in Admin to anchor this routine.";
+  }
+
+  return `Anchored to ${formatClockTime(wakeUpTime)} wake-up.`;
 }
 
 function formatTimeRange(startTime: string, endTime: string) {
@@ -6550,6 +6807,8 @@ function BankDetailsModal({
   onOpenAllowanceEntryModal,
   onOpenCreateAllowanceRequestModal,
   onOpenEditAllowanceRequestModal,
+  onRejectAllowanceRequest,
+  rejectingAllowanceRequestId,
   remoteAllowanceError,
   remoteAllowanceRequestError,
   remoteExternalKeysByMemberId,
@@ -6570,6 +6829,8 @@ function BankDetailsModal({
   onOpenAllowanceEntryModal: (entry: AllowanceEntry) => void;
   onOpenCreateAllowanceRequestModal: (kind: AllowanceRequestKind) => void;
   onOpenEditAllowanceRequestModal: (request: AllowanceRequest) => void;
+  onRejectAllowanceRequest: (request: AllowanceRequest) => void;
+  rejectingAllowanceRequestId: string;
   remoteAllowanceError: string;
   remoteAllowanceRequestError: string;
   remoteExternalKeysByMemberId: Record<string, string>;
@@ -6708,7 +6969,7 @@ function BankDetailsModal({
                   Bank Requests
                 </h3>
                 <p className="mt-1 text-sm text-[#4c5965]">
-                  Submit credits for earned work or debits when cash is taken out of the bank.
+                  Allowance chores request credit automatically when they are checked off. Use this area for manual credits or debits.
                 </p>
               </div>
               {isAllowanceApprovalMode ? (
@@ -6728,8 +6989,8 @@ function BankDetailsModal({
             ) : (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4">
                 <p className="max-w-2xl text-sm text-[#4c5965]">
-                  Open a request to add money into the bank or debit it back out. Parents can also reopen
-                  pending requests to fix details before approval.
+                  Open a manual request to add money into the bank or debit it back out. Chores with an
+                  allowance now create their pending credit request automatically when a child completes them.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -6811,15 +7072,32 @@ function BankDetailsModal({
                         <div className="flex flex-wrap justify-end gap-2">
                           <button
                             className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                            disabled={approvingAllowanceRequestId === request.id}
+                            disabled={
+                              approvingAllowanceRequestId === request.id ||
+                              rejectingAllowanceRequestId === request.id
+                            }
                             onClick={() => onOpenEditAllowanceRequestModal(request)}
                             type="button"
                           >
                             Edit
                           </button>
                           <button
+                            className="border border-[#dc546a] bg-white px-3 py-2 text-sm font-semibold text-[#b03046] disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={
+                              approvingAllowanceRequestId === request.id ||
+                              rejectingAllowanceRequestId === request.id
+                            }
+                            onClick={() => onRejectAllowanceRequest(request)}
+                            type="button"
+                          >
+                            {rejectingAllowanceRequestId === request.id ? "Rejecting..." : "Reject"}
+                          </button>
+                          <button
                             className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={approvingAllowanceRequestId === request.id}
+                            disabled={
+                              approvingAllowanceRequestId === request.id ||
+                              rejectingAllowanceRequestId === request.id
+                            }
                             onClick={() => onApproveAllowanceRequest(request)}
                             type="button"
                           >

@@ -116,6 +116,32 @@ export async function approveRemoteAllowanceRequest(requestId: string) {
   return data;
 }
 
+export async function cancelRemoteAllowanceRequest(requestId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase.rpc("cancel_allowance_request_entry", {
+    target_request_id: requestId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function rejectRemoteAllowanceRequest(requestId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase.rpc("reject_allowance_request_entry", {
+    target_request_id: requestId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 async function saveRemoteAllowanceRequestRow({
   amount,
   assignmentTemplateId,

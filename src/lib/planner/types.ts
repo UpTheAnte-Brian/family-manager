@@ -14,6 +14,8 @@ export type HouseholdMember = {
   relationship: "dad" | "mom" | "son" | "daughter";
   birthDate?: string;
   morningRoutineAllowanceAmount?: number;
+  weekdayWakeUpTime?: string;
+  weekendWakeUpTime?: string;
   workFromHome?: boolean;
   focusWindows?: {
     startTime: string;
@@ -67,8 +69,10 @@ export type RoutineChore = {
   defaultAssigneeIds: string[];
   schedule: {
     daysOfWeek: DayOfWeek[];
-    startTime: string;
-    endTime: string;
+    startTime?: string;
+    endTime?: string;
+    durationMinutes?: number;
+    offsetMinutes?: number;
   };
   countsTowardWeeklyTarget: boolean;
 };
