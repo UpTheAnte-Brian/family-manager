@@ -79,6 +79,10 @@ import {
   resolveRoutineTiming,
 } from "@/lib/routines/schedule";
 import {
+  getEffectiveRemoteRoutineLoadState,
+  getRemoteRoutineLoadContextKey,
+} from "@/lib/routines/remote-load-state";
+import {
   calendarEventAssignmentsStorageKey,
   calendarTeamAssignmentsStorageKey,
 } from "@/lib/calendar/storage";
@@ -509,6 +513,7 @@ export function ProfileDashboard({
   const [remoteHouseholdItemCompletions, setRemoteHouseholdItemCompletions] = useState<Record<string, boolean>>({});
   const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
   const [remoteRoutineCompletions, setRemoteRoutineCompletions] = useState<Record<string, boolean>>({});
+  const [remoteRoutineDataContextKey, setRemoteRoutineDataContextKey] = useState("");
   const [remoteActivityDefinitions, setRemoteActivityDefinitions] = useState<ActivityDefinition[]>([]);
   const [remoteActivityEntries, setRemoteActivityEntries] = useState<ActivityEntry[]>([]);
   const [remoteAllowanceEntries, setRemoteAllowanceEntries] = useState<AllowanceEntry[]>([]);
@@ -635,6 +640,25 @@ export function ProfileDashboard({
       }),
     [effectiveDayTemplates, fixedEvents, season, selectedDate],
   );
+  const effectiveRemoteRoutineLoadState = useMemo(
+    () =>
+      getEffectiveRemoteRoutineLoadState({
+        completions: remoteRoutineCompletions,
+        householdId,
+        isRemoteHouseholdReady,
+        loadedContextKey: remoteRoutineDataContextKey,
+        routines: remoteRoutineItems,
+        selectedDate: displayedDay.date,
+      }),
+    [
+      displayedDay.date,
+      householdId,
+      isRemoteHouseholdReady,
+      remoteRoutineCompletions,
+      remoteRoutineDataContextKey,
+      remoteRoutineItems,
+    ],
+  );
   const choresById = useMemo(
     () => new Map(choreConfig.weeklyChores.map((chore) => [chore.id, chore])),
     [choreConfig.weeklyChores],
@@ -642,8 +666,8 @@ export function ProfileDashboard({
   const routineItems = getRoutineItems(
     choreConfig.routineChores,
     state.localRoutines,
-    isRemoteHouseholdReady ? remoteRoutineItems : [],
-    isRemoteHouseholdReady,
+    effectiveRemoteRoutineLoadState.routines,
+    effectiveRemoteRoutineLoadState.isAuthoritative,
     selectedMember,
     displayedDay,
   );
@@ -700,7 +724,7 @@ export function ProfileDashboard({
       actionCompletions: {
         ...state.actionCompletions,
         ...remoteHouseholdItemCompletions,
-        ...remoteRoutineCompletions,
+        ...effectiveRemoteRoutineLoadState.completions,
         ...remoteTemporaryCompletions,
       },
       choreCompletions: choreConfig.completions,
@@ -708,8 +732,8 @@ export function ProfileDashboard({
     }),
     [
       choreConfig.completions,
+      effectiveRemoteRoutineLoadState.completions,
       remoteHouseholdItemCompletions,
-      remoteRoutineCompletions,
       remoteTemporaryCompletions,
       state,
       temporaryRoutines,
@@ -1273,10 +1297,12 @@ export function ProfileDashboard({
 
     let isActive = true;
     const currentHouseholdId = householdId;
+    const currentDate = displayedDay.date;
+    const currentDayOfWeek = displayedDay.dayOfWeek;
 
     async function loadRemoteRoutinesForHousehold() {
       try {
-        const remoteState = await loadRemoteRoutines(currentHouseholdId, displayedDay.date, displayedDay.dayOfWeek);
+        const remoteState = await loadRemoteRoutines(currentHouseholdId, currentDate, currentDayOfWeek);
 
         if (!isActive) {
           return;
@@ -1284,6 +1310,7 @@ export function ProfileDashboard({
 
         setRemoteRoutineItems(remoteState.routines);
         setRemoteRoutineCompletions(remoteState.completions);
+        setRemoteRoutineDataContextKey(getRemoteRoutineLoadContextKey(currentHouseholdId, currentDate));
         setRemoteTemporaryRoutineError("");
       } catch (error) {
         if (!isActive) {
