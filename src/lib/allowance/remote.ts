@@ -190,6 +190,29 @@ export async function deleteRemoteAllowanceEntry({
   }
 }
 
+export async function deleteRemoteAllowanceEntries({
+  entryIds,
+  householdId,
+}: {
+  entryIds: string[];
+  householdId: string;
+}) {
+  if (entryIds.length === 0) {
+    return;
+  }
+
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase
+    .from("allowance_entries")
+    .delete()
+    .eq("household_id", householdId)
+    .in("id", entryIds);
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function findRemoteMorningRoutineAllowanceEntry({
   childId,
   completionDate,

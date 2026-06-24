@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { canApproveAllowanceRequests } from "@/lib/allowance/approval";
 
 describe("allowance approval access", () => {
-  it("allows approval only in parent view for a household admin", () => {
+  it("allows approval for a household admin regardless of the selected profile", () => {
     assert.equal(
       canApproveAllowanceRequests({
         householdRole: "parent",
@@ -23,7 +23,7 @@ describe("allowance approval access", () => {
         householdRole: "parent",
         selectedMemberRole: "child",
       }),
-      false,
+      true,
     );
     assert.equal(
       canApproveAllowanceRequests({

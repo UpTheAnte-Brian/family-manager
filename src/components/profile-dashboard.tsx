@@ -22,6 +22,7 @@ import {
   canRenameAllowanceEntry,
   type AllowanceEntryDraftInput,
 } from "@/lib/allowance/entries";
+import { getAllowanceLedgerPage } from "@/lib/allowance/ledger";
 import {
   getAllowanceRequestKindLabel,
   getSignedAllowanceRequestAmount,
@@ -39,6 +40,7 @@ import {
 } from "@/lib/allowance/storage";
 import {
   createRemoteMorningRoutineAllowanceEntry,
+  deleteRemoteAllowanceEntries,
   deleteRemoteAllowanceEntry,
   deleteRemoteMorningRoutineAllowanceEntry,
   isMissingAllowanceEntriesTableError,
@@ -771,13 +773,23 @@ export function ProfileDashboard({
     localReminders,
     displayedDay,
   );
-  const selectedMemberAllowanceEntries = (
-    isRemoteHouseholdReady && selectedMember.role === "child"
-      ? remoteAllowanceEntries
-      : allowanceState.entries
-  )
-    .filter((entry) => entry.childId === selectedMember.id)
-    .sort((first, second) => compareStrings(second.occurredAt, first.occurredAt));
+  const selectedMemberAllowanceEntries = useMemo(
+    () =>
+      (
+        isRemoteHouseholdReady && selectedMember.role === "child"
+          ? remoteAllowanceEntries
+          : allowanceState.entries
+      )
+        .filter((entry) => entry.childId === selectedMember.id)
+        .sort((first, second) => compareStrings(second.occurredAt, first.occurredAt)),
+    [
+      allowanceState.entries,
+      isRemoteHouseholdReady,
+      remoteAllowanceEntries,
+      selectedMember.id,
+      selectedMember.role,
+    ],
+  );
   const visibleAllowanceRequests = remoteAllowanceRequests.filter((request) => {
     const childExternalKey = remoteExternalKeysByMemberId[request.childRemoteMemberId];
 
@@ -1715,6 +1727,38 @@ export function ProfileDashboard({
       closeAllowanceEntryModal();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not delete the bank entry.";
+      setAllowanceEntryError(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
+  async function removeAllowanceEntries(entries: AllowanceEntry[]) {
+    if (!isAllowanceApprovalMode) {
+      const message = "Switch to a parent profile before deleting bank entries.";
+      setAllowanceEntryError(message);
+      throw new Error(message);
+    }
+
+    const entryIds = [...new Set(entries.map((entry) => entry.id))];
+
+    try {
+      if (isRemoteHouseholdReady && householdId) {
+        await deleteRemoteAllowanceEntries({
+          entryIds,
+          householdId,
+        });
+        setRemoteAllowanceEntries((current) =>
+          current.filter((candidate) => !entryIds.includes(candidate.id)),
+        );
+      } else {
+        setAllowanceState((current) => ({
+          entries: current.entries.filter((candidate) => !entryIds.includes(candidate.id)),
+        }));
+      }
+
+      setAllowanceEntryError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not delete the selected bank entries.";
       setAllowanceEntryError(message);
       throw error instanceof Error ? error : new Error(message);
     }
@@ -3368,6 +3412,9 @@ export function ProfileDashboard({
           members={members}
           onApproveAllowanceRequest={(request) => {
             void approveAllowanceRequest(request);
+          }}
+          onDeleteAllowanceEntries={async (entries) => {
+            await removeAllowanceEntries(entries);
           }}
           onRejectAllowanceRequest={(request) => {
             void rejectAllowanceRequest(request);
@@ -6804,6 +6851,7 @@ function BankDetailsModal({
   members,
   onApproveAllowanceRequest,
   onClose,
+  onDeleteAllowanceEntries,
   onOpenAllowanceEntryModal,
   onOpenCreateAllowanceRequestModal,
   onOpenEditAllowanceRequestModal,
@@ -6826,6 +6874,7 @@ function BankDetailsModal({
   members: HouseholdMember[];
   onApproveAllowanceRequest: (request: AllowanceRequest) => void;
   onClose: () => void;
+  onDeleteAllowanceEntries: (entries: AllowanceEntry[]) => void | Promise<void>;
   onOpenAllowanceEntryModal: (entry: AllowanceEntry) => void;
   onOpenCreateAllowanceRequestModal: (kind: AllowanceRequestKind) => void;
   onOpenEditAllowanceRequestModal: (request: AllowanceRequest) => void;
@@ -6840,6 +6889,98 @@ function BankDetailsModal({
   visibleAllowanceRequests: AllowanceRequest[];
 }) {
   const hasPendingRequests = visibleAllowanceRequests.length > 0;
+  const [isDeletingEntries, setIsDeletingEntries] = useState(false);
+  const [ledgerUiState, setLedgerUiState] = useState<{
+    memberId: string;
+    page: number;
+    selectedEntryIds: string[];
+  }>({
+    memberId: selectedMember.id,
+    page: 1,
+    selectedEntryIds: [],
+  });
+  const selectedMemberLedgerPage =
+    ledgerUiState.memberId === selectedMember.id ? ledgerUiState.page : 1;
+  const selectedLedgerEntryIds = (
+    ledgerUiState.memberId === selectedMember.id ? ledgerUiState.selectedEntryIds : []
+  ).filter((entryId) => selectedMemberAllowanceEntries.some((entry) => entry.id === entryId));
+  const ledgerPageState = getAllowanceLedgerPage(selectedMemberAllowanceEntries, selectedMemberLedgerPage);
+  const selectedEntryIdSet = new Set(selectedLedgerEntryIds);
+  const selectedLedgerEntries = selectedMemberAllowanceEntries.filter((entry) =>
+    selectedEntryIdSet.has(entry.id),
+  );
+  const allVisibleLedgerEntriesSelected =
+    ledgerPageState.entries.length > 0 &&
+    ledgerPageState.entries.every((entry) => selectedEntryIdSet.has(entry.id));
+
+  function toggleLedgerEntrySelection(entryId: string) {
+    setLedgerUiState((current) => {
+      const currentIds =
+        current.memberId === selectedMember.id ? current.selectedEntryIds : [];
+
+      return {
+        memberId: selectedMember.id,
+        page: current.memberId === selectedMember.id ? current.page : 1,
+        selectedEntryIds: currentIds.includes(entryId)
+          ? currentIds.filter((candidate) => candidate !== entryId)
+          : [...currentIds, entryId],
+      };
+    });
+  }
+
+  function toggleLedgerPageSelection() {
+    const pageEntryIds = ledgerPageState.entries.map((entry) => entry.id);
+
+    if (pageEntryIds.length === 0) {
+      return;
+    }
+
+    setLedgerUiState((current) => {
+      const currentIds =
+        current.memberId === selectedMember.id ? current.selectedEntryIds : [];
+
+      return {
+        memberId: selectedMember.id,
+        page: ledgerPageState.page,
+        selectedEntryIds: pageEntryIds.every((entryId) => currentIds.includes(entryId))
+          ? currentIds.filter((entryId) => !pageEntryIds.includes(entryId))
+          : [...new Set([...currentIds, ...pageEntryIds])],
+      };
+    });
+  }
+
+  async function handleDeleteSelectedEntries() {
+    if (selectedLedgerEntries.length === 0) {
+      return;
+    }
+
+    const selectedRewardCount = selectedLedgerEntries.filter(
+      (entry) => entry.source === "morning-routine-completion",
+    ).length;
+    const confirmationLabel =
+      selectedRewardCount === selectedLedgerEntries.length
+        ? `${selectedLedgerEntries.length} reward${selectedLedgerEntries.length === 1 ? "" : "s"}`
+        : `${selectedLedgerEntries.length} ledger entr${selectedLedgerEntries.length === 1 ? "y" : "ies"}`;
+
+    if (!window.confirm(`Delete ${confirmationLabel}? This cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeletingEntries(true);
+
+    try {
+      await onDeleteAllowanceEntries(selectedLedgerEntries);
+      setLedgerUiState((current) => ({
+        memberId: selectedMember.id,
+        page: current.memberId === selectedMember.id ? current.page : 1,
+        selectedEntryIds: [],
+      }));
+    } catch {
+      return;
+    } finally {
+      setIsDeletingEntries(false);
+    }
+  }
 
   return (
     <div
@@ -6920,9 +7061,40 @@ function BankDetailsModal({
                   <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#657381]">Ledger</h3>
                   <p className="mt-1 text-sm text-[#4c5965]">Recent credits and debits for this child.</p>
                 </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span className="text-xs text-[#657381]">
+                    {ledgerPageState.startIndex + 1}-{ledgerPageState.endIndex} of {selectedMemberAllowanceEntries.length}
+                  </span>
+                  {isAllowanceApprovalMode ? (
+                    <>
+                      <button
+                        className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={ledgerPageState.entries.length === 0 || isDeletingEntries}
+                        onClick={toggleLedgerPageSelection}
+                        type="button"
+                      >
+                        {allVisibleLedgerEntriesSelected ? "Clear page" : "Select page"}
+                      </button>
+                      <button
+                        className="border border-[#dc546a] bg-white px-3 py-2 text-sm font-semibold text-[#b03046] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={selectedLedgerEntries.length === 0 || isDeletingEntries}
+                        onClick={() => {
+                          void handleDeleteSelectedEntries();
+                        }}
+                        type="button"
+                      >
+                        {isDeletingEntries
+                          ? "Deleting..."
+                          : selectedLedgerEntries.length > 0
+                            ? `Delete selected (${selectedLedgerEntries.length})`
+                            : "Delete selected"}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               </div>
               <ol className="grid gap-2">
-                {selectedMemberAllowanceEntries.slice(0, 8).map((entry) => (
+                {ledgerPageState.entries.map((entry) => (
                   <li
                     className="grid gap-2 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm sm:grid-cols-[1fr_auto]"
                     key={entry.id}
@@ -6942,7 +7114,16 @@ function BankDetailsModal({
                       {formatCurrency(entry.amount)}
                     </span>
                     {isAllowanceApprovalMode ? (
-                      <div className="sm:col-span-2 flex justify-end">
+                      <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                        <label className="inline-flex items-center gap-2 text-sm text-[#4c5965]">
+                          <input
+                            checked={selectedEntryIdSet.has(entry.id)}
+                            className="h-4 w-4 accent-[#1f6f8b]"
+                            onChange={() => toggleLedgerEntrySelection(entry.id)}
+                            type="checkbox"
+                          />
+                          Select
+                        </label>
                         <button
                           className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
                           onClick={() => onOpenAllowanceEntryModal(entry)}
@@ -6955,6 +7136,45 @@ function BankDetailsModal({
                   </li>
                 ))}
               </ol>
+              {ledgerPageState.totalPages > 1 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#e2e8f0] pt-3">
+                  <p className="text-sm text-[#4c5965]">
+                    Page {ledgerPageState.page} of {ledgerPageState.totalPages}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={ledgerPageState.page === 1}
+                      onClick={() =>
+                        setLedgerUiState((current) => ({
+                          memberId: selectedMember.id,
+                          page: ledgerPageState.page - 1,
+                          selectedEntryIds:
+                            current.memberId === selectedMember.id ? current.selectedEntryIds : [],
+                        }))
+                      }
+                      type="button"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={ledgerPageState.page === ledgerPageState.totalPages}
+                      onClick={() =>
+                        setLedgerUiState((current) => ({
+                          memberId: selectedMember.id,
+                          page: ledgerPageState.page + 1,
+                          selectedEntryIds:
+                            current.memberId === selectedMember.id ? current.selectedEntryIds : [],
+                        }))
+                      }
+                      type="button"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </section>
           ) : (
             <div className="mb-5">
@@ -7416,6 +7636,7 @@ function AllowanceEntryModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const canRename = canRenameAllowanceEntry(entry);
+  const deleteLabel = entry.source === "morning-routine-completion" ? "Delete reward" : "Delete entry";
   const sourceDescription =
     entry.source === "manual-adjustment"
       ? "This changes the parent-approved credit shown in the bank."
@@ -7435,7 +7656,7 @@ function AllowanceEntryModal({
   }
 
   async function handleDelete() {
-    if (!window.confirm("Delete this bank entry? This only removes this one credit.")) {
+    if (!window.confirm(`Delete this ${entry.source === "morning-routine-completion" ? "reward" : "bank entry"}? This only removes this one credit.`)) {
       return;
     }
 
@@ -7558,7 +7779,7 @@ function AllowanceEntryModal({
                 }}
                 type="button"
               >
-                {isDeleting ? "Deleting..." : "Delete entry"}
+                {isDeleting ? "Deleting..." : deleteLabel}
               </button>
               <div className="flex flex-wrap justify-end gap-2">
                 <button
