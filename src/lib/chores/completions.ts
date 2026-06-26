@@ -81,6 +81,43 @@ export async function createRemoteChoreCompletion({
   };
 }
 
+export async function createRemoteStandaloneChoreCompletion({
+  choreId,
+  completedAt,
+  householdId,
+  occurrenceDate,
+  remoteMemberId,
+}: {
+  choreId: string;
+  completedAt?: string;
+  householdId: string;
+  occurrenceDate: string;
+  remoteMemberId: string;
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const resolvedCompletedAt = completedAt ?? `${occurrenceDate}T18:00:00`;
+  const { data, error } = await supabase
+    .from("chore_completions")
+    .insert({
+      household_id: householdId,
+      chore_id: choreId,
+      occurrence_date: occurrenceDate,
+      completed_by_member_id: remoteMemberId,
+      completed_at: resolvedCompletedAt,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    completedAt: resolvedCompletedAt,
+    id: data.id,
+  };
+}
+
 export async function deleteRemoteChoreCompletion(householdId: string, completionId: string) {
   const supabase = createBrowserSupabaseClient();
   const { error } = await supabase

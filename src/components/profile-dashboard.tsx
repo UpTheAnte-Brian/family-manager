@@ -66,7 +66,12 @@ import {
 } from "@/lib/allowance/morning-routine";
 import { planMorningRoutineSync } from "@/lib/allowance/morning-routine-sync";
 import { choreCategories, getChoreCategoryLabel, normalizeChoreCategory } from "@/lib/chores/categories";
-import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
+import { getAvailableExtraChores } from "@/lib/chores/extra-chores";
+import {
+  createRemoteChoreCompletion,
+  createRemoteStandaloneChoreCompletion,
+  deleteRemoteChoreCompletion,
+} from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { getConfiguredEventsAfterAppliedSourceReplacements } from "@/lib/calendar/applied-source-replacements";
 import { getAppliedCalendarEventAssignmentKey } from "@/lib/calendar/applied-events";
@@ -396,10 +401,20 @@ type AllowanceRequestDraftInput = {
   title: string;
 };
 
+type ExtraChoreRequestDraftInput = {
+  choreId: string;
+  note: string;
+  occurrenceDate: string;
+};
+
 type AllowanceRequestModalState =
   | { mode: "create"; draft: AllowanceRequestDraftInput }
   | { mode: "edit"; draft: AllowanceRequestDraftInput; request: AllowanceRequest }
   | null;
+
+type ExtraChoreModalState = {
+  draft: ExtraChoreRequestDraftInput;
+} | null;
 
 type AllowanceEntryModalState = {
   draft: AllowanceEntryDraftInput;
@@ -539,6 +554,7 @@ export function ProfileDashboard({
   const [remoteAllowanceError, setRemoteAllowanceError] = useState("");
   const [allowanceEntryError, setAllowanceEntryError] = useState("");
   const [remoteAllowanceRequestError, setRemoteAllowanceRequestError] = useState("");
+  const [extraChoreRequestError, setExtraChoreRequestError] = useState("");
   const [baselineScheduleSyncVersion, setBaselineScheduleSyncVersion] = useState(0);
   const [householdItemSyncVersion, setHouseholdItemSyncVersion] = useState(0);
   const [temporaryRoutineSyncVersion, setTemporaryRoutineSyncVersion] = useState(0);
@@ -550,6 +566,7 @@ export function ProfileDashboard({
   const [rejectingAllowanceRequestId, setRejectingAllowanceRequestId] = useState("");
   const [allowanceEntryModal, setAllowanceEntryModal] = useState<AllowanceEntryModalState>(null);
   const [allowanceRequestModal, setAllowanceRequestModal] = useState<AllowanceRequestModalState>(null);
+  const [extraChoreModal, setExtraChoreModal] = useState<ExtraChoreModalState>(null);
   const [bankModalOpen, setBankModalOpen] = useState<BankModalState>(false);
   const [morningRoutineCelebrationKey, setMorningRoutineCelebrationKey] = useState(0);
   const [responsibilityModal, setResponsibilityModal] = useState<ResponsibilityModalState | null>(null);
@@ -799,6 +816,49 @@ export function ProfileDashboard({
 
     return selectedMember.role === "child" ? childExternalKey === selectedMember.id : true;
   });
+  const availableExtraChores = useMemo(() => {
+    if (selectedMember.role !== "child") {
+      return [];
+    }
+
+    const scheduledChoreIds = new Set(assignments.map((assignment) => assignment.choreId));
+    const blockedChoreIds = new Set<string>();
+
+    for (const entry of selectedMemberAllowanceEntries) {
+      if (entry.choreId && entry.occurredAt.startsWith(displayedDay.date)) {
+        blockedChoreIds.add(entry.choreId);
+      }
+    }
+
+    if (selectedRemoteMemberId) {
+      for (const request of visibleAllowanceRequests) {
+        if (
+          request.kind === "credit" &&
+          request.childRemoteMemberId === selectedRemoteMemberId &&
+          request.occurrenceDate === displayedDay.date &&
+          request.choreId
+        ) {
+          blockedChoreIds.add(request.choreId);
+        }
+      }
+    }
+
+    return getAvailableExtraChores({
+      blockedChoreIds,
+      chores: choreConfig.weeklyChores,
+      memberId: selectedMember.id,
+      scheduledChoreIds,
+    });
+  }, [
+    assignments,
+    choreConfig.weeklyChores,
+    displayedDay.date,
+    selectedMember.id,
+    selectedMember.role,
+    selectedMemberAllowanceEntries,
+    selectedRemoteMemberId,
+    visibleAllowanceRequests,
+  ]);
   const selectedMemberMorningRoutineAllowanceAmount = isRemoteHouseholdReady
     ? getMorningRoutineAllowanceAmount(activeRemoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
     : getMorningRoutineAllowanceAmount(selectedMember);
@@ -1604,6 +1664,77 @@ export function ProfileDashboard({
     }
   }
 
+  async function saveExtraChoreRequest(input: ExtraChoreRequestDraftInput) {
+    if (!isRemoteHouseholdReady || !householdId) {
+      const message = "Connect a household in Setup before submitting extra chores for approval.";
+      setExtraChoreRequestError(message);
+      throw new Error(message);
+    }
+
+    if (selectedMember.role !== "child" || !selectedRemoteMemberId) {
+      const message = "Switch to a child profile before submitting an extra chore.";
+      setExtraChoreRequestError(message);
+      throw new Error(message);
+    }
+
+    const chore = availableExtraChores.find((candidate) => candidate.id === input.choreId);
+
+    if (!chore) {
+      const message = "That chore is no longer available for this day.";
+      setExtraChoreRequestError(message);
+      throw new Error(message);
+    }
+
+    const requestAmount = getChoreAllowanceAmount(chore);
+
+    if (!requestAmount) {
+      const message = "Only chores with an allowance amount can be sent for parent approval.";
+      setExtraChoreRequestError(message);
+      throw new Error(message);
+    }
+
+    try {
+      const createdCompletion = await createRemoteStandaloneChoreCompletion({
+        choreId: chore.id,
+        householdId,
+        occurrenceDate: input.occurrenceDate,
+        remoteMemberId: selectedRemoteMemberId,
+      });
+
+      try {
+        const request = await createRemoteAllowanceRequest({
+          amount: requestAmount,
+          category: chore.category,
+          childRemoteMemberId: selectedRemoteMemberId,
+          choreCompletionId: createdCompletion.id,
+          choreId: chore.id,
+          choreTitle: chore.title,
+          householdId,
+          kind: "credit",
+          note: input.note,
+          occurrenceDate: input.occurrenceDate,
+          requestedByRemoteMemberId: selectedRemoteMemberId,
+        });
+
+        setRemoteAllowanceRequests((current) => [request, ...current]);
+        setAllowanceRequestSyncVersion((current) => current + 1);
+        setChoreSyncVersion((current) => current + 1);
+        setExtraChoreRequestError("");
+        closeExtraChoreModal();
+      } catch (error) {
+        await deleteRemoteChoreCompletion(householdId, createdCompletion.id);
+        throw error;
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not submit the extra chore for parent approval.";
+      setExtraChoreRequestError(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
   function openCreateAllowanceRequestModal(kind: AllowanceRequestKind) {
     const defaultChildId = selectedMember.role === "child" ? selectedMember.id : childMembers[0]?.id ?? "";
 
@@ -1667,6 +1798,22 @@ export function ProfileDashboard({
   function closeAllowanceRequestModal() {
     setAllowanceRequestModal(null);
     setRemoteAllowanceRequestError("");
+  }
+
+  function openExtraChoreModal() {
+    setExtraChoreModal({
+      draft: {
+        choreId: availableExtraChores[0]?.id ?? "",
+        note: "",
+        occurrenceDate: displayedDay.date,
+      },
+    });
+    setExtraChoreRequestError("");
+  }
+
+  function closeExtraChoreModal() {
+    setExtraChoreModal(null);
+    setExtraChoreRequestError("");
   }
 
   async function saveAllowanceEntry(draft: AllowanceEntryDraftInput, entry: AllowanceEntry) {
@@ -2967,6 +3114,16 @@ export function ProfileDashboard({
             <Panel
               action={
                 <div className="flex flex-wrap gap-2">
+                  {selectedMember.role === "child" ? (
+                    <button
+                      className="border border-[#2f6f73] bg-white px-3 py-2 text-sm font-semibold text-[#2f6f73] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={availableExtraChores.length === 0}
+                      onClick={openExtraChoreModal}
+                      type="button"
+                    >
+                      Complete extra chore
+                    </button>
+                  ) : null}
                   <button
                     className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
                     onClick={() => setTemporaryRoutineModal(true)}
@@ -3357,6 +3514,16 @@ export function ProfileDashboard({
               setResponsibilityModal(null);
             }
           }}
+        />
+      ) : null}
+      {extraChoreModal ? (
+        <ExtraChoreModal
+          availableChores={availableExtraChores}
+          childName={selectedMember.preferredName}
+          errorMessage={extraChoreRequestError}
+          onClose={closeExtraChoreModal}
+          onSave={saveExtraChoreRequest}
+          startingDraft={extraChoreModal.draft}
         />
       ) : null}
       {baselineScheduleModal ? (
@@ -6325,6 +6492,201 @@ function TemporaryRoutineModal({
             Add routine
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ExtraChoreModal({
+  availableChores,
+  childName,
+  errorMessage,
+  onClose,
+  onSave,
+  startingDraft,
+}: {
+  availableChores: WeeklyChore[];
+  childName: string;
+  errorMessage: string;
+  onClose: () => void;
+  onSave: (input: ExtraChoreRequestDraftInput) => Promise<void>;
+  startingDraft: ExtraChoreRequestDraftInput;
+}) {
+  const [draft, setDraft] = useState(startingDraft);
+  const [isSaving, setIsSaving] = useState(false);
+  const selectedChore =
+    availableChores.find((chore) => chore.id === draft.choreId) ?? availableChores[0] ?? null;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        ...draft,
+        choreId: selectedChore?.id ?? "",
+      });
+    } catch {
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+              Parent Approval
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-[#17202a]">Complete extra chore</h2>
+            <p className="mt-1 text-sm text-[#4c5965]">
+              Pick a bank-eligible chore for {childName} that was not already on this day&apos;s list.
+            </p>
+          </div>
+          <button
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          {errorMessage ? (
+            <p className="mb-4 border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+              {errorMessage}
+            </p>
+          ) : null}
+
+          {availableChores.length === 0 ? (
+            <div className="grid gap-4">
+              <p className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+                No extra allowance chores are available for this child on this day.
+              </p>
+              <div className="flex justify-end">
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  onClick={onClose}
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="grid gap-4" onSubmit={submit}>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold">Chore</span>
+                  <select
+                    className="border border-[#d7e0e7] bg-white px-3 py-2"
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        choreId: event.target.value,
+                      }))
+                    }
+                    value={selectedChore?.id ?? ""}
+                  >
+                    {availableChores.map((chore) => (
+                      <option key={chore.id} value={chore.id}>
+                        {chore.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid gap-1 text-sm">
+                  <span className="font-semibold">Date</span>
+                  <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 font-semibold text-[#17202a]">
+                    {formatDateLabel(draft.occurrenceDate)}
+                  </div>
+                </div>
+              </div>
+
+              {selectedChore ? (
+                <div className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Amount
+                    </p>
+                    <p className="mt-1 font-semibold text-[#17202a]">
+                      {formatCurrency(selectedChore.allowanceAmount ?? 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Category
+                    </p>
+                    <p className="mt-1 font-semibold text-[#17202a]">
+                      {getChoreCategoryLabel(selectedChore.category)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                      Estimated Time
+                    </p>
+                    <p className="mt-1 font-semibold text-[#17202a]">
+                      {selectedChore.estimatedMinutes} min
+                    </p>
+                  </div>
+                  {selectedChore.definitionOfDone ? (
+                    <div className="sm:col-span-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#657381]">
+                        Definition of Done
+                      </p>
+                      <p className="mt-1 text-sm text-[#4c5965]">{selectedChore.definitionOfDone}</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-semibold">Note</span>
+                <textarea
+                  className="min-h-28 border border-[#d7e0e7] bg-white px-3 py-2"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))
+                  }
+                  placeholder="Optional details for the parent approval"
+                  value={draft.note}
+                />
+              </label>
+
+              <div className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
+                Saving this creates a chore completion and a pending bank request. A parent still has to approve it before the credit lands in the bank.
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                  onClick={onClose}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="border border-[#2f6f73] bg-[#2f6f73] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isSaving || !selectedChore}
+                  type="submit"
+                >
+                  {isSaving ? "Saving..." : "Send for approval"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
