@@ -1263,11 +1263,11 @@ function EditorShell({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-center bg-[#17202a]/45 px-4 py-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#17202a]/45 px-4 py-6"
       role="dialog"
     >
-      <section className="w-full max-w-3xl border border-[#cbd5df] bg-white p-5 shadow-xl">
-        <header className="mb-4 flex items-start justify-between gap-4">
+      <section className="mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#cbd5df] bg-white shadow-xl">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#d7e0e7] px-5 py-4">
           <div>
             <h2 className="text-xl font-semibold">{title}</h2>
             <p className="mt-1 text-sm text-[#4c5965]">
@@ -1282,7 +1282,9 @@ function EditorShell({
             Close
           </button>
         </header>
-        <div className="grid gap-4">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-5 py-4">
+          <div className="grid gap-4">{children}</div>
+        </div>
       </section>
     </div>
   );
@@ -1290,7 +1292,7 @@ function EditorShell({
 
 function EditorActions({ onCancel, onSave }: { onCancel: () => void; onSave: () => void }) {
   return (
-    <div className="flex justify-end gap-2">
+    <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[#d7e0e7] bg-white pt-4">
       <button
         className="border border-[#d7e0e7] bg-[#f8fafc] px-4 py-2 text-sm font-semibold"
         onClick={onCancel}
