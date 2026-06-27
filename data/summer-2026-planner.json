@@ -6092,6 +6092,98 @@
           "mason",
           "reagan"
         ]
+      },
+      {
+        "id": "organize-bedroom",
+        "title": "Organize bedroom",
+        "category": "house-reset",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "definitionOfDone": "Toys, books, and clothes are back in their places and the floor is clear."
+      },
+      {
+        "id": "put-away-laundry",
+        "title": "Put away clean laundry",
+        "category": "laundry",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "definitionOfDone": "Clean clothes are folded or hung and put into the right drawers or closets."
+      },
+      {
+        "id": "sweep-floors",
+        "title": "Sweep kitchen or playroom floor",
+        "category": "house-reset",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan"
+        ],
+        "definitionOfDone": "Visible crumbs and dirt are swept up and the dustpan is emptied."
+      },
+      {
+        "id": "dust-furniture",
+        "title": "Dust furniture and baseboards",
+        "category": "house-reset",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "definitionOfDone": "Dust the reachable surfaces and leave the cloth in the laundry."
+      },
+      {
+        "id": "wipe-counters",
+        "title": "Wipe kitchen counters",
+        "category": "kitchen",
+        "estimatedMinutes": 5,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan"
+        ],
+        "definitionOfDone": "Counters are wiped clean after meals or snack prep."
+      },
+      {
+        "id": "put-away-groceries",
+        "title": "Put away groceries",
+        "category": "kitchen",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan",
+          "kenzley"
+        ],
+        "definitionOfDone": "Pantry and fridge items are put into the correct places."
+      },
+      {
+        "id": "water-flowers",
+        "title": "Water plants or flowers",
+        "category": "yard",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason",
+          "reagan"
+        ],
+        "definitionOfDone": "Outdoor pots or beds are watered evenly without flooding them."
+      },
+      {
+        "id": "start-laundry",
+        "title": "Start a load of laundry",
+        "category": "laundry",
+        "estimatedMinutes": 10,
+        "eligibleAssigneeIds": [
+          "mason"
+        ],
+        "requiresAdultCheck": true,
+        "definitionOfDone": "Clothes are sorted, detergent is measured with help, and the washer is started."
       }
     ],
     "weeklyAssignmentTemplates": [
