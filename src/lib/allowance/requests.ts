@@ -3,6 +3,11 @@ import type { AllowanceRequestKind } from "@/lib/allowance/request-kind";
 import { normalizeChoreCategory, type ChoreCategoryId } from "@/lib/chores/categories";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
+export type AllowanceRequestSplitAllocation = {
+  amount: number;
+  childRemoteMemberId: string;
+};
+
 export type AllowanceRequest = {
   id: string;
   childRemoteMemberId: string;
@@ -16,12 +21,24 @@ export type AllowanceRequest = {
   category?: ChoreCategoryId;
   kind: AllowanceRequestKind;
   amount: number;
+  splitAllocations: AllowanceRequestSplitAllocation[];
   occurrenceDate: string;
   note?: string;
   status: "pending" | "approved" | "rejected";
   requestedAt: string;
   approvedAt?: string;
 };
+
+type RemoteAllowanceRequestSplitAllocation = {
+  amountCents?: number;
+  householdMemberId?: string;
+};
+
+type RemoteAllowanceRequestMetadata = {
+  assignmentTemplateId?: string;
+  choreCompletionId?: string;
+  splitAllocations?: RemoteAllowanceRequestSplitAllocation[];
+} | null;
 
 type RemoteAllowanceRequestRow = {
   id: string;
@@ -40,10 +57,7 @@ type RemoteAllowanceRequestRow = {
   status: "pending" | "approved" | "rejected";
   requested_at: string;
   approved_at: string | null;
-  metadata: {
-    assignmentTemplateId?: string;
-    choreCompletionId?: string;
-  } | null;
+  metadata: RemoteAllowanceRequestMetadata;
 };
 
 const allowanceRequestSelect =
@@ -63,6 +77,7 @@ type SaveAllowanceRequestInput = {
   occurrenceDate: string;
   requestId?: string;
   requestedByRemoteMemberId?: string;
+  splitAllocations?: AllowanceRequestSplitAllocation[];
 };
 
 export async function createRemoteAllowanceRequest(input: Omit<SaveAllowanceRequestInput, "requestId">) {
@@ -156,6 +171,7 @@ async function saveRemoteAllowanceRequestRow({
   occurrenceDate,
   requestId,
   requestedByRemoteMemberId,
+  splitAllocations,
 }: SaveAllowanceRequestInput) {
   const supabase = createBrowserSupabaseClient();
   const normalizedAmount = normalizeCurrencyAmount(amount);
@@ -170,6 +186,12 @@ async function saveRemoteAllowanceRequestRow({
     throw new Error(kind === "debit" ? "Enter the reason for the debit." : "Enter the work that should be credited.");
   }
 
+  const normalizedSplitAllocations = normalizeSplitAllocations({
+    childRemoteMemberId,
+    kind,
+    splitAllocations,
+    totalAmount: normalizedAmount,
+  });
   const row = {
     household_id: householdId,
     household_member_id: childRemoteMemberId,
@@ -187,6 +209,9 @@ async function saveRemoteAllowanceRequestRow({
         ? {
             ...(assignmentTemplateId ? { assignmentTemplateId } : {}),
             ...(choreCompletionId ? { choreCompletionId } : {}),
+            ...(normalizedSplitAllocations.length > 0
+              ? { splitAllocations: normalizedSplitAllocations }
+              : {}),
           }
         : {},
   };
@@ -221,10 +246,78 @@ function mapRemoteAllowanceRequest(row: RemoteAllowanceRequestRow): AllowanceReq
     kind: row.request_kind,
     category: row.request_kind === "credit" ? normalizeChoreCategory(row.category_id ?? undefined) : undefined,
     amount: fromAllowanceCents(row.requested_amount_cents),
+    splitAllocations: mapRemoteSplitAllocations(row.metadata?.splitAllocations),
     occurrenceDate: row.occurrence_date,
     note: row.note ?? undefined,
     status: row.status,
     requestedAt: row.requested_at,
     approvedAt: row.approved_at ?? undefined,
   };
+}
+
+function normalizeSplitAllocations({
+  childRemoteMemberId,
+  kind,
+  splitAllocations,
+  totalAmount,
+}: {
+  childRemoteMemberId: string;
+  kind: AllowanceRequestKind;
+  splitAllocations?: AllowanceRequestSplitAllocation[];
+  totalAmount: number;
+}) {
+  if (kind !== "credit") {
+    return [];
+  }
+
+  const seenChildIds = new Set<string>();
+  const normalized = (splitAllocations ?? []).flatMap((allocation) => {
+    const normalizedAmount = normalizeCurrencyAmount(allocation.amount);
+
+    if (!normalizedAmount) {
+      return [];
+    }
+
+    if (!allocation.childRemoteMemberId || allocation.childRemoteMemberId === childRemoteMemberId) {
+      throw new Error("Split rewards must use a different child.");
+    }
+
+    if (seenChildIds.has(allocation.childRemoteMemberId)) {
+      throw new Error("Each child can only receive one split reward amount.");
+    }
+
+    seenChildIds.add(allocation.childRemoteMemberId);
+
+    return [
+      {
+        amountCents: toAllowanceCents(normalizedAmount),
+        householdMemberId: allocation.childRemoteMemberId,
+      },
+    ];
+  });
+  const totalAmountCents = toAllowanceCents(totalAmount);
+  const splitAmountCents = normalized.reduce((sum, allocation) => sum + allocation.amountCents, 0);
+
+  if (splitAmountCents >= totalAmountCents) {
+    throw new Error("Split rewards must leave at least $0.01 for the child who submitted the request.");
+  }
+
+  return normalized;
+}
+
+function mapRemoteSplitAllocations(
+  splitAllocations?: RemoteAllowanceRequestSplitAllocation[],
+): AllowanceRequestSplitAllocation[] {
+  return (splitAllocations ?? []).flatMap((allocation) => {
+    if (!allocation.householdMemberId || typeof allocation.amountCents !== "number" || allocation.amountCents <= 0) {
+      return [];
+    }
+
+    return [
+      {
+        amount: fromAllowanceCents(allocation.amountCents),
+        childRemoteMemberId: allocation.householdMemberId,
+      },
+    ];
+  });
 }

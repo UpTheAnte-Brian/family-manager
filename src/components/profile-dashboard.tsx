@@ -54,6 +54,7 @@ import {
   loadRemoteAllowanceRequests,
   rejectRemoteAllowanceRequest,
   type AllowanceRequest,
+  type AllowanceRequestSplitAllocation,
   updateRemoteAllowanceRequest,
 } from "@/lib/allowance/requests";
 import {
@@ -398,6 +399,10 @@ type AllowanceRequestDraftInput = {
   kind: AllowanceRequestKind;
   note: string;
   occurrenceDate: string;
+  splitAllocations: {
+    amount: string;
+    childId: string;
+  }[];
   title: string;
 };
 
@@ -1617,6 +1622,40 @@ export function ProfileDashboard({
         : undefined;
     const requestCategory =
       input.kind === "credit" ? normalizeChoreCategory(matchedChore?.category ?? input.category) : undefined;
+    let splitAllocations: AllowanceRequestSplitAllocation[] = [];
+
+    if (input.kind === "credit") {
+      splitAllocations = input.splitAllocations.flatMap((split) => {
+        if (!split.childId || split.childId === targetChildId) {
+          return [];
+        }
+
+        const splitAmount = normalizeCurrencyAmount(split.amount);
+
+        if (!splitAmount) {
+          return [];
+        }
+
+        const splitChild = childMembers.find((member) => member.id === split.childId);
+        const splitChildRemoteMemberId = splitChild
+          ? activeRemoteMemberIdsByExternalKey[splitChild.id]
+          : undefined;
+
+        if (!splitChild || !splitChildRemoteMemberId) {
+          const message = `Open Setup and save household members before splitting rewards for ${splitChild?.preferredName ?? "that child"}.`;
+
+          setRemoteAllowanceRequestError(message);
+          throw new Error(message);
+        }
+
+        return [
+          {
+            amount: splitAmount,
+            childRemoteMemberId: splitChildRemoteMemberId,
+          },
+        ];
+      });
+    }
 
     try {
       const nextRequest = editingRequest
@@ -1633,6 +1672,7 @@ export function ProfileDashboard({
             note: input.note,
             occurrenceDate: input.occurrenceDate,
             requestId: editingRequest.id,
+            splitAllocations,
           })
         : await createRemoteAllowanceRequest({
             amount: Number(input.amount),
@@ -1647,6 +1687,7 @@ export function ProfileDashboard({
             note: input.note,
             occurrenceDate: input.occurrenceDate,
             requestedByRemoteMemberId,
+            splitAllocations,
           });
 
       setRemoteAllowanceRequests((current) =>
@@ -1750,6 +1791,7 @@ export function ProfileDashboard({
         kind,
         note: "",
         occurrenceDate: displayedDay.date,
+        splitAllocations: [],
         title: "",
       },
     });
@@ -1771,6 +1813,12 @@ export function ProfileDashboard({
         kind: request.kind,
         note: request.note ?? "",
         occurrenceDate: request.occurrenceDate,
+        splitAllocations: request.splitAllocations
+          .map((split) => ({
+            amount: split.amount.toFixed(2),
+            childId: remoteExternalKeysByMemberId[split.childRemoteMemberId] ?? "",
+          }))
+          .filter((split) => split.childId && split.childId !== childId),
         title: request.choreTitle,
       },
       request,
@@ -7740,13 +7788,72 @@ function AllowanceRequestModal({
 }) {
   const [draft, setDraft] = useState(startingDraft);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSplitReward, setShowSplitReward] = useState(
+    startingDraft.splitAllocations.some((split) => Boolean(normalizeCurrencyAmount(split.amount))),
+  );
   const selectedChild =
     childMembers.find((member) => member.id === draft.childId) ?? childMembers[0] ?? null;
+  const otherChildMembers = childMembers.filter(
+    (member) => member.role === "child" && member.id !== draft.childId,
+  );
   const kindLabel = getAllowanceRequestKindLabel(draft.kind).toLowerCase();
   const signedPendingAmount = request ? getSignedAllowanceRequestAmount(request.amount, request.kind) : null;
+  const normalizedAmount = normalizeCurrencyAmount(draft.amount) ?? 0;
+  const normalizedSplitAllocations = draft.splitAllocations.flatMap((split) => {
+    const splitAmount = normalizeCurrencyAmount(split.amount);
+
+    if (
+      !splitAmount ||
+      split.childId === draft.childId ||
+      !otherChildMembers.some((member) => member.id === split.childId)
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        amount: splitAmount,
+        childId: split.childId,
+      },
+    ];
+  });
+  const splitAmountByChildId = new Map(
+    draft.splitAllocations.map((split) => [split.childId, split.amount] as const),
+  );
+  const splitRewardAmount = normalizedSplitAllocations.reduce((sum, split) => sum + split.amount, 0);
+  const primaryRewardAmount = Math.round((normalizedAmount - splitRewardAmount) * 100) / 100;
+  const splitRewardError =
+    showSplitReward && normalizedSplitAllocations.length > 0 && primaryRewardAmount <= 0
+      ? `Split rewards must leave at least $0.01 for ${selectedChild?.preferredName ?? "the original child"}.`
+      : "";
+
+  function updateSplitRewardAmount(childId: string, amount: string) {
+    setDraft((current) => {
+      const nextAllocations = current.splitAllocations.filter(
+        (split) => split.childId !== childId && split.childId !== current.childId,
+      );
+
+      if (!amount.trim()) {
+        return {
+          ...current,
+          splitAllocations: nextAllocations,
+        };
+      }
+
+      return {
+        ...current,
+        splitAllocations: [...nextAllocations, { amount, childId }],
+      };
+    });
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (splitRewardError) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -7809,6 +7916,9 @@ function AllowanceRequestModal({
                       setDraft((current) => ({
                         ...current,
                         childId: event.target.value,
+                        splitAllocations: current.splitAllocations.filter(
+                          (split) => split.childId !== event.target.value,
+                        ),
                       }))
                     }
                     value={draft.childId}
@@ -7832,12 +7942,19 @@ function AllowanceRequestModal({
                 <span className="font-semibold">Type</span>
                 <select
                   className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextKind = event.target.value as AllowanceRequestKind;
+
                     setDraft((current) => ({
                       ...current,
-                      kind: event.target.value as AllowanceRequestKind,
-                    }))
-                  }
+                      kind: nextKind,
+                      splitAllocations: nextKind === "credit" ? current.splitAllocations : [],
+                    }));
+
+                    if (nextKind !== "credit") {
+                      setShowSplitReward(false);
+                    }
+                  }}
                   value={draft.kind}
                 >
                   <option value="credit">Credit</option>
@@ -7900,7 +8017,7 @@ function AllowanceRequestModal({
                     }
                     required
                     step="0.01"
-                  value={draft.amount}
+                    value={draft.amount}
                 />
               </div>
               </label>
@@ -7926,6 +8043,87 @@ function AllowanceRequestModal({
                 </label>
               ) : null}
             </div>
+
+            {isEditing && draft.kind === "credit" && otherChildMembers.length > 0 ? (
+              <div className="grid gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold"
+                    onClick={() => {
+                      if (showSplitReward) {
+                        setDraft((current) => ({
+                          ...current,
+                          splitAllocations: [],
+                        }));
+                        setShowSplitReward(false);
+                        return;
+                      }
+
+                      setShowSplitReward(true);
+                    }}
+                    type="button"
+                  >
+                    {showSplitReward ? "Clear split reward" : "Split reward"}
+                  </button>
+                  <p className="text-sm text-[#4c5965]">
+                    Enter sibling amounts here and they come out of {selectedChild?.preferredName ?? "this child"}'s
+                    share.
+                  </p>
+                </div>
+
+                {showSplitReward ? (
+                  <div className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-4 py-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {otherChildMembers.map((member) => (
+                        <label className="grid gap-1 text-sm" key={member.id}>
+                          <span className="font-semibold">{member.preferredName}</span>
+                          <div className="relative">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#657381]">
+                              $
+                            </span>
+                            <input
+                              className="w-full border border-[#d7e0e7] bg-white py-2 pl-7 pr-3"
+                              inputMode="decimal"
+                              min="0"
+                              onChange={(event) => updateSplitRewardAmount(member.id, event.target.value)}
+                              placeholder="0.00"
+                              step="0.01"
+                              type="number"
+                              value={splitAmountByChildId.get(member.id) ?? ""}
+                            />
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="border border-[#d7e0e7] bg-white px-3 py-3 text-sm text-[#4c5965]">
+                      <p>
+                        {selectedChild?.preferredName ?? "The original child"} keeps{" "}
+                        <span className="font-semibold text-[#17202a]">
+                          {formatCurrency(Math.max(primaryRewardAmount, 0))}
+                        </span>
+                        {splitRewardAmount > 0 ? (
+                          <>
+                            {" "}
+                            after sharing{" "}
+                            <span className="font-semibold text-[#17202a]">
+                              {formatCurrency(splitRewardAmount)}
+                            </span>
+                            .
+                          </>
+                        ) : (
+                          "."
+                        )}
+                      </p>
+                    </div>
+                    {splitRewardError ? (
+                      <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                        {splitRewardError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <label className="grid gap-1 text-sm">
               <span className="font-semibold">Note</span>
@@ -7966,7 +8164,7 @@ function AllowanceRequestModal({
               </button>
               <button
                 className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isSaving}
+                disabled={isSaving || Boolean(splitRewardError)}
                 type="submit"
               >
                 {isSaving ? "Saving..." : isEditing ? "Update request" : "Save request"}
