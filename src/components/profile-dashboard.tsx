@@ -36,6 +36,7 @@ import {
   getChoreAllowanceAmount,
   normalizeCurrencyAmount,
   removeAllowanceEntriesForCompletion,
+  toAllowanceCents,
   type AllowanceStorageState,
 } from "@/lib/allowance/storage";
 import {
@@ -1965,12 +1966,21 @@ export function ProfileDashboard({
       return;
     }
 
+    const shouldCloseBankModal =
+      bankModalOpen &&
+      visibleAllowanceRequests.length === 1 &&
+      visibleAllowanceRequests[0]?.id === request.id;
+
     try {
       setApprovingAllowanceRequestId(request.id);
       await approveRemoteAllowanceRequest(request.id);
+      await reconcileApprovedSplitAllowanceRequest(request);
       setRemoteAllowanceRequests((current) =>
         current.filter((candidate) => candidate.id !== request.id),
       );
+      if (shouldCloseBankModal) {
+        setBankModalOpen(false);
+      }
       setRemoteAllowanceRequestError("");
       setAllowanceRequestSyncVersion((current) => current + 1);
       setChoreSyncVersion((current) => current + 1);
@@ -1980,6 +1990,118 @@ export function ProfileDashboard({
       );
     } finally {
       setApprovingAllowanceRequestId("");
+    }
+  }
+
+  async function reconcileApprovedSplitAllowanceRequest(request: AllowanceRequest) {
+    if (
+      request.kind !== "credit" ||
+      request.splitAllocations.length === 0 ||
+      !householdId ||
+      householdStatus !== "ready"
+    ) {
+      return;
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    const splitAmountCents = request.splitAllocations.reduce(
+      (sum, allocation) => sum + toAllowanceCents(allocation.amount),
+      0,
+    );
+    const expectedPrimaryAmountCents = toAllowanceCents(request.amount) - splitAmountCents;
+
+    if (expectedPrimaryAmountCents <= 0) {
+      return;
+    }
+
+    const involvedRemoteMemberIds = [
+      request.childRemoteMemberId,
+      ...request.splitAllocations.map((allocation) => allocation.childRemoteMemberId),
+    ];
+    const { data, error } = await supabase
+      .from("allowance_entries")
+      .select("id, household_member_id, amount_cents, chore_completion_id, chore_id, entry_type, occurred_at, metadata")
+      .eq("household_id", householdId)
+      .eq("metadata->>allowanceRequestId", request.id)
+      .in("household_member_id", involvedRemoteMemberIds)
+      .returns<RemoteAllowanceEntryRow[]>();
+
+    if (error) {
+      throw error;
+    }
+
+    const approvedEntries = data ?? [];
+    const primaryEntry = approvedEntries.find(
+      (entry) => entry.household_member_id === request.childRemoteMemberId,
+    );
+
+    if (!primaryEntry) {
+      return;
+    }
+
+    const splitAlreadyApplied =
+      primaryEntry.amount_cents === expectedPrimaryAmountCents &&
+      request.splitAllocations.every((allocation) => {
+        const expectedAmountCents = toAllowanceCents(allocation.amount);
+
+        return approvedEntries.some(
+          (entry) =>
+            entry.household_member_id === allocation.childRemoteMemberId &&
+            entry.amount_cents === expectedAmountCents,
+        );
+      });
+
+    if (splitAlreadyApplied) {
+      return;
+    }
+
+    if (primaryEntry.amount_cents !== expectedPrimaryAmountCents) {
+      const { error: updateError } = await supabase
+        .from("allowance_entries")
+        .update({
+          amount_cents: expectedPrimaryAmountCents,
+        })
+        .eq("household_id", householdId)
+        .eq("id", primaryEntry.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+    }
+
+    for (const allocation of request.splitAllocations) {
+      const expectedAmountCents = toAllowanceCents(allocation.amount);
+      const existingSplitEntry = approvedEntries.find(
+        (entry) =>
+          entry.household_member_id === allocation.childRemoteMemberId &&
+          entry.amount_cents === expectedAmountCents,
+      );
+
+      if (existingSplitEntry) {
+        continue;
+      }
+
+      const { error: insertError } = await supabase.from("allowance_entries").insert({
+        household_id: householdId,
+        household_member_id: allocation.childRemoteMemberId,
+        chore_id: primaryEntry.chore_id ?? request.choreId ?? null,
+        entry_type: "manual_adjustment",
+        amount_cents: expectedAmountCents,
+        occurred_at: primaryEntry.occurred_at,
+        metadata: {
+          allowanceRequestId: request.id,
+          ...(request.assignmentTemplateId ? { assignmentTemplateId: request.assignmentTemplateId } : {}),
+          choreTitle: request.choreTitle,
+          label: request.choreTitle,
+          ...(request.note ? { note: request.note } : {}),
+          requestKind: request.kind,
+          splitFromHouseholdMemberId: request.childRemoteMemberId,
+        },
+      });
+
+      if (insertError) {
+        throw insertError;
+      }
     }
   }
 
