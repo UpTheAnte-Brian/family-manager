@@ -1,5 +1,3 @@
-"use client";
-
 export function getSupabaseLikeErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
     return error.message;

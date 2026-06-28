@@ -1,7 +1,6 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   allowanceStorageKey,
   createChoreAllowanceEntry,
@@ -25,11 +24,7 @@ import {
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { ConsolePageHeader } from "@/components/console-page-header";
-import {
-  formatDurationMinutes,
-  normalizeDurationMinutes,
-  normalizeOffsetMinutes,
-} from "@/lib/routines/schedule";
+import { normalizeOffsetMinutes } from "@/lib/routines/schedule";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -180,10 +175,6 @@ const warehouseSeedChores: WeeklyChore[] = [
 const remoteChoreSelect =
   "id, external_key, title, description, category_id, catalog_chore_id, source_kind, metadata";
 export function ChoreManager({ chores, members }: ChoreManagerProps) {
-  const childMembers = useMemo(
-    () => members.filter((member) => member.role === "child"),
-    [members],
-  );
   const assignableMembers = useMemo(() => members, [members]);
   const initialState = useMemo<ChoreStorageState>(
     () => ({
@@ -886,34 +877,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               )}
             </Panel>
 
-            <Panel
-              action={
-                <Link
-                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
-                  href="/admin"
-                >
-                  Manage in Admin
-                </Link>
-              }
-              title="Morning Routine"
-            >
-              {effectiveState.routineChores.length > 0 ? (
-                <ul className="grid gap-2">
-                  {effectiveState.routineChores.map((chore) => (
-                    <RoutineChoreRow chore={chore} childMembers={childMembers} key={chore.id} />
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState text="No routine steps are saved for this household yet." />
-              )}
-              <p className="mt-3 border border-dashed border-[#cbd5df] bg-[#f8fafc] px-3 py-3 text-sm text-[#4c5965]">
-                Routine templates are managed in{" "}
-                <Link className="font-semibold text-[#1f6f8b] underline" href="/admin">
-                  Admin setup
-                </Link>
-                . This preview is read-only so the dashboard and setup flow keep a single source of truth.
-              </p>
-            </Panel>
           </aside>
         </div>
       </section>
@@ -1561,44 +1524,6 @@ function EditorActions({ onCancel, onSave }: { onCancel: () => void; onSave: () 
       </button>
     </div>
   );
-}
-
-function RoutineChoreRow({
-  chore,
-  childMembers,
-}: {
-  chore: RoutineChore;
-  childMembers: HouseholdMember[];
-}) {
-  const assignedKids = chore.defaultAssigneeIds
-    .map((id) => childMembers.find((child) => child.id === id)?.preferredName)
-    .filter(Boolean)
-    .join(", ");
-
-  return (
-    <li className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
-      <div>
-        <p className="font-semibold">{chore.title}</p>
-        <p className="mt-1 text-xs text-[#657381]">
-          {getRoutineScheduleLabel(chore)} · {assignedKids}
-        </p>
-      </div>
-    </li>
-  );
-}
-
-function getRoutineScheduleLabel(chore: RoutineChore) {
-  const durationLabel =
-    formatDurationMinutes(
-      normalizeDurationMinutes(chore.schedule.durationMinutes) ??
-        getDurationMinutes(chore.schedule.startTime, chore.schedule.endTime),
-    ) || null;
-
-  if (durationLabel) {
-    return durationLabel;
-  }
-
-  return formatTimeRange(normalizeRemoteTime(chore.schedule.startTime), normalizeRemoteTime(chore.schedule.endTime));
 }
 
 function getRoutineChoreSortKey(chore: RoutineChore) {
