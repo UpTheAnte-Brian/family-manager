@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   allowanceStorageKey,
@@ -10,6 +10,12 @@ import {
   removeAllowanceEntriesForCompletion,
   type AllowanceStorageState,
 } from "@/lib/allowance/storage";
+import {
+  buildChoreCatalogMatches,
+  filterChoreCatalogMatches,
+  getChoreCatalogAgeLabel,
+  type ChoreCatalogEntry,
+} from "@/lib/chores/catalog";
 import {
   choreCategories,
   getChoreCategoryLabel,
@@ -50,8 +56,11 @@ type AssignmentWithStatus = WeeklyChoreAssignmentTemplate & {
 };
 
 type RemoteChoreRow = {
+  catalog_chore_id: string | null;
+  description: string | null;
   id: string;
   external_key: string | null;
+  source_kind: "custom" | "catalog" | "seeded";
   title: string;
   category_id: string;
   metadata: {
@@ -110,6 +119,20 @@ type RemoteMemberRow = {
   role: string;
 };
 
+type RemoteCatalogChoreRow = {
+  age_max: number | null;
+  age_min: number | null;
+  category_id: string;
+  default_allowance_amount: number | null;
+  definition_of_done: string | null;
+  description: string | null;
+  estimated_minutes: number;
+  id: string;
+  requires_adult_check: boolean;
+  suggested_money_talk: string | null;
+  title: string;
+};
+
 const dayOptions: DayOfWeek[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 const dayLabels: Record<DayOfWeek, string> = {
   MO: "Mon",
@@ -154,6 +177,8 @@ const warehouseSeedChores: WeeklyChore[] = [
     eligibleAssigneeIds: [],
   },
 ];
+const remoteChoreSelect =
+  "id, external_key, title, description, category_id, catalog_chore_id, source_kind, metadata";
 export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const childMembers = useMemo(
     () => members.filter((member) => member.role === "child"),
@@ -182,13 +207,19 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   );
   const { household, status: householdStatus } = useCurrentHousehold();
   const [remoteState, setRemoteState] = useState<ChoreStorageState | null>(null);
+  const [remoteCatalog, setRemoteCatalog] = useState<ChoreCatalogEntry[]>([]);
+  const [remoteCatalogErrorMessage, setRemoteCatalogErrorMessage] = useState("");
   const [remoteMembers, setRemoteMembers] = useState<RemoteMemberRow[]>([]);
   const [remoteStatusMessage, setRemoteStatusMessage] = useState("");
   const [remoteErrorMessage, setRemoteErrorMessage] = useState("");
   const [remoteSyncVersion, setRemoteSyncVersion] = useState(0);
+  const [catalogCategory, setCatalogCategory] = useState<ChoreCategoryId | "all">("all");
+  const [catalogImportingId, setCatalogImportingId] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
   const householdId = household?.householdId;
   const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(householdId);
   const effectiveState = isRemoteHouseholdReady && remoteState ? remoteState : state;
+  const deferredCatalogQuery = useDeferredValue(catalogQuery);
   const [selectedDate, setSelectedDate] = useState(() => formatDateKey(new Date()));
   const [selectedChoreId, setSelectedChoreId] = useState(
     effectiveState.weeklyChores[0]?.id ?? initialState.weeklyChores[0]?.id ?? "",
@@ -236,9 +267,58 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     };
   }, [householdId, isRemoteHouseholdReady, remoteSyncVersion, setState]);
 
+  useEffect(() => {
+    if (!isRemoteHouseholdReady) {
+      setRemoteCatalog([]);
+      setRemoteCatalogErrorMessage("");
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadRemoteCatalog() {
+      try {
+        const catalogEntries = await loadRemoteChoreCatalog();
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteCatalog(catalogEntries);
+        setRemoteCatalogErrorMessage("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteCatalogErrorMessage(
+          error instanceof Error ? error.message : "Could not load chore catalog.",
+        );
+      }
+    }
+
+    void loadRemoteCatalog();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isRemoteHouseholdReady]);
+
   const choresById = useMemo(
     () => new Map(effectiveState.weeklyChores.map((chore) => [chore.id, chore])),
     [effectiveState.weeklyChores],
+  );
+  const catalogMatches = useMemo(
+    () => buildChoreCatalogMatches(remoteCatalog, effectiveState.weeklyChores),
+    [effectiveState.weeklyChores, remoteCatalog],
+  );
+  const filteredCatalogMatches = useMemo(
+    () =>
+      filterChoreCatalogMatches(catalogMatches, {
+        category: catalogCategory,
+        query: deferredCatalogQuery,
+      }),
+    [catalogCategory, catalogMatches, deferredCatalogQuery],
   );
   const memberById = useMemo(
     () => new Map(assignableMembers.map((member) => [member.id, member])),
@@ -446,6 +526,37 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     });
     setSelectedChoreId(assignment.choreId);
     setAssignmentModal(null);
+  }
+
+  async function addCatalogChore(catalogChore: ChoreCatalogEntry) {
+    if (!isRemoteHouseholdReady || !householdId) {
+      return;
+    }
+
+    setCatalogImportingId(catalogChore.id);
+    setRemoteErrorMessage("");
+    setRemoteStatusMessage("");
+
+    try {
+      const result = await importRemoteCatalogChore({
+        catalogChore,
+        householdId,
+        householdMembers: remoteMembers,
+      });
+      setSelectedChoreId(result.chore.id);
+      setRemoteStatusMessage(
+        result.action === "created"
+          ? "Catalog chore added to this household."
+          : result.action === "linked-existing"
+            ? "Existing household chore linked to the catalog."
+            : "This household already has that chore.",
+      );
+      setRemoteSyncVersion((current) => current + 1);
+    } catch (error) {
+      setRemoteErrorMessage(error instanceof Error ? error.message : "Could not import the catalog chore.");
+    } finally {
+      setCatalogImportingId("");
+    }
   }
 
   async function runRemoteAction(action: () => Promise<string>) {
@@ -688,7 +799,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               </Panel>
             ) : null}
 
-            <Panel title="Warehouse">
+            <Panel title="Backlog">
               {backlogChores.length > 0 ? (
                 <div className="grid gap-2">
                   {backlogChores.map((chore) => (
@@ -708,6 +819,70 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                 </div>
               ) : (
                 <EmptyState text="Every captured chore currently has at least one assignment slot." />
+              )}
+            </Panel>
+
+            <Panel title="Catalog">
+              {isRemoteHouseholdReady ? (
+                <div className="grid gap-3">
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-semibold text-[#4c5965]">Search catalog</span>
+                    <input
+                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                      onChange={(event) => setCatalogQuery(event.target.value)}
+                      placeholder="Search by title, details, or age..."
+                      value={catalogQuery}
+                    />
+                  </label>
+
+                  <label className="grid gap-1 text-sm">
+                    <span className="font-semibold text-[#4c5965]">Category</span>
+                    <select
+                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                      onChange={(event) =>
+                        setCatalogCategory(event.target.value as ChoreCategoryId | "all")
+                      }
+                      value={catalogCategory}
+                    >
+                      <option value="all">All categories</option>
+                      {choreCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {remoteCatalogErrorMessage ? (
+                    <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                      {remoteCatalogErrorMessage}
+                    </p>
+                  ) : null}
+
+                  {filteredCatalogMatches.length > 0 ? (
+                    <div className="grid gap-2">
+                      {filteredCatalogMatches.map((match) => (
+                        <CatalogChoreCard
+                          entry={match.catalog}
+                          householdChoreId={match.householdChoreId}
+                          importState={match.importState}
+                          isImporting={catalogImportingId === match.catalog.id}
+                          key={match.catalog.id}
+                          onImport={() => void addCatalogChore(match.catalog)}
+                          onSelectImported={() => {
+                            if (match.householdChoreId) {
+                              setSelectedChoreId(match.householdChoreId);
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState text="No catalog chores match the current search yet." />
+                  )}
+                </div>
+              ) : (
+                <EmptyState text="Connect a household in Setup to browse the shared chore catalog and import chores into this household." />
               )}
             </Panel>
 
@@ -921,6 +1096,81 @@ function AssignmentCard({
   );
 }
 
+function CatalogChoreCard({
+  entry,
+  householdChoreId,
+  importState,
+  isImporting,
+  onImport,
+  onSelectImported,
+}: {
+  entry: ChoreCatalogEntry;
+  householdChoreId?: string;
+  importState: "available" | "matched" | "imported";
+  isImporting: boolean;
+  onImport: () => void;
+  onSelectImported: () => void;
+}) {
+  const ageLabel = getChoreCatalogAgeLabel(entry.ageMin, entry.ageMax);
+  const actionLabel =
+    importState === "imported"
+      ? "In household"
+      : importState === "matched"
+        ? "Link existing"
+        : "Add to household";
+
+  return (
+    <article className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{entry.title}</h3>
+          <p className="mt-1 text-xs text-[#657381]">
+            {getChoreCategoryLabel(entry.category)} · {entry.estimatedMinutes} min
+            {entry.allowanceAmount ? ` · ${formatCurrency(entry.allowanceAmount)}` : ""}
+            {ageLabel ? ` · ${ageLabel}` : ""}
+            {entry.requiresAdultCheck ? " · adult check" : ""}
+          </p>
+        </div>
+        {importState === "imported" ? (
+          <button
+            className="border border-[#bcd8dc] bg-white px-2 py-1 text-xs font-semibold text-[#2f6f73]"
+            onClick={onSelectImported}
+            type="button"
+          >
+            View
+          </button>
+        ) : null}
+      </div>
+      {entry.definitionOfDone || entry.description ? (
+        <p className="mt-2 text-sm text-[#4c5965]">
+          {entry.definitionOfDone ?? entry.description}
+        </p>
+      ) : null}
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#657381]">
+          {importState === "imported"
+            ? "Imported"
+            : importState === "matched"
+              ? "Existing household chore found"
+              : "Catalog only"}
+        </span>
+        <button
+          className={`border px-3 py-2 text-sm font-semibold ${
+            importState === "imported"
+              ? "border-[#d7e0e7] bg-white text-[#4c5965]"
+              : "border-[#1f6f8b] bg-[#1f6f8b] text-white"
+          }`}
+          disabled={isImporting || (importState === "imported" && Boolean(householdChoreId))}
+          onClick={importState === "imported" ? onSelectImported : onImport}
+          type="button"
+        >
+          {isImporting ? "Saving..." : actionLabel}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function ChoreEditor({
   chore,
   childMembers,
@@ -956,11 +1206,13 @@ function ChoreEditor({
 
     onSave({
       id: chore?.id ?? createId(trimmedTitle),
+      catalogChoreId: chore?.catalogChoreId,
       externalKey: chore?.externalKey,
       title: trimmedTitle,
       category,
       estimatedMinutes: Number(estimatedMinutes) || 10,
       eligibleAssigneeIds,
+      sourceKind: chore?.sourceKind ?? "custom",
       requiresAdultCheck,
       allowanceAmount: normalizeCurrencyAmount(allowanceAmount),
       definitionOfDone: definitionOfDone.trim() || undefined,
@@ -1391,7 +1643,7 @@ async function loadRemoteChoreState(householdId: string) {
   const memberExternalKeyById = new Map((members ?? []).map((member) => [member.id, member.external_key]));
   const { data: remoteChores, error: choresError } = await supabase
     .from("chores")
-    .select("id, external_key, title, category_id, metadata")
+    .select(remoteChoreSelect)
     .eq("household_id", householdId)
     .eq("chore_kind", "weekly")
     .eq("status", "active")
@@ -1496,7 +1748,7 @@ async function loadRemoteChoreState(householdId: string) {
     members: members ?? [],
     state: {
       routineChores,
-      weeklyChores: mergeChoreSeeds(weeklyChores, warehouseSeedChores, []),
+      weeklyChores,
       weeklyAssignmentTemplates,
       completions: choreCompletions,
     },
@@ -1594,8 +1846,10 @@ async function loadRemoteRoutineChores(
 
 function mapRemoteChore(chore: RemoteChoreRow): WeeklyChore {
   return {
+    catalogChoreId: chore.catalog_chore_id ?? undefined,
     id: chore.id,
     externalKey: chore.external_key ?? undefined,
+    sourceKind: chore.source_kind,
     title: chore.title,
     category: normalizeChoreCategory(chore.category_id),
     estimatedMinutes: chore.metadata.estimatedMinutes ?? 10,
@@ -1616,9 +1870,11 @@ async function saveRemoteChore(householdId: string, chore: WeeklyChore) {
       ? await findRemoteChoreIdByExternalKey(supabase, householdId, externalKey)
       : null;
   const row = {
+    catalog_chore_id: chore.catalogChoreId ?? null,
     household_id: householdId,
     external_key: externalKey,
     title: chore.title,
+    source_kind: chore.sourceKind ?? "custom",
     chore_kind: "weekly",
     status: "active",
     category_id: chore.category,
@@ -1635,13 +1891,124 @@ async function saveRemoteChore(householdId: string, chore: WeeklyChore) {
   const query = targetChoreId
     ? supabase.from("chores").update(row).eq("household_id", householdId).eq("id", targetChoreId)
     : supabase.from("chores").insert(row);
-  const { data, error } = await query.select("id, external_key, title, category_id, metadata").single<RemoteChoreRow>();
+  const { data, error } = await query.select(remoteChoreSelect).single<RemoteChoreRow>();
 
   if (error) {
     throw error;
   }
 
   return mapRemoteChore(data);
+}
+
+async function loadRemoteChoreCatalog() {
+  const supabase = createBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .from("chore_catalog")
+    .select(
+      "id, title, description, category_id, estimated_minutes, default_allowance_amount, definition_of_done, suggested_money_talk, requires_adult_check, age_min, age_max",
+    )
+    .eq("status", "active")
+    .order("sort_order", { ascending: true })
+    .order("title", { ascending: true })
+    .returns<RemoteCatalogChoreRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((entry) => ({
+    ageMax: entry.age_max ?? undefined,
+    ageMin: entry.age_min ?? undefined,
+    allowanceAmount: normalizeCurrencyAmount(entry.default_allowance_amount),
+    category: normalizeChoreCategory(entry.category_id),
+    definitionOfDone: entry.definition_of_done ?? undefined,
+    description: entry.description ?? undefined,
+    estimatedMinutes: entry.estimated_minutes,
+    id: entry.id,
+    moneyTalk: entry.suggested_money_talk ?? undefined,
+    requiresAdultCheck: entry.requires_adult_check,
+    title: entry.title,
+  }));
+}
+
+async function importRemoteCatalogChore({
+  catalogChore,
+  householdId,
+  householdMembers,
+}: {
+  catalogChore: ChoreCatalogEntry;
+  householdId: string;
+  householdMembers: RemoteMemberRow[];
+}) {
+  const supabase = createBrowserSupabaseClient();
+  const existingByCatalog = await findRemoteChoreByCatalogId(supabase, householdId, catalogChore.id);
+
+  if (existingByCatalog) {
+    return {
+      action: "selected-existing" as const,
+      chore: mapRemoteChore(existingByCatalog),
+    };
+  }
+
+  const existingByExternalKey = await findRemoteChoreByExternalKey(supabase, householdId, catalogChore.id);
+
+  if (existingByExternalKey) {
+    const { data, error } = await supabase
+      .from("chores")
+      .update({
+        catalog_chore_id: catalogChore.id,
+        source_kind: "catalog",
+      })
+      .eq("household_id", householdId)
+      .eq("id", existingByExternalKey.id)
+      .select(remoteChoreSelect)
+      .single<RemoteChoreRow>();
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      action: "linked-existing" as const,
+      chore: mapRemoteChore(data),
+    };
+  }
+
+  const childExternalKeys = householdMembers
+    .filter((member) => member.role === "child")
+    .map((member) => member.external_key);
+  const { data, error } = await supabase
+    .from("chores")
+    .insert({
+      catalog_chore_id: catalogChore.id,
+      household_id: householdId,
+      external_key: catalogChore.id,
+      title: catalogChore.title,
+      description: catalogChore.description ?? null,
+      source_kind: "catalog",
+      chore_kind: "weekly",
+      status: "active",
+      category_id: catalogChore.category,
+      metadata: {
+        allowanceAmount: catalogChore.allowanceAmount ?? null,
+        definitionOfDone: catalogChore.definitionOfDone ?? null,
+        eligibleAssigneeIds: childExternalKeys,
+        estimatedMinutes: catalogChore.estimatedMinutes,
+        moneyTalk: catalogChore.moneyTalk ?? null,
+        requiresAdultCheck: catalogChore.requiresAdultCheck ?? false,
+      },
+    })
+    .select(remoteChoreSelect)
+    .single<RemoteChoreRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    action: "created" as const,
+    chore: mapRemoteChore(data),
+  };
 }
 
 async function saveRemoteChoreAssignment({
@@ -1787,18 +2154,47 @@ async function findRemoteChoreIdByExternalKey(
   householdId: string,
   externalKey: string,
 ) {
+  const row = await findRemoteChoreByExternalKey(supabase, householdId, externalKey);
+
+  return row?.id ?? null;
+}
+
+async function findRemoteChoreByCatalogId(
+  supabase: ReturnType<typeof createBrowserSupabaseClient>,
+  householdId: string,
+  catalogChoreId: string,
+) {
   const { data, error } = await supabase
     .from("chores")
-    .select("id")
+    .select(remoteChoreSelect)
     .eq("household_id", householdId)
-    .eq("external_key", externalKey)
-    .maybeSingle<{ id: string }>();
+    .eq("catalog_chore_id", catalogChoreId)
+    .maybeSingle<RemoteChoreRow>();
 
   if (error) {
     throw error;
   }
 
-  return data?.id ?? null;
+  return data ?? null;
+}
+
+async function findRemoteChoreByExternalKey(
+  supabase: ReturnType<typeof createBrowserSupabaseClient>,
+  householdId: string,
+  externalKey: string,
+) {
+  const { data, error } = await supabase
+    .from("chores")
+    .select(remoteChoreSelect)
+    .eq("household_id", householdId)
+    .eq("external_key", externalKey)
+    .maybeSingle<RemoteChoreRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? null;
 }
 
 function getEligibleMembersForChore(

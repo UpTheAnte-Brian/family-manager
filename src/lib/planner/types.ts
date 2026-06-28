@@ -80,10 +80,12 @@ export type RoutineChore = {
 export type WeeklyChore = {
   id: string;
   externalKey?: string;
+  catalogChoreId?: string;
   title: string;
   category: ChoreCategoryId;
   estimatedMinutes: number;
   eligibleAssigneeIds: string[];
+  sourceKind?: "custom" | "catalog" | "seeded";
   requiresAdultCheck?: boolean;
   allowanceAmount?: number;
   definitionOfDone?: string;
