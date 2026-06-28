@@ -24,7 +24,7 @@ import {
 import { createRemoteChoreCompletion, deleteRemoteChoreCompletion } from "@/lib/chores/completions";
 import { choreStorageKey, type ChoreStorageState } from "@/lib/chores/storage";
 import { ConsolePageHeader } from "@/components/console-page-header";
-import { normalizeOffsetMinutes } from "@/lib/routines/schedule";
+import { normalizeDurationMinutes, normalizeOffsetMinutes } from "@/lib/routines/schedule";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
@@ -42,6 +42,8 @@ type ChoreManagerProps = {
   chores: PlannerData["chores"];
   members: HouseholdMember[];
 };
+
+type ChoreBrowserTab = "tiles" | "catalog";
 
 type AssignmentWithStatus = WeeklyChoreAssignmentTemplate & {
   child?: HouseholdMember;
@@ -207,6 +209,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const [catalogCategory, setCatalogCategory] = useState<ChoreCategoryId | "all">("all");
   const [catalogImportingId, setCatalogImportingId] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
+  const [choreBrowserTab, setChoreBrowserTab] = useState<ChoreBrowserTab>("tiles");
   const householdId = household?.householdId;
   const isRemoteHouseholdReady = householdStatus === "ready" && Boolean(householdId);
   const effectiveState = isRemoteHouseholdReady && remoteState ? remoteState : state;
@@ -260,8 +263,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
 
   useEffect(() => {
     if (!isRemoteHouseholdReady) {
-      setRemoteCatalog([]);
-      setRemoteCatalogErrorMessage("");
       return;
     }
 
@@ -616,6 +617,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           <section className="grid gap-5">
             <Panel
               action={
+                choreBrowserTab === "tiles" ? (
                 <button
                   className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
                   onClick={() => setEditingChoreId("new")}
@@ -623,51 +625,143 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
                 >
                   Add chore
                 </button>
+                ) : null
               }
-              title="Chore Tiles"
-            >
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {effectiveState.weeklyChores.map((chore) => (
-                  <ChoreTile
-                    assignments={assignments.filter((assignment) => assignment.choreId === chore.id)}
-                    childMembers={assignableMembers}
-                    chore={chore}
-                    isSelected={selectedChore?.id === chore.id}
-                    key={chore.id}
-                    onAssign={() => setAssignmentModal({ mode: "add", choreId: chore.id, dayOfWeek: selectedDay })}
-                    onEdit={() => setEditingChoreId(chore.id)}
-                    onSelect={() => setSelectedChoreId(chore.id)}
-                    selectedDay={selectedDay}
-                  />
-                ))}
-              </div>
-            </Panel>
-
-            <Panel
-              action={
-                <button
-                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
-                  onClick={() => setAssignmentModal({ mode: "add", dayOfWeek: selectedDay })}
-                  type="button"
-                >
-                  Add slot
-                </button>
+              title={
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-xl font-semibold">Chore Tiles</h2>
+                  <div className="inline-flex rounded-sm border border-[#d7e0e7] bg-[#f8fafc] p-1">
+                    <button
+                      aria-pressed={choreBrowserTab === "tiles"}
+                      className={`px-3 py-1 text-sm font-semibold ${
+                        choreBrowserTab === "tiles"
+                          ? "bg-[#1f6f8b] text-white"
+                          : "text-[#4c5965]"
+                      }`}
+                      onClick={() => setChoreBrowserTab("tiles")}
+                      type="button"
+                    >
+                      Chore Tiles
+                    </button>
+                    <button
+                      aria-pressed={choreBrowserTab === "catalog"}
+                      className={`px-3 py-1 text-sm font-semibold ${
+                        choreBrowserTab === "catalog"
+                          ? "bg-[#1f6f8b] text-white"
+                          : "text-[#4c5965]"
+                      }`}
+                      onClick={() => setChoreBrowserTab("catalog")}
+                      type="button"
+                    >
+                      Chore Catalog
+                    </button>
+                  </div>
+                </div>
               }
-              title={`${dayLabels[selectedDay]} Assignments`}
             >
-              {todaysAssignments.length > 0 ? (
-                <div className="grid gap-2 md:grid-cols-2">
-                  {todaysAssignments.map((assignment) => (
-                    <AssignmentCard
-                      assignment={assignment}
-                      key={assignment.id}
-                      onEdit={() => setAssignmentModal({ mode: "edit", assignmentId: assignment.id })}
-          onToggle={() => void toggleCompletion(assignment)}
+              {choreBrowserTab === "tiles" ? (
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                  {effectiveState.weeklyChores.map((chore) => (
+                    <ChoreTile
+                      assignments={assignments.filter((assignment) => assignment.choreId === chore.id)}
+                      childMembers={assignableMembers}
+                      chore={chore}
+                      isSelected={selectedChore?.id === chore.id}
+                      key={chore.id}
+                      onAssign={() =>
+                        setAssignmentModal({ mode: "add", choreId: chore.id, dayOfWeek: selectedDay })
+                      }
+                      onEdit={() => setEditingChoreId(chore.id)}
+                      onSelect={() => setSelectedChoreId(chore.id)}
+                      selectedDay={selectedDay}
                     />
                   ))}
                 </div>
+              ) : isRemoteHouseholdReady ? (
+                <div className="grid gap-3">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-semibold text-[#4c5965]">Search catalog</span>
+                      <input
+                        className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                        onChange={(event) => setCatalogQuery(event.target.value)}
+                        placeholder="Search by title, details, or age..."
+                        value={catalogQuery}
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-semibold text-[#4c5965]">Category</span>
+                      <select
+                        className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
+                        onChange={(event) =>
+                          setCatalogCategory(event.target.value as ChoreCategoryId | "all")
+                        }
+                        value={catalogCategory}
+                      >
+                        <option value="all">All categories</option>
+                        {choreCategories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {remoteCatalogErrorMessage ? (
+                    <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
+                      {remoteCatalogErrorMessage}
+                    </p>
+                  ) : null}
+
+                  {filteredCatalogMatches.length > 0 ? (
+                    <div className="grid gap-2 xl:grid-cols-2">
+                      {filteredCatalogMatches.map((match) => (
+                        <CatalogChoreCard
+                          entry={match.catalog}
+                          householdChoreId={match.householdChoreId}
+                          importState={match.importState}
+                          isImporting={catalogImportingId === match.catalog.id}
+                          key={match.catalog.id}
+                          onImport={() => void addCatalogChore(match.catalog)}
+                          onSelectImported={() => {
+                            if (match.householdChoreId) {
+                              setSelectedChoreId(match.householdChoreId);
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState text="No catalog chores match the current search yet." />
+                  )}
+                </div>
               ) : (
-                <EmptyState text="No chores are assigned for this day yet." />
+                <EmptyState text="Connect a household in Setup to browse the shared chore catalog and import chores into this household." />
+              )}
+            </Panel>
+
+            <Panel title="Backlog">
+              {backlogChores.length > 0 ? (
+                <div className="grid gap-2 md:grid-cols-2">
+                  {backlogChores.map((chore) => (
+                    <button
+                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left"
+                      key={chore.id}
+                      onClick={() => setSelectedChoreId(chore.id)}
+                      type="button"
+                    >
+                      <span className="block font-semibold">{chore.title}</span>
+                      <span className="mt-1 block text-xs text-[#657381]">
+                        {getChoreCategoryLabel(chore.category)} · {chore.estimatedMinutes} min
+                        {chore.allowanceAmount ? ` · ${formatCurrency(chore.allowanceAmount)}` : ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState text="Every captured chore currently has at least one assignment slot." />
               )}
             </Panel>
           </section>
@@ -790,93 +884,33 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
               </Panel>
             ) : null}
 
-            <Panel title="Backlog">
-              {backlogChores.length > 0 ? (
+            <Panel
+              action={
+                <button
+                  className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white"
+                  onClick={() => setAssignmentModal({ mode: "add", dayOfWeek: selectedDay })}
+                  type="button"
+                >
+                  Add slot
+                </button>
+              }
+              title={`${dayLabels[selectedDay]} Assignments`}
+            >
+              {todaysAssignments.length > 0 ? (
                 <div className="grid gap-2">
-                  {backlogChores.map((chore) => (
-                    <button
-                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left"
-                      key={chore.id}
-                      onClick={() => setSelectedChoreId(chore.id)}
-                      type="button"
-                    >
-                      <span className="block font-semibold">{chore.title}</span>
-                      <span className="mt-1 block text-xs text-[#657381]">
-                        {getChoreCategoryLabel(chore.category)} · {chore.estimatedMinutes} min
-                        {chore.allowanceAmount ? ` · ${formatCurrency(chore.allowanceAmount)}` : ""}
-                      </span>
-                    </button>
+                  {todaysAssignments.map((assignment) => (
+                    <AssignmentCard
+                      assignment={assignment}
+                      key={assignment.id}
+                      onEdit={() => setAssignmentModal({ mode: "edit", assignmentId: assignment.id })}
+                      onToggle={() => void toggleCompletion(assignment)}
+                    />
                   ))}
                 </div>
               ) : (
-                <EmptyState text="Every captured chore currently has at least one assignment slot." />
+                <EmptyState text="No chores are assigned for this day yet." />
               )}
             </Panel>
-
-            <Panel title="Catalog">
-              {isRemoteHouseholdReady ? (
-                <div className="grid gap-3">
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-semibold text-[#4c5965]">Search catalog</span>
-                    <input
-                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="Search by title, details, or age..."
-                      value={catalogQuery}
-                    />
-                  </label>
-
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-semibold text-[#4c5965]">Category</span>
-                    <select
-                      className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2"
-                      onChange={(event) =>
-                        setCatalogCategory(event.target.value as ChoreCategoryId | "all")
-                      }
-                      value={catalogCategory}
-                    >
-                      <option value="all">All categories</option>
-                      {choreCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {remoteCatalogErrorMessage ? (
-                    <p className="border border-[#f2b8a0] bg-[#fff7ed] px-3 py-2 text-sm text-[#8a3b12]">
-                      {remoteCatalogErrorMessage}
-                    </p>
-                  ) : null}
-
-                  {filteredCatalogMatches.length > 0 ? (
-                    <div className="grid gap-2">
-                      {filteredCatalogMatches.map((match) => (
-                        <CatalogChoreCard
-                          entry={match.catalog}
-                          householdChoreId={match.householdChoreId}
-                          importState={match.importState}
-                          isImporting={catalogImportingId === match.catalog.id}
-                          key={match.catalog.id}
-                          onImport={() => void addCatalogChore(match.catalog)}
-                          onSelectImported={() => {
-                            if (match.householdChoreId) {
-                              setSelectedChoreId(match.householdChoreId);
-                            }
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState text="No catalog chores match the current search yet." />
-                  )}
-                </div>
-              ) : (
-                <EmptyState text="Connect a household in Setup to browse the shared chore catalog and import chores into this household." />
-              )}
-            </Panel>
-
           </aside>
         </div>
       </section>
@@ -1453,12 +1487,16 @@ function Panel({
 }: Readonly<{
   action?: React.ReactNode;
   children: React.ReactNode;
-  title: string;
+  title: React.ReactNode;
 }>) {
   return (
     <section className="border border-[#cbd5df] bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        {typeof title === "string" ? (
+          <h2 className="text-xl font-semibold">{title}</h2>
+        ) : (
+          <div className="min-w-0 flex-1">{title}</div>
+        )}
         {action}
       </div>
       {children}
