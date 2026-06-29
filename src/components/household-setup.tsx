@@ -128,6 +128,7 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
   const [activeStep, setActiveStep] = useState<SetupStepId | null>(null);
   const [isConfigured, setIsConfigured] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [showAdditionalHouseholdForm, setShowAdditionalHouseholdForm] = useState(false);
   const {
     household: selectedHousehold,
     households,
@@ -146,9 +147,11 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     : false;
   const hasAccount = Boolean(session);
   const hasHousehold = Boolean(selectedHousehold);
+  const hasExistingHouseholds = households.length > 0;
   const activeHouseholdMembers = householdMembers.filter((member) => member.status === "active");
   const archivedHouseholdMembers = householdMembers.filter((member) => member.status === "archived");
   const hasMembers = activeHouseholdMembers.length > 0;
+  const shouldShowCreateHouseholdForm = !hasExistingHouseholds || showAdditionalHouseholdForm;
   const setupProgress = [hasAccount, hasHousehold, hasMembers].filter(Boolean).length;
   const recommendedOpenStep = getRecommendedOpenStep(authReady, hasAccount, hasHousehold, hasMembers);
   const restoredOpenStep = getRestorableWorkflowStep(storedOpenStep, {
@@ -420,6 +423,8 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
         throw new Error("Sign in again before creating a household.");
       }
 
+      const shouldSaveCreatedHouseholdLocation =
+        !hasExistingHouseholds && isHouseholdLocationComplete(householdLocation);
       const household = await createHouseholdForCurrentUser(session.access_token, householdName);
       const householdId = household?.id;
 
@@ -432,19 +437,20 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
       }
 
       setHouseholdName("");
+      setShowAdditionalHouseholdForm(false);
       setHouseholdMembers([]);
       setHouseholdAccessEntries([]);
       setMemberDrafts([emptyMemberDraft]);
       openWorkflowStep(3);
       await refreshCurrentHousehold();
 
-      if (isHouseholdLocationComplete(householdLocation)) {
+      if (shouldSaveCreatedHouseholdLocation) {
         await saveHouseholdLocation(householdId, householdLocation);
       }
 
       await saveMemberDrafts(householdId);
       setRefreshVersion((current) => current + 1);
-      return isHouseholdLocationComplete(householdLocation)
+      return shouldSaveCreatedHouseholdLocation
         ? `Created ${household?.name ?? "household"} with its household address.`
         : `Created ${household?.name ?? "household"}. Add a household address so it appears on the platform map.`;
     }, "household");
@@ -700,6 +706,86 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
     }
   }
 
+  const householdAddressEditor = selectedHouseholdId ? (
+    <div className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3">
+      <div>
+        <p className="font-semibold">Household address</p>
+        <p className="mt-1 text-sm leading-6 text-[#4c5965]">
+          Save the address for {selectedHousehold?.householdName ?? "this household"} so the platform map uses the
+          correct location.
+        </p>
+      </div>
+      <label className="grid gap-1 text-sm">
+        <span className="font-semibold">Search for address</span>
+        <input
+          className="border border-[#d7e0e7] bg-white px-3 py-2"
+          onChange={(event) => updateHouseholdAddressQuery(event.target.value)}
+          placeholder="123 Main St, Maple Grove, MN"
+          value={householdAddressQuery}
+        />
+      </label>
+      {householdAddressLookupStatus === "searching" ? (
+        <p className="text-sm text-[#657381]">Searching Google Maps addresses...</p>
+      ) : null}
+      {householdAddressSuggestions.length > 0 ? (
+        <ul className="grid gap-2">
+          {householdAddressSuggestions.map((suggestion) => (
+            <li key={suggestion.placeId}>
+              <button
+                className="w-full border border-[#d7e0e7] bg-white px-3 py-3 text-left hover:border-[#1f6f8b]"
+                disabled={householdAddressLookupStatus === "loading" || status === "loading"}
+                onClick={() => selectHouseholdAddressSuggestion(suggestion)}
+                type="button"
+              >
+                <span className="block font-semibold">{suggestion.primaryText}</span>
+                {suggestion.secondaryText ? (
+                  <span className="mt-1 block text-sm text-[#657381]">{suggestion.secondaryText}</span>
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {householdAddressLookupMessage ? (
+        <p className="border border-[#d7e0e7] bg-white px-3 py-3 text-sm text-[#657381]">
+          {householdAddressLookupMessage}
+        </p>
+      ) : null}
+      {isHouseholdLocationComplete(householdLocation) ? (
+        <div className="grid gap-2 border border-[#b7d7ce] bg-[#e8f4f3] px-3 py-3 text-sm text-[#2f6f73]">
+          <p className="font-semibold">Saved address</p>
+          <p>{householdLocation.formattedAddress}</p>
+          <p className="text-xs">
+            {householdLocation.latitude?.toFixed(5)}, {householdLocation.longitude?.toFixed(5)}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-[#657381]">
+          Select a suggestion to save a verified location for this household. The platform map will stay blank until an
+          address is saved.
+        </p>
+      )}
+      {isHouseholdAdmin ? (
+        <button
+          className="justify-self-start border border-[#1f6f8b] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:opacity-50"
+          disabled={
+            status === "loading" ||
+            householdAddressLookupStatus === "loading" ||
+            !isHouseholdLocationComplete(householdLocation)
+          }
+          onClick={saveSelectedHouseholdLocation}
+          type="button"
+        >
+          Save household address
+        </button>
+      ) : (
+        <p className="text-sm text-[#657381]">
+          Ask a household owner or parent to update the saved address.
+        </p>
+      )}
+    </div>
+  ) : null;
+
   return (
     <main className="min-h-screen bg-[#eef2f6] text-[#17202a]">
       <ConsolePageHeader
@@ -836,105 +922,140 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                     </div>
                   ) : null}
 
-                  <div className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3">
-                    <h3 className="font-semibold">
-                      {households.length > 0 ? "Create another household" : "Create household"}
-                    </h3>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-semibold">Household name</span>
-                      <input
-                        className="border border-[#d7e0e7] bg-white px-3 py-2"
-                        onChange={(event) => setHouseholdName(event.target.value)}
-                        placeholder="Johnson Family"
-                        value={householdName}
-                      />
-                    </label>
-                    <div className="grid gap-3 border border-[#d7e0e7] bg-white p-3">
-                      <div>
-                        <p className="font-semibold">Household address</p>
-                        <p className="mt-1 text-sm leading-6 text-[#4c5965]">
-                          Save the household location from Google address lookup so platform admin can
-                          map household coverage without weakening household-level access controls.
-                        </p>
-                      </div>
-                      <label className="grid gap-1 text-sm">
-                        <span className="font-semibold">Address lookup</span>
-                        <input
-                          className="border border-[#d7e0e7] bg-white px-3 py-2"
-                          onChange={(event) => updateHouseholdAddressQuery(event.target.value)}
-                          placeholder="123 Main St, Maple Grove, MN"
-                          value={householdAddressQuery}
-                        />
-                      </label>
-                      {householdAddressLookupStatus === "searching" ? (
-                        <p className="text-sm text-[#657381]">Searching Google Maps addresses...</p>
-                      ) : null}
-                      {householdAddressSuggestions.length > 0 ? (
-                        <ul className="grid gap-2">
-                          {householdAddressSuggestions.map((suggestion) => (
-                            <li key={suggestion.placeId}>
-                              <button
-                                className="w-full border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left hover:border-[#1f6f8b]"
-                                disabled={householdAddressLookupStatus === "loading" || status === "loading"}
-                                onClick={() => selectHouseholdAddressSuggestion(suggestion)}
-                                type="button"
-                              >
-                                <span className="block font-semibold">{suggestion.primaryText}</span>
-                                {suggestion.secondaryText ? (
-                                  <span className="mt-1 block text-sm text-[#657381]">{suggestion.secondaryText}</span>
-                                ) : null}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      {householdAddressLookupMessage ? (
-                        <p className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#657381]">
-                          {householdAddressLookupMessage}
-                        </p>
-                      ) : null}
-                      {isHouseholdLocationComplete(householdLocation) ? (
-                        <div className="grid gap-2 border border-[#b7d7ce] bg-[#e8f4f3] px-3 py-3 text-sm text-[#2f6f73]">
-                          <p className="font-semibold">Selected address</p>
-                          <p>{householdLocation.formattedAddress}</p>
-                          <p className="text-xs">
-                            {householdLocation.latitude?.toFixed(5)}, {householdLocation.longitude?.toFixed(5)}
+                  {householdAddressEditor ? <div className="mt-4">{householdAddressEditor}</div> : null}
+
+                  {hasExistingHouseholds ? (
+                    <div className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">Need another household?</h3>
+                          <p className="mt-1 text-sm leading-6 text-[#4c5965]">
+                            Most accounts only need one. Open this only if you are setting up a separate household.
                           </p>
                         </div>
-                      ) : (
-                        <p className="text-sm text-[#657381]">
-                          Select a suggestion to save a verified location. Household creation still
-                          works without it, but the platform map will show this household as missing a
-                          location.
-                        </p>
-                      )}
-                      {selectedHouseholdId && isHouseholdAdmin ? (
                         <button
-                          className="justify-self-start border border-[#1f6f8b] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b] disabled:opacity-50"
-                          disabled={
-                            status === "loading" ||
-                            householdAddressLookupStatus === "loading" ||
-                            !isHouseholdLocationComplete(householdLocation)
-                          }
-                          onClick={saveSelectedHouseholdLocation}
+                          className="border border-[#1f6f8b] bg-white px-4 py-2 text-sm font-semibold text-[#1f6f8b]"
+                          onClick={() => setShowAdditionalHouseholdForm((current) => !current)}
                           type="button"
                         >
-                          Save household address
+                          {showAdditionalHouseholdForm ? "Hide form" : "Add another household"}
                         </button>
+                      </div>
+
+                      {shouldShowCreateHouseholdForm ? (
+                        <div className="grid gap-3 border border-[#d7e0e7] bg-white p-3">
+                          <label className="grid gap-1 text-sm">
+                            <span className="font-semibold">Household name</span>
+                            <input
+                              className="border border-[#d7e0e7] bg-white px-3 py-2"
+                              onChange={(event) => setHouseholdName(event.target.value)}
+                              placeholder="Enter a household name"
+                              value={householdName}
+                            />
+                          </label>
+                          <p className="text-sm text-[#657381]">
+                            After you create it, select the new household above to add its address and finish setup.
+                          </p>
+                          <button
+                            className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            disabled={status === "loading" || !session || !householdName.trim()}
+                            onClick={createHousehold}
+                            type="button"
+                          >
+                            {status === "loading" && activeStep === "household" ? "Creating..." : "Create household"}
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {activeStep === "household" && message ? (
+                        <SetupStatusMessage message={message} status={status} />
                       ) : null}
                     </div>
-                    <button
-                      className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      disabled={status === "loading" || !session || !householdName.trim()}
-                      onClick={createHousehold}
-                      type="button"
-                    >
-                      {status === "loading" && activeStep === "household" ? "Creating..." : "Create household"}
-                    </button>
-                    {activeStep === "household" && message ? (
-                      <SetupStatusMessage message={message} status={status} />
-                    ) : null}
-                  </div>
+                  ) : (
+                    <div className="mt-4 grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] p-3">
+                      <h3 className="font-semibold">Create household</h3>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-semibold">Household name</span>
+                        <input
+                          className="border border-[#d7e0e7] bg-white px-3 py-2"
+                          onChange={(event) => setHouseholdName(event.target.value)}
+                          placeholder="Enter a household name"
+                          value={householdName}
+                        />
+                      </label>
+                      <div className="grid gap-3 border border-[#d7e0e7] bg-white p-3">
+                        <div>
+                          <p className="font-semibold">Household address</p>
+                          <p className="mt-1 text-sm leading-6 text-[#4c5965]">
+                            Save the location during setup so the platform map uses the correct address from the start.
+                          </p>
+                        </div>
+                        <label className="grid gap-1 text-sm">
+                          <span className="font-semibold">Search for address</span>
+                          <input
+                            className="border border-[#d7e0e7] bg-white px-3 py-2"
+                            onChange={(event) => updateHouseholdAddressQuery(event.target.value)}
+                            placeholder="123 Main St, Maple Grove, MN"
+                            value={householdAddressQuery}
+                          />
+                        </label>
+                        {householdAddressLookupStatus === "searching" ? (
+                          <p className="text-sm text-[#657381]">Searching Google Maps addresses...</p>
+                        ) : null}
+                        {householdAddressSuggestions.length > 0 ? (
+                          <ul className="grid gap-2">
+                            {householdAddressSuggestions.map((suggestion) => (
+                              <li key={suggestion.placeId}>
+                                <button
+                                  className="w-full border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-left hover:border-[#1f6f8b]"
+                                  disabled={householdAddressLookupStatus === "loading" || status === "loading"}
+                                  onClick={() => selectHouseholdAddressSuggestion(suggestion)}
+                                  type="button"
+                                >
+                                  <span className="block font-semibold">{suggestion.primaryText}</span>
+                                  {suggestion.secondaryText ? (
+                                    <span className="mt-1 block text-sm text-[#657381]">
+                                      {suggestion.secondaryText}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {householdAddressLookupMessage ? (
+                          <p className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm text-[#657381]">
+                            {householdAddressLookupMessage}
+                          </p>
+                        ) : null}
+                        {isHouseholdLocationComplete(householdLocation) ? (
+                          <div className="grid gap-2 border border-[#b7d7ce] bg-[#e8f4f3] px-3 py-3 text-sm text-[#2f6f73]">
+                            <p className="font-semibold">Selected address</p>
+                            <p>{householdLocation.formattedAddress}</p>
+                            <p className="text-xs">
+                              {householdLocation.latitude?.toFixed(5)}, {householdLocation.longitude?.toFixed(5)}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-[#657381]">
+                            Select a suggestion to save a verified location now, or add the address after the household
+                            is created.
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        className="justify-self-start border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        disabled={status === "loading" || !session || !householdName.trim()}
+                        onClick={createHousehold}
+                        type="button"
+                      >
+                        {status === "loading" && activeStep === "household" ? "Creating..." : "Create household"}
+                      </button>
+                      {activeStep === "household" && message ? (
+                        <SetupStatusMessage message={message} status={status} />
+                      ) : null}
+                    </div>
+                  )}
                 </WorkflowStep>
 
                 <WorkflowStep

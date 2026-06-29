@@ -359,19 +359,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
   const todaysAssignments = assignments.filter((assignment) => assignment.dayOfWeek === selectedDay);
   const scheduledChoreIds = new Set(effectiveState.weeklyAssignmentTemplates.map((assignment) => assignment.choreId));
   const backlogChores = effectiveState.weeklyChores.filter((chore) => !scheduledChoreIds.has(chore.id));
-  const childSummaries = assignableMembers.map((child) => {
-    const childAssignments = assignments.filter((assignment) => assignment.childId === child.id);
-    const todayChildAssignments = childAssignments.filter(
-      (assignment) => assignment.dayOfWeek === selectedDay,
-    );
-
-    return {
-      child,
-      assignedCount: childAssignments.length,
-      doneToday: todayChildAssignments.filter((assignment) => assignment.isComplete).length,
-      dueToday: todayChildAssignments.length,
-    };
-  });
 
   async function toggleCompletion(assignment: WeeklyChoreAssignmentTemplate) {
     if (isRemoteHouseholdReady && householdId) {
@@ -595,24 +582,6 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
             {remoteStatusMessage}
           </p>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-3">
-          {childSummaries.map((summary) => (
-            <section className="border border-[#cbd5df] bg-white p-4 shadow-sm" key={summary.child.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold">{summary.child.preferredName}</h2>
-                  <p className="mt-1 text-sm text-[#657381]">
-                    {summary.assignedCount} weekly slots
-                  </p>
-                </div>
-                <span className="border border-[#bcd8dc] bg-[#e8f4f3] px-2 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
-                  {summary.doneToday}/{summary.dueToday} today
-                </span>
-              </div>
-            </section>
-          ))}
-        </div>
-
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className="grid gap-5">
             <Panel
