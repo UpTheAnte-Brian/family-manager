@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DashboardActivityTracker } from "@/components/dashboard-activity-tracker";
+import { DashboardTripPacking } from "@/components/dashboard-trip-packing";
 import {
   findMatchingActivityDefinition,
   isMissingActivityTablesError,
@@ -107,6 +108,15 @@ import { getBirthdayCountdown, getBirthdayEventsForDate } from "@/lib/planner/bi
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
+import {
+  getVisibleTripPackingPlans,
+  setTripPackingCompletionState,
+} from "@/lib/trip-packing/plans";
+import {
+  clearRemoteTripPackingCompletions,
+  loadRemoteTripPackingPlans,
+} from "@/lib/trip-packing/remote";
+import type { TripPackingPlan } from "@/lib/trip-packing/types";
 import type {
   AllowanceEntry,
   ChoreCompletion,
@@ -532,6 +542,7 @@ export function ProfileDashboard({
   const [remoteBaselineScheduleEvents, setRemoteBaselineScheduleEvents] = useState<DashboardEvent[]>([]);
   const [remoteHouseholdItems, setRemoteHouseholdItems] = useState<DashboardHouseholdItem[]>([]);
   const [remoteResponsibilities, setRemoteResponsibilities] = useState<LocalResponsibilityItem[]>([]);
+  const [remoteTripPackingPlans, setRemoteTripPackingPlans] = useState<TripPackingPlan[]>([]);
   const [remoteTemporaryCompletions, setRemoteTemporaryCompletions] = useState<Record<string, boolean>>({});
   const [remoteHouseholdItemCompletions, setRemoteHouseholdItemCompletions] = useState<Record<string, boolean>>({});
   const [remoteRoutineItems, setRemoteRoutineItems] = useState<DashboardRoutineItem[]>([]);
@@ -555,6 +566,7 @@ export function ProfileDashboard({
   const [remoteTemporaryRoutineError, setRemoteTemporaryRoutineError] = useState("");
   const [remoteBaselineError, setRemoteBaselineError] = useState("");
   const [remoteHouseholdItemError, setRemoteHouseholdItemError] = useState("");
+  const [remoteTripPackingError, setRemoteTripPackingError] = useState("");
   const [remoteChoreError, setRemoteChoreError] = useState("");
   const [remoteActivityError, setRemoteActivityError] = useState("");
   const [remoteAllowanceError, setRemoteAllowanceError] = useState("");
@@ -882,11 +894,17 @@ export function ProfileDashboard({
   const selectedMemberActivityEntries = remoteActivityEntries.filter(
     (entry) => entry.memberId === selectedMember.id,
   );
+  const visibleTripPackingPlans = useMemo(
+    () =>
+      getVisibleTripPackingPlans(remoteTripPackingPlans, selectedMember.id, displayedDay.date),
+    [displayedDay.date, remoteTripPackingPlans, selectedMember.id],
+  );
   const remoteSyncErrors = isRemoteHouseholdReady
     ? [
         remoteTemporaryRoutineError,
         remoteBaselineError,
         remoteHouseholdItemError,
+        remoteTripPackingError,
         remoteChoreError,
       ].filter((message): message is string => Boolean(message))
     : [];
@@ -1175,6 +1193,42 @@ export function ProfileDashboard({
       isActive = false;
     };
   }, [displayedDay.date, displayedDay.dayOfWeek, householdId, householdItemSyncVersion, householdStatus]);
+
+  useEffect(() => {
+    if (!householdId || householdStatus !== "ready") {
+      return;
+    }
+
+    let isActive = true;
+    const currentHouseholdId = householdId;
+
+    async function loadTripPackingPlans() {
+      try {
+        const remoteState = await loadRemoteTripPackingPlans(currentHouseholdId);
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteTripPackingPlans(remoteState.plans);
+        setRemoteTripPackingError("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteTripPackingError(
+          error instanceof Error ? error.message : "Could not load trip packing lists from Supabase.",
+        );
+      }
+    }
+
+    void loadTripPackingPlans();
+
+    return () => {
+      isActive = false;
+    };
+  }, [householdId, householdItemSyncVersion, householdStatus]);
 
   useEffect(() => {
     if (!householdId || householdStatus !== "ready") {
@@ -2489,6 +2543,55 @@ export function ProfileDashboard({
     }));
   }
 
+  async function toggleTripPackingItem(actionItemIds: string[], completed: boolean) {
+    if (!isRemoteHouseholdReady || !householdId) {
+      return;
+    }
+
+    if (!selectedRemoteMemberId) {
+      setRemoteTripPackingError("Open Setup and save household members before completing trip packing items.");
+      return;
+    }
+
+    const previousPlans = remoteTripPackingPlans;
+    setRemoteTripPackingPlans((current) =>
+      setTripPackingCompletionState(
+        current,
+        actionItemIds,
+        completed ? new Date().toISOString() : undefined,
+      ),
+    );
+
+    try {
+      if (completed) {
+        await Promise.all(
+          actionItemIds.map((actionItemId) =>
+            saveRemoteActionItemCompletion({
+              actionItemId,
+              completed: true,
+              date: displayedDay.date,
+              householdId,
+              memberId: selectedRemoteMemberId,
+            }),
+          ),
+        );
+      } else {
+        await clearRemoteTripPackingCompletions({
+          actionItemIds,
+          householdId,
+        });
+      }
+
+      setHouseholdItemSyncVersion((current) => current + 1);
+      setRemoteTripPackingError("");
+    } catch (error) {
+      setRemoteTripPackingPlans(previousPlans);
+      setRemoteTripPackingError(
+        error instanceof Error ? error.message : "Could not save trip packing progress.",
+      );
+    }
+  }
+
   async function addDashboardResponsibility(input: ResponsibilityDraftInput) {
     const title = input.title.trim();
 
@@ -3476,6 +3579,15 @@ export function ProfileDashboard({
                 <EmptyState text="No responsibility is scheduled for this profile on this date." />
               )}
             </Panel>
+
+            {visibleTripPackingPlans.length > 0 ? (
+              <DashboardTripPacking
+                displayedDate={displayedDay.date}
+                member={selectedMember}
+                onToggleItem={toggleTripPackingItem}
+                plans={visibleTripPackingPlans}
+              />
+            ) : null}
 
             <Panel title="Activity Tracker">
               <DashboardActivityTracker
@@ -4666,7 +4778,8 @@ async function loadRemoteHouseholdItems(
 
     return (
       item.metadata.kind !== "baseline-schedule-block" &&
-      item.metadata.kind !== "manual-calendar-event"
+      item.metadata.kind !== "manual-calendar-event" &&
+      item.metadata.kind !== "trip-packing-item"
     );
   });
 
@@ -8188,7 +8301,7 @@ function AllowanceRequestModal({
                     {showSplitReward ? "Clear split reward" : "Split reward"}
                   </button>
                   <p className="text-sm text-[#4c5965]">
-                    Enter sibling amounts here and they come out of {selectedChild?.preferredName ?? "this child"}'s
+                    Enter sibling amounts here and they come out of {selectedChild?.preferredName ?? "this child"}&apos;s
                     share.
                   </p>
                 </div>

@@ -7,6 +7,7 @@ import { AdminActivitySponsorships } from "@/components/admin-activity-sponsorsh
 import { AdminBaselineTemplates } from "@/components/admin-baseline-templates";
 import { AdminCalendarSources } from "@/components/admin-calendar-sources";
 import { AdminRoutineTemplates } from "@/components/admin-routine-templates";
+import { AdminTripPacking } from "@/components/admin-trip-packing";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import {
   emptyHouseholdLocation,
@@ -1192,6 +1193,22 @@ export function HouseholdSetup({ defaultDayTemplates, plannerMembers }: Househol
                     isHouseholdAdmin={isHouseholdAdmin}
                   />
                 </WorkflowStep>
+
+                <WorkflowStep
+                  complete={false}
+                  disabled={!hasMembers || !isHouseholdAdmin}
+                  index={9}
+                  isOpen={openStep === 9}
+                  onOpenChange={(isOpen) => toggleWorkflowStep(9, isOpen)}
+                  summary={
+                    !isHouseholdAdmin
+                      ? `This account has ${selectedHousehold?.role ?? "viewer"} access. Ask a household owner or parent to manage trip packing plans.`
+                      : "Create trip pack lists once, then show each child their merged checklist."
+                  }
+                  title="Trip packing"
+                >
+                  <AdminTripPacking members={adminMembers} />
+                </WorkflowStep>
               </>
             ) : null}
           </>
@@ -1392,6 +1409,7 @@ function getRestorableWorkflowStep(
     case 5:
     case 6:
     case 7:
+    case 9:
       return hasMembers && isHouseholdAdmin ? step : null;
     case 8:
       return hasMembers && hasSelectedHousehold ? 8 : null;
