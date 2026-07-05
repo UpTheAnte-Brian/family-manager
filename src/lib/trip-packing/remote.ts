@@ -10,6 +10,7 @@ type RemoteTripPackingActionItemRow = {
     checklistStartsOn?: string;
     kind?: string;
     quantity?: number;
+    showOnDashboard?: boolean;
     sourceItemId?: string;
     sourceKind?: "base" | "member";
     tripEndsOn?: string;
@@ -144,6 +145,7 @@ export async function loadRemoteTripPackingPlans(householdId: string): Promise<{
         completedAt: latestCompletionByActionItemId.get(item.id)?.completed_at,
         createdAt: item.created_at,
         quantity: normalizeTripPackingQuantity(Number(metadata.quantity ?? 1)),
+        showOnDashboard: metadata.showOnDashboard ?? true,
         sourceItemId: metadata.sourceItemId,
         sourceKind: metadata.sourceKind,
         title: item.title,
@@ -329,6 +331,7 @@ function createRemoteTripPackingRow({
       kind: "trip-packing-item",
       checklistStartsOn: plan.checklistStartsOn,
       quantity: item.quantity,
+      showOnDashboard: plan.showOnDashboard,
       sourceItemId: item.id,
       sourceKind,
       tripEndsOn: plan.tripEndsOn,

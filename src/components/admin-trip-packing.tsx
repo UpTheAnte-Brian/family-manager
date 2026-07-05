@@ -103,6 +103,7 @@ export function AdminTripPacking({ members }: AdminTripPackingProps) {
           items.map(cloneTripPackingItem),
         ]),
       ),
+      showOnDashboard: plan.showOnDashboard,
       tripEndsOn: plan.tripEndsOn,
       tripName: plan.tripName,
       tripStartsOn: plan.tripStartsOn,
@@ -374,6 +375,9 @@ export function AdminTripPacking({ members }: AdminTripPackingProps) {
                       <p className="mt-2 text-xs uppercase tracking-[0.12em] text-[#657381]">
                         {plan.memberIds.length} family member{plan.memberIds.length === 1 ? "" : "s"} · {totalProgress.completedCount}/{totalProgress.totalCount} packed
                       </p>
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f73]">
+                        {plan.showOnDashboard ? "Showing on dashboard" : "Hidden from dashboard"}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -493,6 +497,26 @@ export function AdminTripPacking({ members }: AdminTripPackingProps) {
                   )}
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 text-sm">
+                <input
+                  checked={editorState.showOnDashboard}
+                  className="mt-1 h-4 w-4"
+                  onChange={(event) =>
+                    setEditorState((current) => ({
+                      ...current,
+                      showOnDashboard: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  <span className="block font-semibold text-[#17202a]">Show on dashboard</span>
+                  <span className="block text-[#4c5965]">
+                    Turn this off once the trip is underway or finished so the packing card disappears from each child&apos;s dashboard.
+                  </span>
+                </span>
+              </label>
 
               <fieldset className="grid gap-2 text-sm">
                 <legend className="font-semibold">Who is packing?</legend>
@@ -685,6 +709,7 @@ function createStarterEditorState(childMembers: HouseholdMember[]): TripPackingE
     checklistStartsOn,
     memberIds,
     memberItems: Object.fromEntries(memberIds.map((memberId) => [memberId, []])),
+    showOnDashboard: true,
     tripEndsOn,
     tripName: defaultTripName,
     tripStartsOn,
@@ -705,6 +730,7 @@ function cleanEditorState(state: TripPackingEditorState): TripPackingEditorState
     checklistStartsOn: state.checklistStartsOn,
     memberIds: [...new Set(state.memberIds)],
     memberItems: cleanedMemberItems,
+    showOnDashboard: state.showOnDashboard,
     tripEndsOn: state.tripEndsOn,
     tripName: state.tripName.trim(),
     tripStartsOn: state.tripStartsOn,

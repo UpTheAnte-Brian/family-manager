@@ -63,6 +63,7 @@ export function groupTripPackingItems(items: TripPackingStoredItem[]): TripPacki
       checklistStartsOn: string;
       itemsByMemberId: Map<string, TripPackingStoredItem[]>;
       memberItemsByMemberId: Map<string, Map<string, TripPackingItemDraft>>;
+      showOnDashboard: boolean;
       tripEndsOn: string;
       tripName: string;
       tripStartsOn: string;
@@ -79,6 +80,7 @@ export function groupTripPackingItems(items: TripPackingStoredItem[]): TripPacki
         checklistStartsOn: item.checklistStartsOn,
         itemsByMemberId: new Map<string, TripPackingStoredItem[]>(),
         memberItemsByMemberId: new Map<string, Map<string, TripPackingItemDraft>>(),
+        showOnDashboard: item.showOnDashboard,
         tripEndsOn: item.tripEndsOn,
         tripName: item.tripName,
         tripStartsOn: item.tripStartsOn,
@@ -142,6 +144,7 @@ export function groupTripPackingItems(items: TripPackingStoredItem[]): TripPacki
           ),
         ]),
       ),
+      showOnDashboard: plan.showOnDashboard,
       tripEndsOn: plan.tripEndsOn,
       tripStartsOn: plan.tripStartsOn,
       tripName: plan.tripName,
@@ -161,6 +164,7 @@ export function getVisibleTripPackingPlans(
 ) {
   return plans.filter(
     (plan) =>
+      plan.showOnDashboard &&
       plan.memberIds.includes(memberId) &&
       plan.checklistStartsOn <= date &&
       date <= plan.tripEndsOn,

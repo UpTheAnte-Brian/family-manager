@@ -11,6 +11,7 @@ export type TripPackingStoredItem = {
   completedAt?: string;
   createdAt: string;
   quantity: number;
+  showOnDashboard: boolean;
   sourceItemId: string;
   sourceKind: "base" | "member";
   title: string;
@@ -28,6 +29,7 @@ export type TripPackingPlan = {
   itemsByMemberId: Record<string, TripPackingStoredItem[]>;
   memberIds: string[];
   memberItems: Record<string, TripPackingItemDraft[]>;
+  showOnDashboard: boolean;
   tripEndsOn: string;
   tripStartsOn: string;
   tripName: string;
@@ -39,6 +41,7 @@ export type TripPackingPlanInput = {
   id: string;
   memberIds: string[];
   memberItems: Record<string, TripPackingItemDraft[]>;
+  showOnDashboard: boolean;
   tripEndsOn: string;
   tripStartsOn: string;
   tripName: string;

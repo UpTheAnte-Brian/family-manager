@@ -57,6 +57,7 @@ describe("trip packing helpers", () => {
         checklistStartsOn: "2026-07-01",
         createdAt: "2026-06-29T10:00:00.000Z",
         quantity: 5,
+        showOnDashboard: true,
         sourceItemId: "socks",
         sourceKind: "base",
         title: "Socks",
@@ -71,6 +72,7 @@ describe("trip packing helpers", () => {
         checklistStartsOn: "2026-07-01",
         createdAt: "2026-06-29T10:00:00.000Z",
         quantity: 5,
+        showOnDashboard: true,
         sourceItemId: "socks",
         sourceKind: "base",
         title: "Socks",
@@ -86,6 +88,7 @@ describe("trip packing helpers", () => {
         completedAt: "2026-06-30T17:00:00.000Z",
         createdAt: "2026-06-29T10:00:00.000Z",
         quantity: 1,
+        showOnDashboard: true,
         sourceItemId: "soccer-cleats",
         sourceKind: "member",
         title: "Soccer cleats",
@@ -100,6 +103,7 @@ describe("trip packing helpers", () => {
     assert.deepEqual(plans[0].memberIds, ["mason", "nora"]);
     assert.deepEqual(plans[0].baseItems.map((item) => item.title), ["Socks"]);
     assert.deepEqual(plans[0].memberItems.mason.map((item) => item.title), ["Soccer cleats"]);
+    assert.equal(plans[0].showOnDashboard, true);
 
     assert.deepEqual(
       getTripPackingProgress(plans[0], "mason"),
@@ -113,6 +117,28 @@ describe("trip packing helpers", () => {
       getVisibleTripPackingPlans(plans, "mason", "2026-07-02").map((plan) => plan.id),
       ["cabin-trip"],
     );
+  });
+
+  it("hides plans from the dashboard when the visibility flag is off", () => {
+    const plans = groupTripPackingItems([
+      {
+        actionItemId: "1",
+        assigneeId: "mason",
+        checklistStartsOn: "2026-07-01",
+        createdAt: "2026-06-29T10:00:00.000Z",
+        quantity: 5,
+        showOnDashboard: false,
+        sourceItemId: "socks",
+        sourceKind: "base",
+        title: "Socks",
+        tripEndsOn: "2026-07-05",
+        tripPlanId: "cabin-trip",
+        tripStartsOn: "2026-07-01",
+        tripName: "Cabin trip",
+      },
+    ]);
+
+    assert.deepEqual(getVisibleTripPackingPlans(plans, "mason", "2026-07-02"), []);
   });
 
   it("counts trip duration inclusively", () => {
