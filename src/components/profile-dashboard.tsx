@@ -107,6 +107,7 @@ import type { AppliedCalendarEvent, CalendarSource } from "@/lib/calendar/types"
 import { getBirthdayCountdown, getBirthdayEventsForDate } from "@/lib/planner/birthdays";
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
 import { useCurrentHousehold } from "@/lib/supabase/household";
 import {
   getVisibleTripPackingPlans,
@@ -1353,7 +1354,7 @@ export function ProfileDashboard({
         }
 
         setRemoteAllowanceError(
-          error instanceof Error ? error.message : "Could not load allowance entries from Supabase.",
+          getSupabaseLikeErrorMessage(error, "Could not load allowance entries from Supabase."),
         );
       }
     }
@@ -1402,7 +1403,7 @@ export function ProfileDashboard({
         }
 
         setRemoteAllowanceRequestError(
-          error instanceof Error ? error.message : "Could not load pending bank requests from Supabase.",
+          getSupabaseLikeErrorMessage(error, "Could not load pending bank requests from Supabase."),
         );
       }
     }
@@ -1754,7 +1755,7 @@ export function ProfileDashboard({
       setRemoteAllowanceRequestError("");
       setAllowanceRequestSyncVersion((current) => current + 1);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not save the bank request.";
+      const message = getSupabaseLikeErrorMessage(error, "Could not save the bank request.");
       setRemoteAllowanceRequestError(message);
       throw error instanceof Error ? error : new Error(message);
     }
@@ -2040,7 +2041,7 @@ export function ProfileDashboard({
       setChoreSyncVersion((current) => current + 1);
     } catch (error) {
       setRemoteAllowanceRequestError(
-        error instanceof Error ? error.message : "Could not approve the bank request.",
+        getSupabaseLikeErrorMessage(error, "Could not approve the bank request."),
       );
     } finally {
       setApprovingAllowanceRequestId("");
@@ -2189,7 +2190,7 @@ export function ProfileDashboard({
       setChoreSyncVersion((current) => current + 1);
     } catch (error) {
       setRemoteAllowanceRequestError(
-        error instanceof Error ? error.message : "Could not reject the bank request.",
+        getSupabaseLikeErrorMessage(error, "Could not reject the bank request."),
       );
     } finally {
       setRejectingAllowanceRequestId("");
