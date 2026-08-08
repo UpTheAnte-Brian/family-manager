@@ -1534,7 +1534,7 @@ function MemberDraftEditor({
 
           return (
             <li
-              className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_150px_130px_130px_140px_auto]"
+              className="grid gap-3 border border-[#d7e0e7] bg-[#f8fafc] px-3 py-3 md:grid-cols-[1fr_1fr_150px_120px_130px_130px_140px_auto]"
               key={member.tempId}
             >
               <label className="grid gap-1 text-sm">
@@ -1575,14 +1575,6 @@ function MemberDraftEditor({
                   <option value="parent">Parent</option>
                   <option value="child">Child</option>
                 </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-semibold">Relationship</span>
-                <input
-                  className="border border-[#d7e0e7] bg-white px-3 py-2"
-                  onChange={(event) => onUpdateMember(member.tempId, { relationship: event.target.value })}
-                  value={member.relationship}
-                />
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="font-semibold">Weekday wake-up</span>
@@ -1660,7 +1652,6 @@ function MemberDraftEditor({
                   <p className="font-semibold">{member.display_name ?? member.preferred_name}</p>
                   <p className="mt-1 text-xs text-[#657381]">
                     {formatHouseholdMemberRole(member.role)}
-                    {member.relationship ? ` · ${member.relationship}` : ""}
                     {member.archived_at ? ` · Archived ${formatCompactDate(member.archived_at)}` : ""}
                   </p>
                 </div>

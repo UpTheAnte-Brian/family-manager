@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   allowanceStorageKey,
   createChoreAllowanceEntry,
@@ -28,6 +28,7 @@ import { normalizeDurationMinutes, normalizeOffsetMinutes } from "@/lib/routines
 import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useCurrentHousehold } from "@/lib/supabase/household";
+import { formatTimeRange } from "@/lib/time/format";
 import type {
   ChoreCompletion,
   DayOfWeek,
@@ -507,6 +508,42 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
     setAssignmentModal(null);
   }
 
+  async function deleteAssignment(assignment: WeeklyChoreAssignmentTemplate) {
+    if (isRemoteHouseholdReady && householdId) {
+      await runRemoteAction(async () => {
+        await deleteRemoteChoreAssignment(householdId, assignment.id);
+        setAssignmentModal(null);
+        return "Assignment deleted.";
+      });
+      return;
+    }
+
+    setState((current) => {
+      const removedCompletionIds = new Set(
+        current.completions
+          .filter((completion) => completion.assignmentTemplateId === assignment.id)
+          .map((completion) => completion.id),
+      );
+
+      setAllowanceState((currentAllowance) => ({
+        entries: currentAllowance.entries.filter(
+          (entry) => !entry.choreCompletionId || !removedCompletionIds.has(entry.choreCompletionId),
+        ),
+      }));
+
+      return {
+        ...current,
+        completions: current.completions.filter(
+          (completion) => completion.assignmentTemplateId !== assignment.id,
+        ),
+        weeklyAssignmentTemplates: current.weeklyAssignmentTemplates.filter(
+          (candidate) => candidate.id !== assignment.id,
+        ),
+      };
+    });
+    setAssignmentModal(null);
+  }
+
   async function addCatalogChore(catalogChore: ChoreCatalogEntry) {
     if (!isRemoteHouseholdReady || !householdId) {
       return;
@@ -893,7 +930,7 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           }
           childMembers={assignableMembers}
           onCancel={() => setEditingChoreId(null)}
-          onSave={(chore) => void upsertChore(chore)}
+          onSave={upsertChore}
         />
       ) : null}
 
@@ -912,7 +949,12 @@ export function ChoreManager({ chores, members }: ChoreManagerProps) {
           defaultChoreId={assignmentModal.mode === "add" ? assignmentModal.choreId : undefined}
           defaultDayOfWeek={assignmentModal.mode === "add" ? assignmentModal.dayOfWeek : undefined}
           onCancel={() => setAssignmentModal(null)}
-          onSave={(assignment) => void upsertAssignment(assignment)}
+          onDelete={
+            assignmentModal.mode === "edit"
+              ? async (assignment) => deleteAssignment(assignment)
+              : undefined
+          }
+          onSave={upsertAssignment}
         />
       ) : null}
     </main>
@@ -1146,7 +1188,7 @@ function ChoreEditor({
   chore?: WeeklyChore;
   childMembers: HouseholdMember[];
   onCancel: () => void;
-  onSave: (chore: WeeklyChore) => void;
+  onSave: (chore: WeeklyChore) => Promise<void>;
 }) {
   const [title, setTitle] = useState(chore?.title ?? "");
   const [category, setCategory] = useState<ChoreCategoryId>(
@@ -1162,32 +1204,46 @@ function ChoreEditor({
     chore?.eligibleAssigneeIds.length ? chore.eligibleAssigneeIds : childMembers.map((child) => child.id),
   );
   const [moneyTalk, setMoneyTalk] = useState(chore?.moneyTalk ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+  const saveInFlight = useRef(false);
 
-  function submit() {
+  async function submit() {
+    if (isSaving || saveInFlight.current) {
+      return;
+    }
+
     const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
       return;
     }
 
-    onSave({
-      id: chore?.id ?? createId(trimmedTitle),
-      catalogChoreId: chore?.catalogChoreId,
-      externalKey: chore?.externalKey,
-      title: trimmedTitle,
-      category,
-      estimatedMinutes: Number(estimatedMinutes) || 10,
-      eligibleAssigneeIds,
-      sourceKind: chore?.sourceKind ?? "custom",
-      requiresAdultCheck,
-      allowanceAmount: normalizeCurrencyAmount(allowanceAmount),
-      definitionOfDone: definitionOfDone.trim() || undefined,
-      moneyTalk: moneyTalk.trim() || undefined,
-    });
+    saveInFlight.current = true;
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        id: chore?.id ?? createId(trimmedTitle),
+        catalogChoreId: chore?.catalogChoreId,
+        externalKey: chore?.externalKey,
+        title: trimmedTitle,
+        category,
+        estimatedMinutes: Number(estimatedMinutes) || 10,
+        eligibleAssigneeIds,
+        sourceKind: chore?.sourceKind ?? "custom",
+        requiresAdultCheck,
+        allowanceAmount: normalizeCurrencyAmount(allowanceAmount),
+        definitionOfDone: definitionOfDone.trim() || undefined,
+        moneyTalk: moneyTalk.trim() || undefined,
+      });
+    } finally {
+      saveInFlight.current = false;
+      setIsSaving(false);
+    }
   }
 
   return (
-    <EditorShell onCancel={onCancel} title={chore ? "Edit chore" : "Add chore"}>
+    <EditorShell isBusy={isSaving} onCancel={onCancel} title={chore ? "Edit chore" : "Add chore"}>
       <label className="grid gap-1 text-sm">
         <span className="font-semibold">Name</span>
         <input
@@ -1286,7 +1342,7 @@ function ChoreEditor({
         />
         Needs adult check
       </label>
-      <EditorActions onCancel={onCancel} onSave={submit} />
+      <EditorActions isSaving={isSaving} onCancel={onCancel} onSave={() => void submit()} />
     </EditorShell>
   );
 }
@@ -1299,6 +1355,7 @@ function AssignmentEditor({
   defaultChoreId,
   defaultDayOfWeek,
   onCancel,
+  onDelete,
   onSave,
 }: {
   assignment?: WeeklyChoreAssignmentTemplate;
@@ -1308,7 +1365,8 @@ function AssignmentEditor({
   defaultChoreId?: string;
   defaultDayOfWeek?: DayOfWeek;
   onCancel: () => void;
-  onSave: (assignment: WeeklyChoreAssignmentTemplate) => void;
+  onDelete?: (assignment: WeeklyChoreAssignmentTemplate) => Promise<void>;
+  onSave: (assignment: WeeklyChoreAssignmentTemplate) => Promise<void>;
 }) {
   const initialChoreId = assignment?.choreId ?? defaultChoreId ?? chores[0]?.id ?? "";
   const initialStartTime = assignment?.startTime ?? "16:00";
@@ -1332,26 +1390,55 @@ function AssignmentEditor({
       chores.find((chore) => chore.id === initialChoreId)?.estimatedMinutes ??
       15,
   );
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const saveInFlight = useRef(false);
   const selectedChore = chores.find((chore) => chore.id === choreId);
   const availableAssignees = getEligibleMembersForChore(selectedChore, childMembers, [childId]);
 
-  function submit() {
-    if (!childId || !choreId) {
+  async function submit() {
+    if (!childId || !choreId || isSaving || isDeleting || saveInFlight.current) {
       return;
     }
 
-    onSave({
-      id: assignment?.id ?? createId(`${childId}-${choreId}-${dayOfWeek}`),
-      childId,
-      choreId,
-      dayOfWeek,
-      startTime,
-      endTime,
-    });
+    saveInFlight.current = true;
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        id: assignment?.id ?? createId(`${childId}-${choreId}-${dayOfWeek}`),
+        childId,
+        choreId,
+        dayOfWeek,
+        startTime,
+        endTime,
+      });
+    } finally {
+      saveInFlight.current = false;
+      setIsSaving(false);
+    }
+  }
+
+  async function removeAssignment() {
+    if (!assignment || !onDelete || isSaving || isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await onDelete(assignment);
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
-    <EditorShell onCancel={onCancel} title={assignment ? "Edit assignment" : "Assign chore"}>
+    <EditorShell
+      isBusy={isSaving || isDeleting}
+      onCancel={onCancel}
+      title={assignment ? "Edit assignment" : "Assign chore"}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">
           <span className="font-semibold">Assignee</span>
@@ -1444,7 +1531,14 @@ function AssignmentEditor({
           />
         </label>
       </div>
-      <EditorActions onCancel={onCancel} onSave={submit} />
+      <EditorActions
+        deleteLabel="Delete assignment"
+        isDeleting={isDeleting}
+        isSaving={isSaving}
+        onCancel={onCancel}
+        onDelete={assignment && onDelete ? () => void removeAssignment() : undefined}
+        onSave={() => void submit()}
+      />
     </EditorShell>
   );
 }
@@ -1475,10 +1569,12 @@ function Panel({
 
 function EditorShell({
   children,
+  isBusy = false,
   onCancel,
   title,
 }: Readonly<{
   children: React.ReactNode;
+  isBusy?: boolean;
   onCancel: () => void;
   title: string;
 }>) {
@@ -1497,7 +1593,8 @@ function EditorShell({
             </p>
           </div>
           <button
-            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold"
+            className="border border-[#d7e0e7] bg-[#f8fafc] px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isBusy}
             onClick={onCancel}
             type="button"
           >
@@ -1512,23 +1609,51 @@ function EditorShell({
   );
 }
 
-function EditorActions({ onCancel, onSave }: { onCancel: () => void; onSave: () => void }) {
+function EditorActions({
+  deleteLabel = "Delete",
+  isDeleting = false,
+  isSaving = false,
+  onCancel,
+  onDelete,
+  onSave,
+}: {
+  deleteLabel?: string;
+  isDeleting?: boolean;
+  isSaving?: boolean;
+  onCancel: () => void;
+  onDelete?: () => void;
+  onSave: () => void;
+}) {
   return (
-    <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[#d7e0e7] bg-white pt-4">
+    <div className="sticky bottom-0 flex flex-wrap justify-between gap-2 border-t border-[#d7e0e7] bg-white pt-4">
+      {onDelete ? (
+        <button
+          className="border border-[#c74b38] bg-white px-4 py-2 text-sm font-semibold text-[#a73726] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={isSaving || isDeleting}
+          onClick={onDelete}
+          type="button"
+        >
+          {isDeleting ? "Deleting..." : deleteLabel}
+        </button>
+      ) : <span />}
+      <div className="flex gap-2">
       <button
         className="border border-[#d7e0e7] bg-[#f8fafc] px-4 py-2 text-sm font-semibold"
+        disabled={isSaving || isDeleting}
         onClick={onCancel}
         type="button"
       >
         Cancel
       </button>
       <button
-        className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white"
+        className="border border-[#1f6f8b] bg-[#1f6f8b] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={isSaving || isDeleting}
         onClick={onSave}
         type="button"
       >
-        Save
+        {isSaving ? "Saving..." : "Save"}
       </button>
+      </div>
     </div>
   );
 }
@@ -2011,6 +2136,40 @@ async function saveRemoteChoreAssignment({
   };
 }
 
+async function deleteRemoteChoreAssignment(householdId: string, assignmentId: string) {
+  const supabase = createBrowserSupabaseClient();
+  const { error: completionError } = await supabase
+    .from("chore_completions")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignment_template_id", assignmentId);
+
+  if (completionError) {
+    throw completionError;
+  }
+
+  const { error: memberAssignmentError } = await supabase
+    .from("household_assignments")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("assignable_type", "chore_assignment_template")
+    .eq("assignable_id", assignmentId);
+
+  if (memberAssignmentError) {
+    throw memberAssignmentError;
+  }
+
+  const { error } = await supabase
+    .from("chore_assignment_templates")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("id", assignmentId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 function getRemoteMemberId(remoteMembers: RemoteMemberRow[], externalKey: string) {
   const member = remoteMembers.find((candidate) => candidate.external_key === externalKey);
 
@@ -2204,10 +2363,6 @@ function slugify(value: string) {
 
 function compareStrings(first: string, second: string) {
   return first.localeCompare(second, undefined, { numeric: true, sensitivity: "base" });
-}
-
-function formatTimeRange(startTime: string, endTime: string) {
-  return `${startTime}-${endTime}`;
 }
 
 function formatDateKey(date: Date) {

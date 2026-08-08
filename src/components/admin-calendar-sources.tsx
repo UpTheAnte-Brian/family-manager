@@ -10,6 +10,7 @@ import type {
   CalendarSourceKind,
 } from "@/lib/calendar/types";
 import type { HouseholdMember } from "@/lib/planner/types";
+import { formatTimeRange } from "@/lib/time/format";
 
 type AdminCalendarSourcesProps = {
   members: HouseholdMember[];
@@ -819,7 +820,7 @@ function CalendarSourcePreviewModal({
                 >
                   <span className="font-semibold">{event.title}</span>
                   <span className="text-[#4c5965]">
-                    {event.date} · {event.startTime}-{event.endTime} · {event.category}
+                    {event.date} · {formatTimeRange(event.startTime, event.endTime)} · {event.category}
                   </span>
                   {event.teamLabel ? <span className="text-xs font-semibold text-[#2f6f73]">{event.teamLabel}</span> : null}
                   {event.location ? <span className="text-xs text-[#657381]">{event.location}</span> : null}

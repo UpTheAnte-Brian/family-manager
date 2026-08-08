@@ -109,6 +109,7 @@ import { useLocalStorageState } from "@/lib/storage/local";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getSupabaseLikeErrorMessage } from "@/lib/supabase/error-message";
 import { useCurrentHousehold } from "@/lib/supabase/household";
+import { formatClockTime, formatTimeRange } from "@/lib/time/format";
 import {
   getVisibleTripPackingPlans,
   setTripPackingCompletionState,
@@ -841,29 +842,7 @@ export function ProfileDashboard({
     }
 
     const scheduledChoreIds = new Set(assignments.map((assignment) => assignment.choreId));
-    const blockedChoreIds = new Set<string>();
-
-    for (const entry of selectedMemberAllowanceEntries) {
-      if (entry.choreId && entry.occurredAt.startsWith(displayedDay.date)) {
-        blockedChoreIds.add(entry.choreId);
-      }
-    }
-
-    if (selectedRemoteMemberId) {
-      for (const request of visibleAllowanceRequests) {
-        if (
-          request.kind === "credit" &&
-          request.childRemoteMemberId === selectedRemoteMemberId &&
-          request.occurrenceDate === displayedDay.date &&
-          request.choreId
-        ) {
-          blockedChoreIds.add(request.choreId);
-        }
-      }
-    }
-
     return getAvailableExtraChores({
-      blockedChoreIds,
       chores: choreConfig.weeklyChores,
       memberId: selectedMember.id,
       scheduledChoreIds,
@@ -871,12 +850,8 @@ export function ProfileDashboard({
   }, [
     assignments,
     choreConfig.weeklyChores,
-    displayedDay.date,
     selectedMember.id,
     selectedMember.role,
-    selectedMemberAllowanceEntries,
-    selectedRemoteMemberId,
-    visibleAllowanceRequests,
   ]);
   const selectedMemberMorningRoutineAllowanceAmount = isRemoteHouseholdReady
     ? getMorningRoutineAllowanceAmount(activeRemoteMemberConfigsByExternalKey[selectedMember.id] ?? null)
@@ -6831,7 +6806,7 @@ function ExtraChoreModal({
             </p>
             <h2 className="mt-1 text-xl font-semibold text-[#17202a]">Complete extra chore</h2>
             <p className="mt-1 text-sm text-[#4c5965]">
-              Pick a bank-eligible chore for {childName} that was not already on this day&apos;s list.
+              Pick a bank-eligible chore for {childName} that was not already on this day&apos;s list. If they completed more than one block, submit it once for each block.
             </p>
           </div>
           <button
@@ -7423,26 +7398,6 @@ function getMorningRoutineWakeUpLabel(member: HouseholdMember, dayOfWeek: DayOfW
   return `Anchored to ${formatClockTime(wakeUpTime)} wake-up.`;
 }
 
-function formatTimeRange(startTime: string, endTime: string) {
-  if (startTime === "00:00" && endTime === "23:59") {
-    return "All Day";
-  }
-
-  if (!isClockTime(startTime) || !isClockTime(endTime)) {
-    return `${startTime}-${endTime}`;
-  }
-
-  return `${formatClockTime(startTime)}-${formatClockTime(endTime)}`;
-}
-
-function formatClockTime(time: string) {
-  const [hourValue, minuteValue] = time.split(":").map(Number);
-  const period = hourValue >= 12 ? "PM" : "AM";
-  const hour = hourValue % 12 || 12;
-
-  return `${hour}:${String(minuteValue).padStart(2, "0")} ${period}`;
-}
-
 function formatOrdinal(value: number) {
   const remainder = value % 100;
 
@@ -7464,10 +7419,6 @@ function formatOrdinal(value: number) {
 
 function formatPlural(value: number, singular: string) {
   return value === 1 ? singular : `${singular}s`;
-}
-
-function isClockTime(value: string) {
-  return /^\d{2}:\d{2}$/.test(value);
 }
 
 function DashboardSetupGate({ title }: { title: string }) {

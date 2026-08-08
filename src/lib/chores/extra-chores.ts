@@ -1,12 +1,10 @@
 import type { WeeklyChore } from "@/lib/planner/types";
 
 export function getAvailableExtraChores({
-  blockedChoreIds,
   chores,
   memberId,
   scheduledChoreIds,
 }: {
-  blockedChoreIds: Set<string>;
   chores: WeeklyChore[];
   memberId: string;
   scheduledChoreIds: Set<string>;
@@ -18,8 +16,7 @@ export function getAvailableExtraChores({
     return (
       isEligible &&
       Boolean(chore.allowanceAmount) &&
-      !scheduledChoreIds.has(chore.id) &&
-      !blockedChoreIds.has(chore.id)
+      !scheduledChoreIds.has(chore.id)
     );
   });
 }

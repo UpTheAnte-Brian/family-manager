@@ -22,6 +22,7 @@ import type { AppliedCalendarEvent, CalendarSource } from "@/lib/calendar/types"
 import { getBirthdayEventsForRange } from "@/lib/planner/birthdays";
 import type { FixedEvent, HouseholdMember } from "@/lib/planner/types";
 import { useLocalStorageState } from "@/lib/storage/local";
+import { formatTimeRange } from "@/lib/time/format";
 
 type CalendarOverviewProps = {
   configuredEvents: FixedEvent[];
@@ -504,7 +505,7 @@ export function CalendarOverview({ configuredEvents, members, season }: Calendar
                     >
                       <div className="lg:border-r lg:border-[#d7e0e7] lg:pr-4">
                         <time className="inline-flex rounded-full border border-[#bcd8dc] bg-white px-3 py-1 text-sm font-semibold text-[#1f6f8b]">
-                          {event.startTime}-{event.endTime}
+                          {formatTimeRange(event.startTime, event.endTime)}
                         </time>
                       </div>
                       <div className="grid gap-3">

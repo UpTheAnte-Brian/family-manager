@@ -39,7 +39,6 @@ const chores: WeeklyChore[] = [
 
 test("returns only allowance chores available to the selected child", () => {
   const result = getAvailableExtraChores({
-    blockedChoreIds: new Set(),
     chores,
     memberId: "mason",
     scheduledChoreIds: new Set(),
@@ -51,13 +50,12 @@ test("returns only allowance chores available to the selected child", () => {
   );
 });
 
-test("excludes chores already scheduled or already pending for that day", () => {
+test("keeps an extra chore available after it has already been requested", () => {
   const result = getAvailableExtraChores({
-    blockedChoreIds: new Set(["house-1"]),
     chores,
     memberId: "mason",
     scheduledChoreIds: new Set(["yard-1"]),
   });
 
-  assert.deepEqual(result.map((chore) => chore.id), []);
+  assert.deepEqual(result.map((chore) => chore.id), ["house-1"]);
 });

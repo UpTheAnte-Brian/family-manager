@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import type { DayOfWeek, DayTemplate, NoiseLevel, ScheduleBlock } from "@/lib/planner/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { formatTimeRange } from "@/lib/time/format";
 import { useCurrentHousehold } from "@/lib/supabase/household";
 
 type AdminBaselineTemplatesProps = {
@@ -876,16 +877,4 @@ function normalizeDaysOfWeek(daysOfWeek: string[] | null | undefined): DayOfWeek
 
 function normalizeTimeForInput(value: string | null) {
   return value?.slice(0, 5) ?? "";
-}
-
-function formatTimeRange(startTime: string, endTime: string) {
-  return `${formatClockTime(startTime)}-${formatClockTime(endTime)}`;
-}
-
-function formatClockTime(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  const suffix = hours >= 12 ? "PM" : "AM";
-  const normalizedHours = hours % 12 || 12;
-
-  return `${normalizedHours}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
