@@ -97,8 +97,7 @@ Use this flow for Apple/shared family calendars, SportsEngine, school calendars,
 1. Add a source label and shared URL.
 2. Choose the source type.
 3. Select default household members when the whole source usually belongs to one person.
-4. Preview the feed.
-5. Apply the preview to the local dashboard feed.
+4. Use **Sync now** to fetch the latest feed and replace that source's dashboard events immediately. Use **Preview** first when you want to review the incoming events before applying them.
 
 For sources that should stay current, switch the source to `Daily scheduled refresh` and choose a time. Scheduled refreshes run from the deployed app and reapply the source automatically after the configured time in the household timezone.
 

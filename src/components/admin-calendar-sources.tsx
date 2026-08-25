@@ -66,6 +66,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
   const [previewBySource, setPreviewBySource] = useState<Record<string, CalendarPreviewResult>>({});
   const [applyingSourceId, setApplyingSourceId] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState<string | null>(null);
+  const [isSyncingNow, setIsSyncingNow] = useState<string | null>(null);
   const [previewModalSourceId, setPreviewModalSourceId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -187,8 +188,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
     }
   }
 
-  async function applyPreview(source: CalendarSource) {
-    const preview = previewBySource[source.id];
+  async function applyPreview(source: CalendarSource, preview = previewBySource[source.id]) {
 
     if (!preview) {
       return;
@@ -333,24 +333,25 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
       }));
       const lastSyncedAt = new Date().toISOString();
       const lastSyncMessage = getPreviewMessage(data as CalendarPreviewResult);
+      const syncedSource = {
+        ...source,
+        lastSyncedAt,
+        lastSyncStatus: "success" as const,
+        lastSyncMessage,
+      };
       setSources((current) =>
         current.map((candidate) =>
           candidate.id === source.id
-            ? {
-                ...candidate,
-                lastSyncedAt,
-                lastSyncStatus: "success",
-                lastSyncMessage,
-              }
+            ? syncedSource
             : candidate,
         ),
       );
-      void saveCalendarSource({
-        ...source,
-        lastSyncedAt,
-        lastSyncStatus: "success",
-        lastSyncMessage,
-      });
+      void saveCalendarSource(syncedSource);
+
+      return {
+        preview: data as CalendarPreviewResult,
+        source: syncedSource,
+      };
     } catch (error) {
       const lastSyncedAt = new Date().toISOString();
       const lastSyncMessage = error instanceof Error ? error.message : "Preview failed";
@@ -372,8 +373,23 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
         lastSyncStatus: "error",
         lastSyncMessage,
       });
+      return null;
     } finally {
       setIsPreviewing(null);
+    }
+  }
+
+  async function syncSourceNow(source: CalendarSource) {
+    setIsSyncingNow(source.id);
+
+    try {
+      const result = await previewSource(source);
+
+      if (result) {
+        await applyPreview(result.source, result.preview);
+      }
+    } finally {
+      setIsSyncingNow(null);
     }
   }
 
@@ -576,7 +592,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                           }
                           value={source.syncMode}
                         >
-                          <option value="manual">Manual</option>
+                          <option value="manual">Manual — only when requested</option>
                           <option value="scheduled">Scheduled daily</option>
                         </select>
                       </label>
@@ -623,7 +639,7 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="border border-[#1f6f8b] bg-white px-3 py-2 text-sm font-semibold text-[#1f6f8b]"
-                      disabled={isPreviewing === source.id}
+                      disabled={isPreviewing === source.id || isSyncingNow === source.id}
                       onClick={() => {
                         setPreviewModalSourceId(source.id);
                         void previewSource(source);
@@ -631,6 +647,14 @@ export function AdminCalendarSources({ members }: AdminCalendarSourcesProps) {
                       type="button"
                     >
                       {isPreviewing === source.id ? "Previewing..." : "Preview"}
+                    </button>
+                    <button
+                      className="border border-[#1f6f8b] bg-[#1f6f8b] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      disabled={isPreviewing === source.id || applyingSourceId === source.id || isSyncingNow === source.id}
+                      onClick={() => void syncSourceNow(source)}
+                      type="button"
+                    >
+                      {isSyncingNow === source.id ? "Syncing..." : "Sync now"}
                     </button>
                     <button
                       className="border border-[#d7e0e7] bg-white px-3 py-2 text-sm font-semibold text-[#33414f]"
@@ -694,7 +718,7 @@ function getPreviewMessage(preview: CalendarPreviewResult) {
 
 function getScheduleSummary(source: CalendarSource, timeZone: string) {
   if (source.syncMode !== "scheduled") {
-    return "Runs only when a parent previews and applies this source.";
+    return "Does not refresh automatically. Use Sync now to fetch and apply new calendar changes immediately.";
   }
 
   const attemptedLabel = source.schedule?.lastAttemptedOn
